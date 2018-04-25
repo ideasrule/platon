@@ -4,7 +4,7 @@ import time
 import scipy.linalg
 import matplotlib.pyplot as plt
 
-def get_dl(heights, Nh):
+def get_dl(heights):
     h_mesh, h_prime_mesh = np.meshgrid(heights, heights)
 
     sqr_length = h_prime_mesh[:, 0:-1]**2 - h_mesh[:, 1:]**2
@@ -12,23 +12,16 @@ def get_dl(heights, Nh):
     lengths = 2*np.sqrt(sqr_length)
 
     dl = lengths[0:-1] - lengths[1:]
-    return dl[0:Nh, 0:Nh]
+    return dl
 
-NLam = 4616
-Nh = 334
-
-heights = np.loadtxt(sys.argv[1])
-assert(len(heights) == Nh + 1)
-
-kappa = np.loadtxt(sys.argv[2])
-tau_ref = np.loadtxt(sys.argv[3])
+heights = np.loadtxt(sys.argv[1]) #Heights in descending order, from center
+kappa = np.loadtxt(sys.argv[2]) #N_lambda x N_heights opacities
+tau_ref = np.loadtxt(sys.argv[3]) #Tau computed by C Eliza
 
 start = time.time()
-
-
-dl = get_dl(heights, Nh)
-
-
+dl = get_dl(heights)
 result = np.dot(kappa, dl)
 print time.time() - start
+
+#Did it succeed?
 print np.allclose(result, tau_ref)

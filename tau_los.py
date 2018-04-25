@@ -6,12 +6,12 @@ import matplotlib.pyplot as plt
 
 def get_dl(heights, Nh):
     h_mesh, h_prime_mesh = np.meshgrid(heights, heights)
-    h_mesh = np.hstack((h_mesh[:,1:], np.zeros((Nh+1, 1))))
-    lengths = 2*np.sqrt(h_prime_mesh**2 - h_mesh**2)
 
-    shifted_lengths = np.vstack((lengths[1:], np.zeros(Nh + 1)))
-    dl = lengths - shifted_lengths
-    dl[np.isnan(dl)] = 0
+    sqr_length = h_prime_mesh[:, 0:-1]**2 - h_mesh[:, 1:]**2
+    sqr_length[sqr_length < 0] = 0
+    lengths = 2*np.sqrt(sqr_length)
+
+    dl = lengths[0:-1] - lengths[1:]
     return dl[0:Nh, 0:Nh]
 
 NLam = 4616

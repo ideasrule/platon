@@ -23,5 +23,5 @@ dl = get_dl(heights)
 result = np.dot(kappa, dl)
 print time.time() - start
 
-#Did it succeed?
+#Does it match result from C ExoTransmit?
 print np.allclose(result, tau_ref)

@@ -48,13 +48,12 @@ class TransitDepthCalculator:
         kappa_atm = kappa_interpolator.fast_interpolate(kappa, self.T_grid, self.P_grid, T, P)
         
         dP = P[1:] - P[0:-1]
-        dz = dP/P[1:] * k_B * T[1:]/(mu[1:] * amu* self.g)
-        dz = np.append(k_B*T[0]/(mu[0] * amu * self.g), dz)
+        dh = dP/P[1:] * k_B * T[1:]/(mu[1:] * amu* self.g)
+        dh = np.append(k_B*T[0]/(mu[0] * amu * self.g), dh)
         
         #dz goes from top to bottom of atmosphere
-        radius_with_atm = np.sum(dz) + self.planet_radius
-        heights = np.append(radius_with_atm, radius_with_atm - np.cumsum(dz))
-        dh = heights[0:-1] - heights[1:]
+        radius_with_atm = np.sum(dh) + self.planet_radius
+        heights = np.append(radius_with_atm, radius_with_atm - np.cumsum(dh))
         tau_los = get_line_of_sight_tau(kappa_atm, heights)
 
         absorption_fraction = 1 - np.exp(-tau_los)

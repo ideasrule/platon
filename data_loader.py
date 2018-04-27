@@ -1,7 +1,9 @@
 import numpy as np
+import os
 
 class OpacityData:
     species_name = None
+    species_mass = None
     filename = None
     wavelengths = None
     pressures = None
@@ -42,22 +44,31 @@ class OpacityData:
         return np.array(wavelengths), np.array(temperatures), np.array(pressures), np.array(cross_sections)
 
     def get_opacity(self):
-        k_B = 1.38e-16
+        k_B = 1.38e-23
         opacities = np.zeros(self.cross_sections.shape)
         for T_index in range(len(self.temperatures)):
             for P_index in range(len(self.pressures)):
                 rho = k_B * self.temperatures[T_index]/self.pressures[P_index]
-                opacities[:, P_index, T_index] = self.cross_sections[:, P_index, T_index]/rho
-        print opacities
+                opacities[:, P_index, T_index] = self.cross_sections[:, P_index, T_index]/rho                
         return opacities
 
 
+def read_species_data(opacity_dir, species_masses_file):
+    opacities_data = dict()
+    mass_data = dict()
+    
+    with open(species_masses_file) as f:
+        for line in f:
+            if line[0] == '#': continue
+            columns = line.split()
+            species_name = columns[0]
+            print species_name
+            species_mass = float(columns[1])
+            opacity_filename = os.path.join(opacity_dir, "opac{0}.dat".format(species_name))
+            if os.path.isfile(opacity_filename):
+                opacities_data[species_name] = OpacityData(species_name, opacity_filename)
+            mass_data[species_name] = species_mass
 
-species = ["C2H2", "C2H4"]
+    return opacities_data, mass_data
+    
 
-for s in species:
-    filename = "Opac/opac{0}.dat".format(s)
-    data_obj = OpacityData(s, filename)
-    #read_opacity_file(filename)
-    #data = np.loadtxt(filename)
-    #print 

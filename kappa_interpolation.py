@@ -7,8 +7,8 @@ def normal_interpolate(kappa, grid_T, grid_P, atm_T, atm_P):
     all_results = []
     N_wavelengths = kappa.shape[0]
     for i in range(N_wavelengths):
-        interpolator = RectBivariateSpline(grid_T, grid_P, kappa[i], kx=1, ky=1)
-        result = interpolator.ev(atm_T, atm_P)
+        interpolator = RectBivariateSpline(grid_P, grid_T, kappa[i], kx=1, ky=1)
+        result = interpolator.ev(atm_P, atm_T)
         all_results.append(result)
     return np.array(all_results)
     
@@ -29,16 +29,16 @@ def fast_interpolate(kappa, grid_T, grid_P, atm_T, atm_P):
     P_indices_upper = P_indices_lower + 1
     P_indices_frac = P_indices - P_indices_lower
 
-    result = kappa[:, T_indices_lower, P_indices_lower]*(1-T_indices_frac)*(1-P_indices_frac) + \
-             kappa[:, T_indices_upper, P_indices_lower]*T_indices_frac*(1-P_indices_frac) + \
-             kappa[:, T_indices_lower, P_indices_upper]*(1-T_indices_frac)*P_indices_frac + \
-             kappa[:, T_indices_upper, P_indices_upper]*T_indices_frac*P_indices_frac
+    result = kappa[:, P_indices_lower, T_indices_lower]*(1-P_indices_frac)*(1-T_indices_frac) + \
+             kappa[:, P_indices_upper, T_indices_lower]*P_indices_frac*(1-T_indices_frac) + \
+             kappa[:, P_indices_lower, T_indices_upper]*(1-P_indices_frac)*T_indices_frac + \
+             kappa[:, P_indices_upper, T_indices_upper]*P_indices_frac*T_indices_frac
     end = time.time()
     print end-start
     return result
     
 
-temperatures = np.arange(100, 3100, 100)
+'''temperatures = np.arange(100, 3100, 100)
 pressures = 10.0 ** np.arange(-4, 9)
 
 N_wavelengths = 4616
@@ -52,4 +52,4 @@ kappa = kappa.reshape((N_wavelengths, N_temperatures, N_pressures))
 
 result_slow = normal_interpolate(kappa, temperatures, pressures, atm_T, atm_P)
 result_fast = fast_interpolate(kappa, temperatures, pressures, atm_T, atm_P)
-print np.allclose(result_slow, result_fast)
+print np.allclose(result_slow, result_fast)'''

@@ -5,6 +5,7 @@ from scipy.interpolate import RectBivariateSpline
 from tau_los import get_line_of_sight_tau
 import numpy as np
 import matplotlib.pyplot as plt
+import time
 
 class TransitDepthCalculator:
     def __init__(self, planet_radius, star_radius, g, opacity_dir, species_masses_file):
@@ -26,7 +27,7 @@ class TransitDepthCalculator:
         '''P: array of length N_tau
            T: array of length N_tau
            abundances: dictionary mapping species name to (N_T, N_P) array, where N_T is the number of temperature points in the opacity data files, and N_P is the number of pressure points in those files'''
-
+        start = time.time()
         k_B = 1.38e-23
         amu = 1.67e-27
         
@@ -43,7 +44,7 @@ class TransitDepthCalculator:
                 atm_abundances = interpolator.ev(P, T)
                 mu += atm_abundances * self.mass_data[species_name]
             
-        kappa_atm = kappa_interpolation.normal_interpolate(kappa, self.T_grid, self.P_grid, T, P)
+        kappa_atm = kappa_interpolation.fast_interpolate(kappa, self.T_grid, self.P_grid, T, P)
         
         dP = P[1:] - P[0:-1]
         dz = dP/P[1:] * k_B * T[1:]/(mu[1:] * amu* self.g)
@@ -59,6 +60,8 @@ class TransitDepthCalculator:
         transit_depths = (self.planet_radius/self.star_radius)**2 + 2/self.star_radius**2 * absorption_fraction.dot(heights[1:] * dh)
         #plt.plot(self.lambda_grid*1e6, transit_depths*100)
         #plt.show()
+        end = time.time()
+        print "Time taken", end-start
         return transit_depths
         
         

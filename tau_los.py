@@ -14,14 +14,6 @@ def get_dl(heights):
     dl = lengths[0:-1] - lengths[1:]
     return dl
 
-heights = np.loadtxt(sys.argv[1]) #Heights in descending order, from center
-kappa = np.loadtxt(sys.argv[2]) #N_lambda x N_heights opacities
-tau_ref = np.loadtxt(sys.argv[3]) #Tau computed by C Eliza
-
-start = time.time()
-dl = get_dl(heights)
-result = np.dot(kappa, dl)
-print time.time() - start
-
-#Does it match result from C ExoTransmit?
-print np.allclose(result, tau_ref)
+def get_line_of_sight_tau(kappa, heights):
+    dl = get_dl(heights)
+    return np.dot(kappa, dl)

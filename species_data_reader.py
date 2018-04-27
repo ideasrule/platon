@@ -1,5 +1,6 @@
 import numpy as np
 import os
+from constants import k_B
 
 class OpacityData:
     species_name = None
@@ -44,7 +45,6 @@ class OpacityData:
         return np.array(wavelengths), np.array(temperatures), np.array(pressures), np.array(cross_sections)
 
     def get_opacity(self):
-        k_B = 1.38e-23
         opacities = np.zeros(self.cross_sections.shape)
         for T_index in range(len(self.temperatures)):
             for P_index in range(len(self.pressures)):
@@ -62,7 +62,7 @@ def read_species_data(opacity_dir, species_masses_file):
             if line[0] == '#': continue
             columns = line.split()
             species_name = columns[0]
-            print species_name
+            print "Loading", species_name
             species_mass = float(columns[1])
             opacity_filename = os.path.join(opacity_dir, "opac{0}.dat".format(species_name))
             if os.path.isfile(opacity_filename):

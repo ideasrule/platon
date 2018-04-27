@@ -14,7 +14,6 @@ def normal_interpolate(kappa, grid_T, grid_P, atm_T, atm_P):
     
 
 def fast_interpolate(kappa, grid_T, grid_P, atm_T, atm_P):
-    start = time.time()
     T_mesh, P_mesh = np.meshgrid(np.arange(len(grid_T)), np.arange(len(grid_P)))
     interpolator = RectBivariateSpline(grid_T, grid_P, T_mesh.T, kx=1, ky=1)
     T_indices = interpolator.ev(atm_T, atm_P)
@@ -33,8 +32,6 @@ def fast_interpolate(kappa, grid_T, grid_P, atm_T, atm_P):
              kappa[:, P_indices_upper, T_indices_lower]*P_indices_frac*(1-T_indices_frac) + \
              kappa[:, P_indices_lower, T_indices_upper]*(1-P_indices_frac)*T_indices_frac + \
              kappa[:, P_indices_upper, T_indices_upper]*P_indices_frac*T_indices_frac
-    end = time.time()
-    print end-start
     return result
     
 

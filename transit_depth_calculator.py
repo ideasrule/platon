@@ -1,6 +1,6 @@
 from species_data_reader import read_species_data
 import interpolator_3D
-from read_eos import get_abundances
+import eos_reader
 from scipy.interpolate import RectBivariateSpline
 from tau_los import get_line_of_sight_tau
 import numpy as np
@@ -66,7 +66,7 @@ class TransitDepthCalculator:
 depth_calculator = TransitDepthCalculator(6.4e6, 7e8, 9.8)
 
 index, P, T = np.loadtxt("T_P/t_p_800K.dat", unpack=True, skiprows=1)
-abundances = get_abundances("EOS/eos_1Xsolar_cond.dat")
+abundances = eos_reader.get_abundances("EOS/eos_1Xsolar_cond.dat")
 
 transit_depths = depth_calculator.compute_depths(P, T, abundances)
 transit_depths *= 100

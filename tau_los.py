@@ -14,6 +14,6 @@ def get_dl(heights):
     dl = lengths[0:-1] - lengths[1:]
     return dl
 
-def get_line_of_sight_tau(kappa, heights):
+def get_line_of_sight_tau(absorption_coeff, heights):
     dl = get_dl(heights)
-    return np.dot(kappa, dl)
+    return np.dot(absorption_coeff, dl)

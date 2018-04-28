@@ -1,5 +1,5 @@
 from species_data_reader import read_species_data
-import kappa_interpolator
+import interpolator_3D
 from read_eos import get_abundances
 from scipy.interpolate import RectBivariateSpline
 from tau_los import get_line_of_sight_tau
@@ -44,7 +44,7 @@ class TransitDepthCalculator:
                 atm_abundances = interpolator.ev(P, T)
                 mu += atm_abundances * self.mass_data[species_name]
             
-        absorption_coeff_atm = kappa_interpolator.fast_interpolate(absorption_coeff, self.T_grid, self.P_grid, T, P)
+        absorption_coeff_atm = interpolator_3D.fast_interpolate(absorption_coeff, self.T_grid, self.P_grid, T, P)
         
         dP = P[1:] - P[0:-1]
         dh = dP/P[1:] * k_B * T[1:]/(mu[1:] * amu* self.g)

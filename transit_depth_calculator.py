@@ -69,7 +69,7 @@ class TransitDepthCalculator:
         return absorption_coeff
         
 
-    def compute_depths(self, P, T, abundances, add_scattering=True, add_collisional_absorption=True):
+    def compute_depths(self, P, T, abundances, add_scattering=True, add_collisional_absorption=True, cloudtop_pressure=np.inf):
         '''P: array of length N_tau
            T: array of length N_tau
            abundances: dictionary mapping species name to (N_T, N_P) array, where N_T is the number of temperature points in the absorption data files, and N_P is the number of pressure points in those files'''
@@ -98,6 +98,9 @@ class TransitDepthCalculator:
         tau_los = get_line_of_sight_tau(absorption_coeff_atm, heights)
 
         absorption_fraction = 1 - np.exp(-tau_los)
+        
+        absorption_fraction[:, P > cloudtop_pressure] = 0
+        
         transit_depths = (self.planet_radius/self.star_radius)**2 + 2/self.star_radius**2 * absorption_fraction.dot(heights[1:] * dh)
 
         end = time.time()
@@ -110,7 +113,7 @@ depth_calculator = TransitDepthCalculator(6.4e6, 7e8, 9.8)
 index, P, T = np.loadtxt("T_P/t_p_800K.dat", unpack=True, skiprows=1)
 abundances = eos_reader.get_abundances("EOS/eos_1Xsolar_cond.dat")
 
-transit_depths = depth_calculator.compute_depths(P, T, abundances)
+transit_depths = depth_calculator.compute_depths(P, T, abundances, cloudtop_pressure=np.inf)
 transit_depths *= 100
 
 ref_wavelengths, ref_depths = np.loadtxt("ref_spectra.dat", unpack=True, skiprows=2)

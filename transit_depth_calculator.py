@@ -26,13 +26,46 @@ class TransitDepthCalculator:
         self.N_T = len(self.T_grid)
         self.N_P = len(self.P_grid)
 
-        self.scattering_absorption = np.zeros((self.N_lambda, self.N_P, self.N_T))
         P_meshgrid, lambda_meshgrid, T_meshgrid = np.meshgrid(self.P_grid, self.lambda_grid, self.T_grid)
         self.P_meshgrid = P_meshgrid
         self.T_meshgrid = T_meshgrid
-        self.scattering_factor = 8*np.pi/3 * (2*np.pi/lambda_meshgrid)**4 * P_meshgrid / (k_B * T_meshgrid)
+            
+    def __rebin_absorption_dict__(self, bins, dictionary):
+        new_dict = dict()
+        
+        for key in dictionary:
+            shape = dictionary[key].shape
+            assert(dictionary[key].shape[0] == self.N_lambda)
 
+            new_shape = list(shape)
+            new_shape[0] = len(bins)
+            
+            new_dict[key] = np.zeros(new_shape)           
+            for i, (start, end) in enumerate(bins):
+                selection = np.logical_and(self.lambda_grid >= start, self.lambda_grid < end)
+                averaged = np.mean(dictionary[key][selection], axis=0)
+                new_dict[key][i] = averaged
 
+        return new_dict
+        
+    def change_wavelength_bins(self, bins):
+        bins = np.array(bins)
+        if bins.ndim == 1:
+            new_bins = []
+            for i in range(len(bins)-1):
+                new_bins.append([bins[i], bins[i+1]])
+        bins = np.array(new_bins)
+        
+        self.absorption_data = self.__rebin_absorption_dict__(bins, self.absorption_data)
+        self.collisional_absorption_data = self.__rebin_absorption_dict__(bins, self.collisional_absorption_data)
+        self.lambda_grid = np.array([np.mean([start, end]) for (start, end) in bins])
+        self.N_lambda = len(bins)
+        
+        P_meshgrid, lambda_meshgrid, T_meshgrid = np.meshgrid(self.P_grid, self.lambda_grid, self.T_grid)
+        self.P_meshgrid = P_meshgrid
+        self.T_meshgrid = T_meshgrid
+        
+        
     def get_gas_absorption(self, abundances):
         absorption_coeff = np.zeros((self.N_lambda, self.N_P, self.N_T))
          
@@ -54,7 +87,8 @@ class TransitDepthCalculator:
                 cross_section += abundances[species_name] * self.polarizability_data[species_name]**2 * scatt_prefactor
 
         return cross_section * self.P_meshgrid/(k_B*self.T_meshgrid)
-        
+
+    
     def get_collisional_absorption(self, abundances):
         absorption_coeff = np.zeros((self.N_lambda, self.N_P, self.N_T))
         n = self.P_meshgrid/(k_B * self.T_meshgrid)                    
@@ -107,20 +141,34 @@ class TransitDepthCalculator:
         print "Time taken", end-start
         return transit_depths
         
-        
-depth_calculator = TransitDepthCalculator(6.4e6, 7e8, 9.8)
 
 index, P, T = np.loadtxt("T_P/t_p_800K.dat", unpack=True, skiprows=1)
 abundances = eos_reader.get_abundances("EOS/eos_1Xsolar_cond.dat")
+    
+depth_calculator = TransitDepthCalculator(6.4e6, 7e8, 9.8)
+#depth_calculator.change_wavelength_bins([[1e-6,2e-6], [2e-6,3e-6]])
+#depth_calculator.change_wavelength_bins(np.linspace(1.1e-6, 1.7e-6, 30))
 
 transit_depths = depth_calculator.compute_depths(P, T, abundances, cloudtop_pressure=np.inf)
 transit_depths *= 100
+
+#plt.plot(depth_calculator.lambda_grid, transit_depths)
+#plt.show()
 
 ref_wavelengths, ref_depths = np.loadtxt("ref_spectra.dat", unpack=True, skiprows=2)
 plt.plot(ref_wavelengths, ref_depths, label="ExoTransmit")
 plt.plot(depth_calculator.lambda_grid, transit_depths, label="PyExoTransmit")
 plt.legend()
 plt.figure()
+plt.title("Residuals of comparison")
 plt.plot(ref_wavelengths, ref_depths-transit_depths)
+
+plt.figure()
+
+depth_calculator.change_wavelength_bins(np.linspace(1.1e-6, 1.7e-6, 30))
+binned_transit_depths = depth_calculator.compute_depths(P, T, abundances) * 100
+plt.plot(ref_wavelengths, transit_depths, label="Unbinned")
+plt.plot(depth_calculator.lambda_grid, binned_transit_depths, label="Binned")
+
 plt.show()
 

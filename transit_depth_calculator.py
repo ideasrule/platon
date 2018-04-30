@@ -111,9 +111,13 @@ class TransitDepthCalculator:
         
 
     def compute_depths(self, P, T, abundances, add_scattering=True, add_collisional_absorption=True, cloudtop_pressure=np.inf):
-        '''P: array of length N_tau
-           T: array of length N_tau
-           abundances: dictionary mapping species name to (N_T, N_P) array, where N_T is the number of temperature points in the absorption data files, and N_P is the number of pressure points in those files'''
+        '''
+        P: List of pressures in atmospheric P-T profile, in ascending order
+        T: List of temperatures corresponding to pressures in P
+        abundances: dictionary mapping species name to (N_T, N_P) array, where N_T is the number of temperature points in the absorption data files, and N_P is the number of pressure points in those files
+        add_scattering: whether Rayleigh scattering opacity is taken into account
+        add_collisional_absorption: whether collisionally induced absorption is taken into account
+        cloudtop_pressure: pressure level below which light cannot penetrate'''
         start = time.time()
         assert(len(P) == len(T))
 

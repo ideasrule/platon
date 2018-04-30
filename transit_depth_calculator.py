@@ -29,6 +29,8 @@ class TransitDepthCalculator:
         P_meshgrid, lambda_meshgrid, T_meshgrid = np.meshgrid(self.P_grid, self.lambda_grid, self.T_grid)
         self.P_meshgrid = P_meshgrid
         self.T_meshgrid = T_meshgrid
+
+        self.wavelength_rebinned = False
             
     def __rebin_absorption_dict__(self, bins, dictionary):
         new_dict = dict()
@@ -49,6 +51,11 @@ class TransitDepthCalculator:
         return new_dict
         
     def change_wavelength_bins(self, bins):
+        if self.wavelength_rebinned:
+            raise NotImplementedError("Multiple re-binnings not yet supported")
+
+        self.wavelength_rebinned = True
+        
         bins = np.array(bins)
         if bins.ndim == 1:
             new_bins = []

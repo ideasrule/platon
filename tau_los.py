@@ -15,5 +15,8 @@ def get_dl(heights):
     return dl
 
 def get_line_of_sight_tau(absorption_coeff, heights):
+    #heights must be in descending order
+    assert(np.allclose(heights, np.sort(heights)[::-1]))
+    
     dl = get_dl(heights)
     return np.dot(absorption_coeff, dl)

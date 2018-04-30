@@ -2,6 +2,7 @@ import sys
 import numpy as np
 
 def get_abundances(filename):
+    '''Reads EOS file in the ExoTransmit format, returning a dictionary mapping species name to an abundance array of dimension'''
     line_counter = 0
 
     species = None
@@ -19,11 +20,10 @@ def get_abundances(filename):
                 species = elements[2:]
             elif len(elements) > 1:
                 elements = np.array([float(e) for e in elements])
-                pressures.append(elements[0])
-                temperatures.append(elements[1])
-                #compositions.append(elements[2:]/np.sum(elements[2:]))
+                temperatures.append(elements[0])
+                pressures.append(elements[1])
                 compositions.append(elements[2:])
-                #assert(np.abs(np.sum(compositions[-1]) - 1) < 1e-10)
+
             line_counter += 1
 
     temperatures = np.array(temperatures)
@@ -34,7 +34,7 @@ def get_abundances(filename):
     N_pressures = len(np.unique(pressures))
     
     for i in range(len(species)):
-        c = compositions[:, i].reshape((N_temperatures, N_pressures))
+        c = compositions[:, i].reshape((N_pressures, N_temperatures))
         #This file has decreasing temperatures and pressures; we want increasing temperatures and pressures
         c = np.flip(c, 0)
         c = np.flip(c, 1)

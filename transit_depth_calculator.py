@@ -10,11 +10,11 @@ import pickle
 from constants import k_B, amu
 
 class TransitDepthCalculator:
-    def __init__(self, planet_radius, star_radius, g, absorption_dir="Absorption", species_masses_file="all_species_masses", lambda_grid_file="wavelengths.npy", P_grid_file="pressures.npy", T_grid_file="temperatures.npy", collisional_absorption_file="collisional_absorption.pkl"):
+    def __init__(self, planet_radius, star_radius, g, absorption_dir="Absorption", species_info_file="species_info", lambda_grid_file="wavelengths.npy", P_grid_file="pressures.npy", T_grid_file="temperatures.npy", collisional_absorption_file="collisional_absorption.pkl"):
         self.planet_radius = planet_radius
         self.star_radius = star_radius
         self.g = g
-        self.absorption_data, self.mass_data, self.polarizability_data = read_species_data(absorption_dir, species_masses_file)
+        self.absorption_data, self.mass_data, self.polarizability_data = read_species_data(absorption_dir, species_info_file)
 
         self.collisional_absorption_data = np.load(collisional_absorption_file)
 

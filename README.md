@@ -29,7 +29,6 @@ First, we initialize the transit calculator object with the planetary radius, st
 
 ```
 from transit_depth_calculator import TransitDepthCalculator
-
 depth_calculator = TransitDepthCalculator(6.4e6, 7e8, 9.8)
 ```
 
@@ -39,7 +38,8 @@ and hold it, not reconstruct it over and over again.
 
 Optionally, we specify the wavelength bins for which we want the transit depth:
 
-```depth_calculator.change_wavelength_bins([[100e-9, 200e-9], [200e-9, 300e-9]])
+```
+depth_calculator.change_wavelength_bins([[100e-9, 200e-9], [200e-9, 300e-9]])
 
 OR
 

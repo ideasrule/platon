@@ -2,7 +2,7 @@ from species_data_reader import read_species_data
 import interpolator_3D
 import eos_reader
 from scipy.interpolate import RectBivariateSpline
-from tau_los import get_line_of_sight_tau
+from tau_calculator import get_line_of_sight_tau
 import numpy as np
 import matplotlib.pyplot as plt
 import time

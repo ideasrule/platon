@@ -134,19 +134,19 @@ class TransitDepthCalculator:
         absorption_coeff_atm = interpolator_3D.fast_interpolate(absorption_coeff, self.T_grid, self.P_grid, T, P)
 
         dP = P[1:] - P[0:-1]
-        dh = dP/P[1:] * k_B * T[1:]/(mu[1:] * amu* self.g)
-        dh = np.append(k_B*T[0]/(mu[0] * amu * self.g), dh)
+        dr = dP/P[1:] * k_B * T[1:]/(mu[1:] * amu* self.g)
+        dr = np.append(k_B*T[0]/(mu[0] * amu * self.g), dr)
         
         #dz goes from top to bottom of atmosphere
-        radius_with_atm = np.sum(dh) + self.planet_radius
-        heights = np.append(radius_with_atm, radius_with_atm - np.cumsum(dh))
-        tau_los = get_line_of_sight_tau(absorption_coeff_atm, heights)
+        radius_with_atm = np.sum(dr) + self.planet_radius
+        radii = np.append(radius_with_atm, radius_with_atm - np.cumsum(dr))
+        tau_los = get_line_of_sight_tau(absorption_coeff_atm, radii)
 
         absorption_fraction = 1 - np.exp(-tau_los)
         
         absorption_fraction[:, P > cloudtop_pressure] = 0
         
-        transit_depths = (self.planet_radius/self.star_radius)**2 + 2/self.star_radius**2 * absorption_fraction.dot(heights[1:] * dh)
+        transit_depths = (self.planet_radius/self.star_radius)**2 + 2/self.star_radius**2 * absorption_fraction.dot(radii[1:] * dr)
 
         end = time.time()
         print "Time taken", end-start

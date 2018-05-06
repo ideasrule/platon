@@ -10,8 +10,7 @@ import pickle
 from constants import k_B, amu
 
 class TransitDepthCalculator:
-    def __init__(self, planet_radius, star_radius, g, absorption_dir="Absorption", species_info_file="species_info", lambda_grid_file="wavelengths.npy", P_grid_file="pressures.npy", T_grid_file="temperatures.npy", collisional_absorption_file="collisional_absorption.pkl"):
-        self.planet_radius = planet_radius
+    def __init__(self, star_radius, g, absorption_dir="Absorption", species_info_file="species_info", lambda_grid_file="wavelengths.npy", P_grid_file="pressures.npy", T_grid_file="temperatures.npy", collisional_absorption_file="collisional_absorption.pkl"):
         self.star_radius = star_radius
         self.g = g
         self.absorption_data, self.mass_data, self.polarizability_data = read_species_data(absorption_dir, species_info_file)
@@ -57,44 +56,43 @@ class TransitDepthCalculator:
         self.T_meshgrid = T_meshgrid
         
         
-    def get_gas_absorption(self, abundances, T_cond):
-        absorption_coeff = np.zeros((self.N_lambda, self.N_P, np.sum(T_cond)))
-         
+    def get_gas_absorption(self, abundances, P_cond, T_cond):
+        absorption_coeff = np.zeros((self.N_lambda, np.sum(P_cond), np.sum(T_cond)))         
         for species_name in abundances.keys():
             assert(abundances[species_name].shape == (self.N_P, self.N_T))
             if species_name in self.absorption_data:
-                absorption_coeff += self.absorption_data[species_name][:,:,T_cond] * abundances[species_name][:,T_cond]
+                absorption_coeff += self.absorption_data[species_name][:,P_cond,:][:,:,T_cond] * abundances[species_name][P_cond,:][:,T_cond]
                 
         return absorption_coeff
 
         
-    def get_scattering_absorption(self, abundances, T_cond):
-        cross_section = np.zeros((self.N_lambda, self.N_P, np.sum(T_cond)))
+    def get_scattering_absorption(self, abundances, P_cond, T_cond):
+        cross_section = np.zeros((self.N_lambda, np.sum(P_cond), np.sum(T_cond)))
         scatt_prefactor = 8*np.pi/3 * (2*np.pi/self.lambda_grid)**4
         scatt_prefactor = scatt_prefactor.reshape((self.N_lambda,1,1))
         
         for species_name in abundances:
             if species_name in self.polarizability_data:
-                cross_section += abundances[species_name][:,T_cond] * self.polarizability_data[species_name]**2 * scatt_prefactor
+                cross_section += abundances[species_name][P_cond,:][:,T_cond] * self.polarizability_data[species_name]**2 * scatt_prefactor
         
-        return cross_section * self.P_meshgrid[:,:,T_cond]/(k_B*self.T_meshgrid[:,:,T_cond])
+        return cross_section * self.P_meshgrid[:,P_cond,:][:,:,T_cond]/(k_B*self.T_meshgrid[:,P_cond,:][:,:,T_cond])
 
     
-    def get_collisional_absorption(self, abundances, T_cond):
-        absorption_coeff = np.zeros((self.N_lambda, self.N_P, np.sum(T_cond)))
-        n = self.P_meshgrid[:,:,T_cond]/(k_B * self.T_meshgrid[:,:,T_cond])
+    def get_collisional_absorption(self, abundances, P_cond, T_cond):
+        absorption_coeff = np.zeros((self.N_lambda, np.sum(P_cond), np.sum(T_cond)))
+        n = self.P_meshgrid[:,P_cond,:][:,:,T_cond]/(k_B * self.T_meshgrid[:,P_cond,:][:,:,T_cond])
         
         for s1, s2 in self.collisional_absorption_data:
             if s1 in abundances and s2 in abundances:
-                n1 = (abundances[s1][:,T_cond]*n)
-                n2 = (abundances[s2][:,T_cond]*n)
+                n1 = (abundances[s1][P_cond, :][:,T_cond]*n)
+                n2 = (abundances[s2][P_cond, :][:,T_cond]*n)
                 abs_data = self.collisional_absorption_data[(s1,s2)].reshape((self.N_lambda, 1, self.N_T))[:,:,T_cond]
                 absorption_coeff += abs_data * n1 * n2
 
         return absorption_coeff
         
     
-    def compute_depths(self, P, T, abundances, add_scattering=True, add_collisional_absorption=True, cloudtop_pressure=np.inf):
+    def compute_depths(self, planet_radius, P, T, abundances, add_scattering=True, scattering_factor=1, add_collisional_absorption=True, cloudtop_pressure=np.inf):
         '''
         P: List of pressures in atmospheric P-T profile, in ascending order
         T: List of temperatures corresponding to pressures in P
@@ -105,11 +103,17 @@ class TransitDepthCalculator:
         start = time.time()
         assert(len(P) == len(T))
 
+        #above_clouds = P < cloudtop_pressure
+        #P = P[above_clouds]
+        #T = T[above_clouds]
+        
         T_cond = interpolator_3D.get_condition_array(T, self.T_grid)
+        P_cond = interpolator_3D.get_condition_array(P, self.P_grid)
 
-        absorption_coeff = self.get_gas_absorption(abundances, T_cond)
-        if add_scattering: absorption_coeff += self.get_scattering_absorption(abundances, T_cond)
-        if add_collisional_absorption: absorption_coeff += self.get_collisional_absorption(abundances, T_cond)
+        #print self.P_grid[P_cond]
+        absorption_coeff = self.get_gas_absorption(abundances, P_cond, T_cond)
+        if add_scattering: absorption_coeff += scattering_factor * self.get_scattering_absorption(abundances, P_cond, T_cond)
+        if add_collisional_absorption: absorption_coeff += self.get_collisional_absorption(abundances, P_cond, T_cond)
         
         mu = np.zeros(len(P))
         for species_name in abundances:
@@ -117,14 +121,14 @@ class TransitDepthCalculator:
             atm_abundances = interpolator.ev(P, T)
             mu += atm_abundances * self.mass_data[species_name]
 
-        absorption_coeff_atm = interpolator_3D.fast_interpolate(absorption_coeff, self.T_grid[T_cond], self.P_grid, T, P)
+        absorption_coeff_atm = interpolator_3D.fast_interpolate(absorption_coeff, self.T_grid[T_cond], self.P_grid[P_cond], T, P)
 
         dP = P[1:] - P[0:-1]
         dr = dP/P[1:] * k_B * T[1:]/(mu[1:] * amu* self.g)
         dr = np.append(k_B*T[0]/(mu[0] * amu * self.g), dr)
         
         #dz goes from top to bottom of atmosphere
-        radius_with_atm = np.sum(dr) + self.planet_radius
+        radius_with_atm = np.sum(dr) + planet_radius
         radii = np.append(radius_with_atm, radius_with_atm - np.cumsum(dr))
         tau_los = get_line_of_sight_tau(absorption_coeff_atm, radii)
 
@@ -132,9 +136,9 @@ class TransitDepthCalculator:
         
         absorption_fraction[:, P > cloudtop_pressure] = 0
         
-        transit_depths = (self.planet_radius/self.star_radius)**2 + 2/self.star_radius**2 * absorption_fraction.dot(radii[1:] * dr)
+        transit_depths = (planet_radius/self.star_radius)**2 + 2/self.star_radius**2 * absorption_fraction.dot(radii[1:] * dr)
         end = time.time()
-        print "Time taken", end-start
+        #print "Time taken", end-start
         
         binned_wavelengths = []
         binned_depths = []
@@ -148,7 +152,7 @@ class TransitDepthCalculator:
         return self.lambda_grid, transit_depths
         
 
-index, P, T = np.loadtxt("T_P/t_p_800K.dat", unpack=True, skiprows=1)
+'''index, P, T = np.loadtxt("T_P/t_p_800K.dat", unpack=True, skiprows=1)
 T = T*0.9
 abundances = eos_reader.get_abundances("EOS/eos_1Xsolar_cond.dat")
     
@@ -162,12 +166,12 @@ wavelength_bins.append([3.2e-6, 4e-6])
 wavelength_bins.append([4e-6, 5e-6])
 depth_calculator.change_wavelength_bins(wavelength_bins)
 
-wavelengths, transit_depths = depth_calculator.compute_depths(P, T, abundances, cloudtop_pressure=np.inf)
+wavelengths, transit_depths = depth_calculator.compute_depths(P, T, abundances, cloudtop_pressure=10)
 transit_depths *= 100
 
 ref_wavelengths, ref_depths = np.loadtxt("ref_spectra.dat", unpack=True, skiprows=2)
 plt.plot(ref_wavelengths, ref_depths, label="ExoTransmit")
 plt.plot(wavelengths, transit_depths, label="PyExoTransmit")
 plt.legend()
-plt.show()
+plt.show()'''
 

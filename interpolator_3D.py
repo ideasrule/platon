@@ -41,7 +41,8 @@ def fast_interpolate(data, grid_x, grid_y, target_x, target_y):
         y_indices_frac = y_indices - y_indices_lower
         return data[:, y_indices_lower, 0]*(1-y_indices_frac) + \
             data[:, y_indices_upper, 0] * y_indices_frac
-                                           
+
+    #print grid_x, grid_y
     interpolator = RectBivariateSpline(grid_x, grid_y, x_mesh.T, kx=1, ky=1)
     x_indices = interpolator.ev(target_x, target_y)
     interpolator = RectBivariateSpline(grid_x, grid_y, y_mesh.T, kx=1, ky=1)

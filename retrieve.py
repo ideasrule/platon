@@ -52,7 +52,7 @@ class Retriever:
         abundances = self.interp_metallicity_grid(metallicity)
         
         wavelengths, calculated_depths = calculator.compute_depths(R, P_profile, T_profile, abundances, scattering_factor=scatt_factor, cloudtop_pressure=cloudtop_P)                
-        result = -np.sum((calculated_depths - measured_depths)**2/measured_errors**2)
+        result = -0.5 * np.sum((calculated_depths - measured_depths)**2/measured_errors**2)
         median_diff = 1e6*np.median(np.abs(calculated_depths - measured_depths))
         '''if median_diff < 30:
             plt.plot(wavelengths, calculated_depths, '.')
@@ -61,7 +61,7 @@ class Retriever:
         print result, median_diff, R/7.1e7, T, metallicity, scatt_factor, cloudtop_P
         return result
     
-    def run_emcee(self, wavelength_bins, depths, errors, T_guess, R_guess, metallicity_guess, scatt_factor_guess, cloudtop_P_guess, star_radius, g, guess_frac_range = 0.5, nwalkers=50, nsteps=30000, output="chain.npy"):        
+    def run_emcee(self, wavelength_bins, depths, errors, T_guess, R_guess, metallicity_guess, scatt_factor_guess, cloudtop_P_guess, star_radius, g, guess_frac_range = 0.5, nwalkers=50, nsteps=10000):        
         guess = np.array([R_guess, T_guess, np.log10(metallicity_guess), np.log10(scatt_factor_guess), np.log10(cloudtop_P_guess)])
         ndim = len(guess)
         initial_positions = [guess + guess_frac_range*guess*np.random.randn(ndim) + guess_frac_range*np.random.randn(ndim) for i in range(nwalkers)]

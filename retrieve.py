@@ -37,7 +37,7 @@ class Retriever:
     def ln_prob(self, params, calculator, measured_depths, measured_errors, low_P=0.1, high_P=2e5, num_P=400, max_scatt_factor=10):        
         R, T, logZ, log_scatt_factor, log_cloudtop_P = params
         metallicity = 10.0**logZ
-        scatt_factor = 10.0*log_scatt_factor
+        scatt_factor = 10.0**log_scatt_factor
         cloudtop_P = 10.0**log_cloudtop_P
 
         if R <= 0 or T <= 0: return -np.inf

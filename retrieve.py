@@ -34,41 +34,44 @@ class Retriever:
             result[key] = interpolator(metallicity)
         return result
 
-    def ln_prob(self, params, calculator, measured_depths, measured_errors, low_P=0.1, high_P=2e5, num_P=400):        
-        R, T, metallicity, scatt_factor, log_cloudtop_P = params
-        cloudtop_P = 10**log_cloudtop_P
+    def ln_prob(self, params, calculator, measured_depths, measured_errors, low_P=0.1, high_P=2e5, num_P=400, max_scatt_factor=10):        
+        R, T, logZ, log_scatt_factor, log_cloudtop_P = params
+        metallicity = 10.0**logZ
+        scatt_factor = 10.0*log_scatt_factor
+        cloudtop_P = 10.0**log_cloudtop_P
 
         if R <= 0 or T <= 0: return -np.inf
         if metallicity < np.min(self.metallicities) or metallicity > np.max(self.metallicities): return -np.inf
         if scatt_factor < 0: return -np.inf
         if T <= np.min(calculator.T_grid) or T >= np.max(calculator.T_grid): return -np.inf
-        if cloudtop_P <= low_P: return -np.inf
+        if cloudtop_P <= low_P or cloudtop_P >= high_P: return -np.inf
+        if scatt_factor > max_scatt_factor: return -np.inf
         
         P_profile = np.logspace(np.log10(low_P), np.log10(high_P), num_P)
         T_profile = np.ones(num_P) * T
         abundances = self.interp_metallicity_grid(metallicity)
         
-        wavelengths, calculated_depths = calculator.compute_depths(R, P_profile, T_profile, abundances, scattering_factor=scatt_factor, cloudtop_pressure=cloudtop_P)        
-        
+        wavelengths, calculated_depths = calculator.compute_depths(R, P_profile, T_profile, abundances, scattering_factor=scatt_factor, cloudtop_pressure=cloudtop_P)                
         result = -np.sum((calculated_depths - measured_depths)**2/measured_errors**2)
         median_diff = 1e6*np.median(np.abs(calculated_depths - measured_depths))
-        '''if median_diff < 50:
+        '''if median_diff < 30:
             plt.plot(wavelengths, calculated_depths, '.')
             plt.errorbar(wavelengths, measured_depths, yerr=measured_errors, fmt='.')
             plt.show()'''
-        print result, median_diff, R/7.1e7, T, metallicity, scatt_factor
+        print result, median_diff, R/7.1e7, T, metallicity, scatt_factor, cloudtop_P
         return result
     
-    def run_emcee(self, wavelength_bins, depths, errors, T_guess, R_guess, metallicity_guess, scatt_factor_guess, log_cloudtop_P_guess, star_radius, g, guess_frac_range = 0.5, nwalkers=50, nsteps=10, output="chain.npy"):        
-        guess = np.array([R_guess, T_guess, metallicity_guess, scatt_factor_guess, log_cloudtop_P_guess])
+    def run_emcee(self, wavelength_bins, depths, errors, T_guess, R_guess, metallicity_guess, scatt_factor_guess, cloudtop_P_guess, star_radius, g, guess_frac_range = 0.5, nwalkers=50, nsteps=30000, output="chain.npy"):        
+        guess = np.array([R_guess, T_guess, np.log10(metallicity_guess), np.log10(scatt_factor_guess), np.log10(cloudtop_P_guess)])
         ndim = len(guess)
-        initial_positions = [guess + guess_frac_range*guess*np.random.randn(ndim) for i in range(nwalkers)]
+        initial_positions = [guess + guess_frac_range*guess*np.random.randn(ndim) + guess_frac_range*np.random.randn(ndim) for i in range(nwalkers)]
         calculator = TransitDepthCalculator(star_radius, g)        
         calculator.change_wavelength_bins(wavelength_bins)        
         
-        sampler = emcee.EnsembleSampler(nwalkers, ndim, self.ln_prob, args=(calculator, depths, errors))        
+        sampler = emcee.EnsembleSampler(nwalkers, ndim, self.ln_prob, args=(calculator, depths, errors))
         sampler.run_mcmc(initial_positions, nsteps)
-        np.save(output, sampler.chain)
+        np.save("chain.npy", sampler.chain)
+        np.save("lnprob.npy", sampler.lnprob)
         
 
 
@@ -81,5 +84,5 @@ depths = 1e-6 * np.array([14512.7, 14546.5, 14566.3, 14523.1, 14528.7, 14549.9, 
 errors = 1e-6 * np.array([50.6, 35.5, 35.2, 34.6, 34.1, 33.7, 33.5, 33.6, 33.8, 33.7, 33.4, 33.4, 33.5, 33.9, 34.4, 34.5, 34.7, 35.0, 35.4, 35.9, 36.4, 36.6, 37.1, 37.8, 38.6, 39.2, 39.9, 40.8])
 
 
-retriever.run_emcee(wavelength_bins, depths, errors, 1200, 9.7e7, 1, 1, 6.0, 8.0e8, 9.311)
+retriever.run_emcee(wavelength_bins, depths, errors, 1200, 9.7e7, 1, 1, 1.0e6, 8.0e8, 9.311)
 #retriever.interp_metallicity_grid(1.1)

@@ -7,7 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 import pickle
-from constants import k_B, amu
+from constants import K_B, AMU
 
 class TransitDepthCalculator:
     def __init__(self, star_radius, g, absorption_dir="Absorption", species_info_file="species_info", lambda_grid_file="wavelengths.npy", P_grid_file="pressures.npy", T_grid_file="temperatures.npy", collisional_absorption_file="collisional_absorption.pkl"):
@@ -75,12 +75,12 @@ class TransitDepthCalculator:
             if species_name in self.polarizability_data:
                 cross_section += abundances[species_name][P_cond,:][:,T_cond] * self.polarizability_data[species_name]**2 * scatt_prefactor
         
-        return cross_section * self.P_meshgrid[:,P_cond,:][:,:,T_cond]/(k_B*self.T_meshgrid[:,P_cond,:][:,:,T_cond])
+        return cross_section * self.P_meshgrid[:,P_cond,:][:,:,T_cond]/(K_B*self.T_meshgrid[:,P_cond,:][:,:,T_cond])
 
     
     def get_collisional_absorption(self, abundances, P_cond, T_cond):
         absorption_coeff = np.zeros((self.N_lambda, np.sum(P_cond), np.sum(T_cond)))
-        n = self.P_meshgrid[:,P_cond,:][:,:,T_cond]/(k_B * self.T_meshgrid[:,P_cond,:][:,:,T_cond])
+        n = self.P_meshgrid[:,P_cond,:][:,:,T_cond]/(K_B * self.T_meshgrid[:,P_cond,:][:,:,T_cond])
         
         for s1, s2 in self.collisional_absorption_data:
             if s1 in abundances and s2 in abundances:
@@ -100,14 +100,14 @@ class TransitDepthCalculator:
             mu += atm_abundances * self.mass_data[species_name]
 
         dP = P[1:] - P[0:-1]
-        dr = dP/P[1:] * k_B * T[1:]/(mu[1:] * amu* self.g)
-        dr = np.append(k_B*T[0]/(mu[0] * amu * self.g), dr)
+        dr = dP/P[1:] * K_B * T[1:]/(mu[1:] * AMU * self.g)
+        dr = np.append(K_B*T[0]/(mu[0] * AMU * self.g), dr)
         
         #dz goes from top to bottom of atmosphere
         radius_with_atm = np.sum(dr) + planet_radius
         radii = radius_with_atm - np.cumsum(dr)
         radii = np.append(radius_with_atm, radii[P_cond])
-        return radii, dr
+        return radii, dr[P_cond]
     
     def compute_depths(self, planet_radius, P, T, abundances, add_scattering=True, scattering_factor=1, add_collisional_absorption=True, cloudtop_pressure=np.inf):
         '''
@@ -124,7 +124,6 @@ class TransitDepthCalculator:
         radii, dr = self.get_above_cloud_r_and_dr(P, T, abundances, planet_radius, above_clouds)
         P = P[above_clouds]
         T = T[above_clouds]
-        dr = dr[above_clouds]
         
         T_cond = interpolator_3D.get_condition_array(T, self.T_grid)
         P_cond = interpolator_3D.get_condition_array(P, self.P_grid, cloudtop_pressure)
@@ -138,8 +137,6 @@ class TransitDepthCalculator:
         tau_los = get_line_of_sight_tau(absorption_coeff_atm, radii)
 
         absorption_fraction = 1 - np.exp(-tau_los)
-        
-        #absorption_fraction[:, P > cloudtop_pressure] = 0
         
         transit_depths = (planet_radius/self.star_radius)**2 + 2/self.star_radius**2 * absorption_fraction.dot(radii[1:] * dr)
         end = time.time()

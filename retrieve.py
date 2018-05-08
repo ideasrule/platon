@@ -46,7 +46,8 @@ class Retriever:
         wavelengths, calculated_depths = calculator.compute_depths(R, P_profile, T_profile, abundances, scattering_factor=scatt_factor, cloudtop_pressure=cloudtop_P)                
         result = -0.5 * np.sum((calculated_depths - measured_depths)**2/measured_errors**2)
 
-        #print result, median_diff, R/7.1e7, T, metallicity, scatt_factor, cloudtop_P
+        median_diff = np.median(np.abs(calculated_depths - measured_depths))*1e6
+        print result, median_diff, R/7.1e7, T, metallicity, scatt_factor, cloudtop_P
         if plot:
             plt.errorbar(1e6*wavelengths, measured_depths, yerr=measured_errors, fmt='.')
             plt.plot(1e6*wavelengths, calculated_depths)

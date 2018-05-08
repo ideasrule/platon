@@ -90,7 +90,24 @@ class TransitDepthCalculator:
                 absorption_coeff += abs_data * n1 * n2
 
         return absorption_coeff
+    
+
+    def get_above_cloud_r_and_dr(self, P, T, abundances, planet_radius, P_cond):
+        mu = np.zeros(len(P))
+        for species_name in abundances:
+            interpolator = RectBivariateSpline(self.P_grid, self.T_grid, abundances[species_name], kx=1, ky=1)
+            atm_abundances = interpolator.ev(P, T)
+            mu += atm_abundances * self.mass_data[species_name]
+
+        dP = P[1:] - P[0:-1]
+        dr = dP/P[1:] * k_B * T[1:]/(mu[1:] * amu* self.g)
+        dr = np.append(k_B*T[0]/(mu[0] * amu * self.g), dr)
         
+        #dz goes from top to bottom of atmosphere
+        radius_with_atm = np.sum(dr) + planet_radius
+        radii = radius_with_atm - np.cumsum(dr)
+        radii = np.append(radius_with_atm, radii[P_cond])
+        return radii, dr
     
     def compute_depths(self, planet_radius, P, T, abundances, add_scattering=True, scattering_factor=1, add_collisional_absorption=True, cloudtop_pressure=np.inf):
         '''
@@ -103,38 +120,26 @@ class TransitDepthCalculator:
         start = time.time()
         assert(len(P) == len(T))
 
-        #above_clouds = P < cloudtop_pressure
-        #P = P[above_clouds]
-        #T = T[above_clouds]
+        above_clouds = P < cloudtop_pressure
+        radii, dr = self.get_above_cloud_r_and_dr(P, T, abundances, planet_radius, above_clouds)
+        P = P[above_clouds]
+        T = T[above_clouds]
+        dr = dr[above_clouds]
         
         T_cond = interpolator_3D.get_condition_array(T, self.T_grid)
-        P_cond = interpolator_3D.get_condition_array(P, self.P_grid)
-
-        #print self.P_grid[P_cond]
+        P_cond = interpolator_3D.get_condition_array(P, self.P_grid, cloudtop_pressure)
+     
         absorption_coeff = self.get_gas_absorption(abundances, P_cond, T_cond)
         if add_scattering: absorption_coeff += scattering_factor * self.get_scattering_absorption(abundances, P_cond, T_cond)
-        if add_collisional_absorption: absorption_coeff += self.get_collisional_absorption(abundances, P_cond, T_cond)
-        
-        mu = np.zeros(len(P))
-        for species_name in abundances:
-            interpolator = RectBivariateSpline(self.P_grid, self.T_grid, abundances[species_name], kx=1, ky=1)
-            atm_abundances = interpolator.ev(P, T)
-            mu += atm_abundances * self.mass_data[species_name]
+        if add_collisional_absorption: absorption_coeff += self.get_collisional_absorption(abundances, P_cond, T_cond)    
 
         absorption_coeff_atm = interpolator_3D.fast_interpolate(absorption_coeff, self.T_grid[T_cond], self.P_grid[P_cond], T, P)
 
-        dP = P[1:] - P[0:-1]
-        dr = dP/P[1:] * k_B * T[1:]/(mu[1:] * amu* self.g)
-        dr = np.append(k_B*T[0]/(mu[0] * amu * self.g), dr)
-        
-        #dz goes from top to bottom of atmosphere
-        radius_with_atm = np.sum(dr) + planet_radius
-        radii = np.append(radius_with_atm, radius_with_atm - np.cumsum(dr))
         tau_los = get_line_of_sight_tau(absorption_coeff_atm, radii)
 
         absorption_fraction = 1 - np.exp(-tau_los)
         
-        absorption_fraction[:, P > cloudtop_pressure] = 0
+        #absorption_fraction[:, P > cloudtop_pressure] = 0
         
         transit_depths = (planet_radius/self.star_radius)**2 + 2/self.star_radius**2 * absorption_fraction.dot(radii[1:] * dr)
         end = time.time()
@@ -156,7 +161,7 @@ class TransitDepthCalculator:
 T = T*0.9
 abundances = eos_reader.get_abundances("EOS/eos_1Xsolar_cond.dat")
     
-depth_calculator = TransitDepthCalculator(6.4e6, 7e8, 9.8)
+depth_calculator = TransitDepthCalculator(7e8, 9.8)
 wfc_wavelengths = np.linspace(1.1e-6, 1.7e-6, 30)
 wavelength_bins = []
 for i in range(len(wfc_wavelengths) - 1):
@@ -166,7 +171,8 @@ wavelength_bins.append([3.2e-6, 4e-6])
 wavelength_bins.append([4e-6, 5e-6])
 depth_calculator.change_wavelength_bins(wavelength_bins)
 
-wavelengths, transit_depths = depth_calculator.compute_depths(P, T, abundances, cloudtop_pressure=10)
+wavelengths, transit_depths = depth_calculator.compute_depths(6.4e6, P, T, abundances, cloudtop_pressure=10)
+print transit_depths
 transit_depths *= 100
 
 ref_wavelengths, ref_depths = np.loadtxt("ref_spectra.dat", unpack=True, skiprows=2)

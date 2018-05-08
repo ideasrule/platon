@@ -45,12 +45,8 @@ class Retriever:
         
         wavelengths, calculated_depths = calculator.compute_depths(R, P_profile, T_profile, abundances, scattering_factor=scatt_factor, cloudtop_pressure=cloudtop_P)                
         result = -0.5 * np.sum((calculated_depths - measured_depths)**2/measured_errors**2)
-        median_diff = 1e6*np.median(np.abs(calculated_depths - measured_depths))
-        '''if median_diff < 30:
-            plt.plot(wavelengths, calculated_depths, '.')
-            plt.errorbar(wavelengths, measured_depths, yerr=measured_errors, fmt='.')
-            plt.show()'''
-        print result, median_diff, R/7.1e7, T, metallicity, scatt_factor, cloudtop_P
+
+        #print result, median_diff, R/7.1e7, T, metallicity, scatt_factor, cloudtop_P
         if plot:
             plt.errorbar(1e6*wavelengths, measured_depths, yerr=measured_errors, fmt='.')
             plt.plot(1e6*wavelengths, calculated_depths)
@@ -150,9 +146,9 @@ fit_info = FitInfo({'R': R_guess, 'T': T_guess, 'logZ': np.log10(metallicity_gue
 fit_info.add_fit_param('R', 0.9*R_guess, 1.1*R_guess, 0, np.inf)
 fit_info.add_fit_param('T', 0.5*T_guess, 1.5*T_guess, 0, np.inf)
 fit_info.add_fit_param('logZ', -1, 3, -1, 3)
-fit_info.add_fit_param('log_cloudtop_P', -1, 6, -np.inf, np.inf)
+fit_info.add_fit_param('log_cloudtop_P', -1, 6, 0, np.inf)
 fit_info.add_fit_param('log_scatt_factor', 0, 1, 0, 3)
 
-#retriever.run_emcee(bins, depths, errors, fit_info)
-retriever.plot_result(bins, depths, errors, fit_info, [1.35868222866*7.1e7, 1108.28033324, np.log10(0.718669990058), np.log10(940.472706829), np.log10(2.87451662752)])
+retriever.run_emcee(bins, depths, errors, fit_info, nsteps=30000)
+#retriever.plot_result(bins, depths, errors, fit_info, [1.35868222866*7.1e7, 1108.28033324, np.log10(0.718669990058), np.log10(940.472706829), np.log10(2.87451662752)])
 

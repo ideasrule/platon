@@ -2,6 +2,7 @@ import numpy as np
 import os
 import eos_reader
 import scipy
+import pickle
 
 class AbundanceGetter:
     def __init__(self, format='ggchem'):
@@ -15,13 +16,14 @@ class AbundanceGetter:
         else:
             assert(False)
             
-    def load_exotransmit_files(self):
+    def load_exotransmit_files(self, type='gas'):
         self.metallicities = [0.1, 1, 5, 10, 30, 50, 100, 1000]
         self.abundances = []
         for m in self.metallicities:
             m_str = str(m).replace('.', 'p')
-            filename = "EOS/eos_{0}Xsolar_cond.dat".format(m_str)
-            abundances = eos_reader.get_abundances(filename)
+            filename = "EOS/eos_{0}Xsolar_{1}.dat".format(m_str, type)
+            print filename
+            self.abundances.append(eos_reader.get_abundances(filename))
 
     def load_ggchem_files(self):
         all_logZ = np.linspace(-1, 3, 81)
@@ -34,9 +36,9 @@ class AbundanceGetter:
             if not os.path.isfile(filename):
                 file_exists[i] = False
                 continue
-            
-            abundances = eos_reader.get_abundances_from_pickle(filename)
-            self.abundances.append(abundances)
+
+            with open(filename) as f:                
+                self.abundances.append(pickle.load(f))
             
         self.metallicities = self.metallicities[file_exists]
 

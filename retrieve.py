@@ -7,10 +7,11 @@ import emcee
 from fit_info import FitInfo
 import os
 from abundance_getter import AbundanceGetter
+import pickle
 
 class Retriever:
     def __init__(self):
-        self.abundance_getter = AbundanceGetter()
+        self.abundance_getter = AbundanceGetter("exotransmit")
 
 
     def ln_prob(self, params, calculator, fit_info, measured_depths, measured_errors, low_P=0.1, high_P=2e5, num_P=400, max_scatt_factor=10, plot=False):
@@ -45,15 +46,15 @@ class Retriever:
             plt.show()
         return result
     
-    def run_emcee(self, wavelength_bins, depths, errors, fit_info, nwalkers=50, nsteps=10000):        
+    def run_emcee(self, wavelength_bins, depths, errors, fit_info, nwalkers=50, nsteps=10000, output_prefix="output"):        
         initial_positions = fit_info.generate_rand_param_arrays(nwalkers)
         calculator = TransitDepthCalculator(fit_info.get("star_radius"), fit_info.get("g"))
         calculator.change_wavelength_bins(wavelength_bins)        
         
         sampler = emcee.EnsembleSampler(nwalkers, fit_info.get_num_fit_params(), self.ln_prob, args=(calculator, fit_info, depths, errors))
         sampler.run_mcmc(initial_positions, nsteps)
-        np.save("chain.npy", sampler.chain)
-        np.save("lnprob.npy", sampler.lnprobability)
+        np.save(output_prefix + "_chain.npy", sampler.chain)
+        np.save(output_prefix + "_lnprob.npy", sampler.lnprobability)
 
     def plot_result(self, wavelength_bins, depths, errors, fit_info, parameter_array):
         calculator = TransitDepthCalculator(fit_info.get("star_radius"), fit_info.get("g"))
@@ -144,6 +145,7 @@ fit_info.add_fit_param('logZ', -1, 3, -1, 3)
 fit_info.add_fit_param('log_cloudtop_P', -1, 6, 0, np.inf)
 fit_info.add_fit_param('log_scatt_factor', 0, 1, 0, 3)
 
-retriever.run_emcee(bins, depths, errors, fit_info, nsteps=30000)
+retriever.run_emcee(bins, depths, errors, fit_info, output_prefix="exotransmit")
+
 #retriever.plot_result(bins, depths, errors, fit_info, [1.35868222866*7.1e7, 1108.28033324, np.log10(0.718669990058), np.log10(940.472706829), np.log10(2.87451662752)])
 

@@ -6,34 +6,12 @@ from transit_depth_calculator import TransitDepthCalculator
 import emcee
 from fit_info import FitInfo
 import os
+from abundance_getter import AbundanceGetter
 
 class Retriever:
     def __init__(self):
-        all_logZ = np.linspace(-1, 3, 81)
-        self.metallicities = 10**all_logZ
-        self.abundances = []
-        file_exists = np.ones(len(all_logZ), dtype=bool)
-        
-        for i,logZ in enumerate(all_logZ):
-            filename = "abundances/abund_dict_{0}.pkl".format(str(logZ))
-            if not os.path.isfile(filename):
-                file_exists[i] = False
-                continue
-            
-            abundances = eos_reader.get_abundances_from_pickle(filename)
-            self.abundances.append(abundances)
-            
-        self.metallicities = self.metallicities[file_exists]
-        all_logZ = all_logZ[file_exists]
-        print self.metallicities, all_logZ
+        self.abundance_getter = AbundanceGetter()
 
-    def interp_metallicity_grid(self, metallicity):
-        result = dict()
-        for key in self.abundances[0]:
-            grids = [self.abundances[i][key] for i in range(len(self.abundances))]
-            interpolator = scipy.interpolate.interp1d(self.metallicities, grids, axis=0)
-            result[key] = interpolator(metallicity)
-        return result
 
     def ln_prob(self, params, calculator, fit_info, measured_depths, measured_errors, low_P=0.1, high_P=2e5, num_P=400, max_scatt_factor=10, plot=False):
         if not fit_info.within_limits(params): return -np.inf
@@ -44,14 +22,15 @@ class Retriever:
         metallicity = 10.0**params_dict["logZ"]
         scatt_factor = 10.0**params_dict["log_scatt_factor"]
         cloudtop_P = 10.0**params_dict["log_cloudtop_P"]
+        min_metallicity, max_metallicity = self.abundance_getter.get_metallicity_bounds()
         
-        if metallicity < np.min(self.metallicities) or metallicity > np.max(self.metallicities): return -np.inf
+        if metallicity < min_metallicity or metallicity > max_metallicity: return -np.inf
         if T <= np.min(calculator.T_grid) or T >= np.max(calculator.T_grid): return -np.inf
         if cloudtop_P <= low_P or cloudtop_P >= high_P: return -np.inf
 
         P_profile = np.logspace(np.log10(low_P), np.log10(high_P), num_P)
         T_profile = np.ones(num_P) * T
-        abundances = self.interp_metallicity_grid(metallicity)
+        abundances = self.abundance_getter.interp(metallicity)
         
         wavelengths, calculated_depths = calculator.compute_depths(R, P_profile, T_profile, abundances, scattering_factor=scatt_factor, cloudtop_pressure=cloudtop_P)                
         result = -0.5 * np.sum((calculated_depths - measured_depths)**2/measured_errors**2)
@@ -137,9 +116,13 @@ stis_bins, stis_depths, stis_errors = hd209458b_stis()
 wfc3_bins, wfc3_depths, wfc3_errors = hd209458b_wfc3()
 spitzer_bins, spitzer_depths, spitzer_errors = hd209458b_spitzer()
 
-bins = np.concatenate([stis_bins, wfc3_bins, spitzer_bins])
-depths = np.concatenate([stis_depths, wfc3_depths, spitzer_depths])
-errors = np.concatenate([stis_errors, wfc3_errors, spitzer_errors])
+#bins = np.concatenate([stis_bins, wfc3_bins, spitzer_bins])
+#depths = np.concatenate([stis_depths, wfc3_depths, spitzer_depths])
+#errors = np.concatenate([stis_errors, wfc3_errors, spitzer_errors])
+
+bins = wfc3_bins
+depths = wfc3_depths
+errors = wfc3_errors
 
 
 #plt.errorbar([(start+end)/2 for (start,end) in bins], depths, yerr=errors, fmt='.')

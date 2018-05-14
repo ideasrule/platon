@@ -1,7 +1,11 @@
 import sys
 import numpy as np
+import pickle
 
-def get_abundances(filename):
+def get_abundances_from_pickle(filename):
+    return pickle.load(open(filename))
+
+def get_abundances_from_text(filename):
     '''Reads EOS file in the ExoTransmit format, returning a dictionary mapping species name to an abundance array of dimension'''
     line_counter = 0
 

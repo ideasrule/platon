@@ -5,17 +5,27 @@ import scipy.interpolate
 from transit_depth_calculator import TransitDepthCalculator
 import emcee
 from fit_info import FitInfo
+import os
 
 class Retriever:
     def __init__(self):
-        self.metallicities = [0.1, 1, 5, 10, 30, 50, 100, 1000]
+        all_logZ = np.linspace(-1, 3, 81)
+        self.metallicities = 10**all_logZ
         self.abundances = []
-        for m in self.metallicities:
-            m_str = str(m).replace('.', 'p')
-            filename = "EOS/eos_{0}Xsolar_cond.dat".format(m_str)
-            abundances = eos_reader.get_abundances(filename)
+        file_exists = np.ones(len(all_logZ), dtype=bool)
+        
+        for i,logZ in enumerate(all_logZ):
+            filename = "abundances/abund_dict_{0}.pkl".format(str(logZ))
+            if not os.path.isfile(filename):
+                file_exists[i] = False
+                continue
+            
+            abundances = eos_reader.get_abundances_from_pickle(filename)
             self.abundances.append(abundances)
-
+            
+        self.metallicities = self.metallicities[file_exists]
+        all_logZ = all_logZ[file_exists]
+        print self.metallicities, all_logZ
 
     def interp_metallicity_grid(self, metallicity):
         result = dict()
@@ -130,6 +140,7 @@ spitzer_bins, spitzer_depths, spitzer_errors = hd209458b_spitzer()
 bins = np.concatenate([stis_bins, wfc3_bins, spitzer_bins])
 depths = np.concatenate([stis_depths, wfc3_depths, spitzer_depths])
 errors = np.concatenate([stis_errors, wfc3_errors, spitzer_errors])
+
 
 #plt.errorbar([(start+end)/2 for (start,end) in bins], depths, yerr=errors, fmt='.')
 #plt.show()

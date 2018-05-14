@@ -22,7 +22,6 @@ class AbundanceGetter:
         for m in self.metallicities:
             m_str = str(m).replace('.', 'p')
             filename = "EOS/eos_{0}Xsolar_{1}.dat".format(m_str, type)
-            print filename
             self.abundances.append(eos_reader.get_abundances(filename))
 
     def load_ggchem_files(self):

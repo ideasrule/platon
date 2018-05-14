@@ -37,7 +37,7 @@ class Retriever:
         result = -0.5 * np.sum((calculated_depths - measured_depths)**2/measured_errors**2)
 
         median_diff = np.median(np.abs(calculated_depths - measured_depths))*1e6
-        print result, median_diff, R/7.1e7, T, metallicity, scatt_factor, cloudtop_P
+        #print result, median_diff, R/7.1e7, T, metallicity, scatt_factor, cloudtop_P
         if plot:
             plt.errorbar(1e6*wavelengths, measured_depths, yerr=measured_errors, fmt='.')
             plt.plot(1e6*wavelengths, calculated_depths)
@@ -52,7 +52,11 @@ class Retriever:
         calculator.change_wavelength_bins(wavelength_bins)        
         
         sampler = emcee.EnsembleSampler(nwalkers, fit_info.get_num_fit_params(), self.ln_prob, args=(calculator, fit_info, depths, errors))
-        sampler.run_mcmc(initial_positions, nsteps)
+
+        for i, result in enumerate(sampler.sample(initial_positions, iterations=nsteps)):
+            if (i+1) % 10 == 0:
+                print str(i+1) + "/" + str(nsteps), sampler.lnprobability[0,i], sampler.chain[0,i]
+        
         np.save(output_prefix + "_chain.npy", sampler.chain)
         np.save(output_prefix + "_lnprob.npy", sampler.lnprobability)
 

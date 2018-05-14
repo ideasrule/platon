@@ -10,8 +10,8 @@ from abundance_getter import AbundanceGetter
 import pickle
 
 class Retriever:
-    def __init__(self):
-        self.abundance_getter = AbundanceGetter("exotransmit")
+    def __init__(self, abundance_format='ggchem'):
+        self.abundance_getter = AbundanceGetter(abundance_format)
 
 
     def ln_prob(self, params, calculator, fit_info, measured_depths, measured_errors, low_P=0.1, high_P=2e5, num_P=400, max_scatt_factor=10, plot=False):
@@ -133,7 +133,7 @@ errors = wfc3_errors
 #plt.errorbar([(start+end)/2 for (start,end) in bins], depths, yerr=errors, fmt='.')
 #plt.show()
         
-retriever = Retriever()
+retriever = Retriever('ggchem')
 
 R_guess = 9.7e7
 T_guess = 1200

@@ -1,7 +1,5 @@
 import numpy as np
 import os
-from constants import k_B
-
 
 def read_species_data(absorption_dir, species_info_file, absorption_file_prefix="absorb_coeffs_"):
     absorption_data = dict()

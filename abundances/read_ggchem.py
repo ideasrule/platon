@@ -9,7 +9,8 @@ def get_species_from_file(filename):
     return species
 
 
-filename = sys.argv[1]
+logZ = sys.argv[1]
+filename = "result_{0}/Static_Conc_2D.dat".format(logZ)
 species_info_file = sys.argv[2]
 
 N_T = 30
@@ -36,7 +37,6 @@ include = [h in species_to_include for h in header]
 
 for i,row in enumerate(data):
     total = np.sum(10**row[include])
-    print total
     data[i, include] = 10**row[include]/total
 
 #print header
@@ -45,7 +45,7 @@ for i, h in enumerate(header):
     abund_dict[h] = np.flip(abund_dict[h], 0)
     abund_dict[h] = np.flip(abund_dict[h], 1)
 
+output_filename = "abund_dict_{0}.pkl".format(logZ)
+pickle.dump(abund_dict, open(output_filename, "wb"))    
 
-pickle.dump(abund_dict, open("output.pkl", "wb"))    
-#print abund_dict.keys()
 

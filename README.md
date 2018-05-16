@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.com/ideasrule/PyExoTransmit.svg?token=CWfZwAJHKDPous7mJixf&branch=master)](https://travis-ci.com/ideasrule/PyExoTransmit)
+
 # PyExoTransmit
 
 PyExoTransmit calculates the transmission spectrum of a planet from 300 nm to 30 um, taking into account gas absorption, collisionally induced gas absorption, and Rayleigh scattering.  It is derived from ExoTransmit by Eliza Kempton (https://github.com/elizakempton/Exo_Transmit).

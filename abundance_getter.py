@@ -5,33 +5,49 @@ import scipy
 import pickle
 
 class AbundanceGetter:
-    def __init__(self, format='ggchem'):
+    def __init__(self, format='ggchem', include_condensates=False):
         self.metallicities = None
         self.abundances = None
+        self.min_temperature = None
         
         if format == 'ggchem':
-            self.load_ggchem_files()
+            self.load_ggchem_files(include_condensates)
         elif format == 'exotransmit':
-            self.load_exotransmit_files()
+            self.load_exotransmit_files(include_condensates)
         else:
             assert(False)
             
-    def load_exotransmit_files(self, type='gas'):
+    def load_exotransmit_files(self, include_condensates):
+        self.min_temperature = 100
         self.metallicities = [0.1, 1, 5, 10, 30, 50, 100, 1000]
         self.abundances = []
+
+        if include_condensates:
+            suffix = "cond"
+        else:
+            suffix = "gas"
+        
         for m in self.metallicities:
             m_str = str(m).replace('.', 'p')
-            filename = "EOS/eos_{0}Xsolar_{1}.dat".format(m_str, type)
+            filename = "EOS/eos_{0}Xsolar_{1}.dat".format(m_str, suffix)
             self.abundances.append(eos_reader.get_abundances(filename))
 
-    def load_ggchem_files(self):
+    def load_ggchem_files(self, include_condensates):
         all_logZ = np.linspace(-1, 3, 81)
         self.metallicities = 10**all_logZ
         self.abundances = []
+
+        if include_condensates:
+            sub_dir = "cond"
+            self.min_temperature = 300
+        else:
+            sub_dir = "gas_only"
+            self.min_temperature = 100
+            
         file_exists = np.ones(len(all_logZ), dtype=bool)
         
         for i,logZ in enumerate(all_logZ):
-            filename = "abundances/abund_dict_{0}.pkl".format(str(logZ))
+            filename = "abundances/{0}/abund_dict_{1}.pkl".format(sub_dir, str(logZ))
             if not os.path.isfile(filename):
                 file_exists[i] = False
                 continue
@@ -51,3 +67,6 @@ class AbundanceGetter:
 
     def get_metallicity_bounds(self):
         return np.min(self.metallicities), np.max(self.metallicities)
+
+    def get_min_temperature(self):
+        return self.min_temperature

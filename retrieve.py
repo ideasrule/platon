@@ -10,8 +10,8 @@ from abundance_getter import AbundanceGetter
 import pickle
 
 class Retriever:
-    def __init__(self, abundance_format='ggchem'):
-        self.abundance_getter = AbundanceGetter(abundance_format)
+    def __init__(self, abundance_format='ggchem', include_condensates=False):
+        self.abundance_getter = AbundanceGetter(abundance_format, include_condensates)
 
 
     def ln_prob(self, params, calculator, fit_info, measured_depths, measured_errors, low_P=0.1, high_P=2e5, num_P=400, max_scatt_factor=10, plot=False):
@@ -27,6 +27,7 @@ class Retriever:
         
         if metallicity < min_metallicity or metallicity > max_metallicity: return -np.inf
         if T <= np.min(calculator.T_grid) or T >= np.max(calculator.T_grid): return -np.inf
+        if T <= self.abundance_getter.get_min_temperature(): return -np.inf
         if cloudtop_P <= low_P or cloudtop_P >= high_P: return -np.inf
 
         P_profile = np.logspace(np.log10(low_P), np.log10(high_P), num_P)
@@ -133,7 +134,7 @@ errors = wfc3_errors
 #plt.errorbar([(start+end)/2 for (start,end) in bins], depths, yerr=errors, fmt='.')
 #plt.show()
         
-retriever = Retriever('ggchem')
+retriever = Retriever('ggchem', include_condensates=True)
 
 R_guess = 9.7e7
 T_guess = 1200

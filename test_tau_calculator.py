@@ -1,7 +1,7 @@
 import unittest
 import tau_calculator
 import numpy as np
-import scipy.interpolate
+import scipy.integrate
 
 class TestTauLOS(unittest.TestCase):
 

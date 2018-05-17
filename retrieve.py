@@ -24,6 +24,7 @@ class Retriever:
         scatt_factor = 10.0**params_dict["log_scatt_factor"]
         cloudtop_P = 10.0**params_dict["log_cloudtop_P"]
         min_metallicity, max_metallicity = self.abundance_getter.get_metallicity_bounds()
+        error_multiple = params_dict["error_multiple"]
         
         if metallicity < min_metallicity or metallicity > max_metallicity: return -np.inf
         if T <= np.min(calculator.T_grid) or T >= np.max(calculator.T_grid): return -np.inf
@@ -34,11 +35,11 @@ class Retriever:
         T_profile = np.ones(num_P) * T
         abundances = self.abundance_getter.interp(metallicity)
         
-        wavelengths, calculated_depths = calculator.compute_depths(R, P_profile, T_profile, abundances, scattering_factor=scatt_factor, cloudtop_pressure=cloudtop_P)                
-        result = -0.5 * np.sum((calculated_depths - measured_depths)**2/measured_errors**2)
+        wavelengths, calculated_depths = calculator.compute_depths(R, P_profile, T_profile, abundances, scattering_factor=scatt_factor, cloudtop_pressure=cloudtop_P)
+        residuals = calculated_depths - measured_depths
+        scaled_errors = error_multiple * measured_errors
+        result = -0.5 * np.sum(residuals**2/scaled_errors**2 + np.log(scaled_errors**2))
 
-        median_diff = np.median(np.abs(calculated_depths - measured_depths))*1e6
-        #print result, median_diff, R/7.1e7, T, metallicity, scatt_factor, cloudtop_P
         if plot:
             plt.errorbar(1e6*wavelengths, measured_depths, yerr=measured_errors, fmt='.')
             plt.plot(1e6*wavelengths, calculated_depths)
@@ -142,15 +143,18 @@ metallicity_guess = 1
 scatt_factor_guess = 1
 cloudtop_P_guess = 1e6
 
-fit_info = FitInfo({'R': R_guess, 'T': T_guess, 'logZ': np.log10(metallicity_guess), 'log_scatt_factor': np.log10(scatt_factor_guess), 'log_cloudtop_P': np.log10(cloudtop_P_guess), 'star_radius': 8.0e8, 'g': 9.311})
+fit_info = FitInfo({'R': R_guess, 'T': T_guess, 'logZ': np.log10(metallicity_guess), 'log_scatt_factor': np.log10(scatt_factor_guess), 'log_cloudtop_P': np.log10(cloudtop_P_guess), 'star_radius': 8.0e8, 'g': 9.311, 'error_multiple': 1})
 
 fit_info.add_fit_param('R', 0.9*R_guess, 1.1*R_guess, 0, np.inf)
 fit_info.add_fit_param('T', 0.5*T_guess, 1.5*T_guess, 0, np.inf)
 fit_info.add_fit_param('logZ', -1, 3, -1, 3)
 fit_info.add_fit_param('log_cloudtop_P', -1, 6, 0, np.inf)
 fit_info.add_fit_param('log_scatt_factor', 0, 1, 0, 3)
+fit_info.add_fit_param('error_multiple', 0.1, 10, 0, np.inf)
 
-retriever.run_emcee(bins, depths, errors, fit_info, output_prefix="exotransmit")
+
+
+retriever.run_emcee(bins, depths, errors, fit_info, output_prefix="ggchem_error", nsteps=10000)
 
 #retriever.plot_result(bins, depths, errors, fit_info, [1.35868222866*7.1e7, 1108.28033324, np.log10(0.718669990058), np.log10(940.472706829), np.log10(2.87451662752)])
 

@@ -32,31 +32,19 @@ def normal_interpolate(data, grid_x, grid_y, target_x, target_y):
 def fast_interpolate(data, grid_x, grid_y, target_x, target_y):
     assert(len(target_x) == len(target_y))
     
-    x_mesh, y_mesh = np.meshgrid(np.arange(len(grid_x)), np.arange(len(grid_y)))
     if len(grid_x) == 1:
         #Stupid hack to get around refusal of RectBivariateSpline to
         #interpolate with only one element
-        interpolator = interp1d(grid_y, y_mesh.T.flatten())
-        y_indices = interpolator(target_y)
-        y_indices_lower = y_indices.astype(int)
-        y_indices_upper = y_indices_lower + 1
-        y_indices_frac = y_indices - y_indices_lower
-        return data[:, y_indices_lower, 0]*(1-y_indices_frac) + \
-            data[:, y_indices_upper, 0] * y_indices_frac
+        interpolator = interp1d(grid_y, data, axis=1)
+        return interpolator(target_y).reshape((data.shape[0], len(target_y)))
 
     if len(grid_y) == 1:
-        interpolator = interp1d(grid_x, x_mesh.T.flatten())
-        x_indices = interpolator(target_x)
-        x_indices_lower = x_indices.astype(int)
-        x_indices_upper = x_indices_lower + 1
-        x_indices_frac = x_indices - x_indices_lower
-        return data[:, 0, x_indices_lower] * (1-x_indices_frac) + \
-            data[:, 0, x_indices_upper] * x_indices_frac
+        #Same as above
+        interpolator = interp1d(grid_x, data, axis=2)
+        return interpolator(target_x).reshape((data.shape[0], len(target_x)))
     
-    #print grid_x, grid_y
-    #print "interpolator", grid_x, grid_y, target_x, target_y
+    x_mesh, y_mesh = np.meshgrid(np.arange(len(grid_x)), np.arange(len(grid_y)))
     interpolator = RectBivariateSpline(grid_x, grid_y, x_mesh.T, kx=1, ky=1)
-    #print "interpolator", grid_y
 
     x_indices = interpolator.ev(target_x, target_y)
     interpolator = RectBivariateSpline(grid_x, grid_y, y_mesh.T, kx=1, ky=1)

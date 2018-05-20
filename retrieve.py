@@ -8,14 +8,17 @@ from fit_info import FitInfo
 import os
 from abundance_getter import AbundanceGetter
 import pickle
+import nestle
 
 class Retriever:
     def __init__(self, abundance_format='ggchem', include_condensates=False):
         self.abundance_getter = AbundanceGetter(abundance_format, include_condensates)
-
+        self.num_calls = 0
+        
 
     def ln_prob(self, params, calculator, fit_info, measured_depths, measured_errors, low_P=0.1, high_P=2e5, num_P=400, max_scatt_factor=10, plot=False):
-        if not fit_info.within_limits(params): return -np.inf
+        if not fit_info.within_limits(params):
+            return -np.inf
         params_dict = fit_info.interpret_param_array(params)
 
         R = params_dict["R"]
@@ -26,11 +29,16 @@ class Retriever:
         min_metallicity, max_metallicity = self.abundance_getter.get_metallicity_bounds()
         error_multiple = params_dict["error_multiple"]
         
-        if metallicity < min_metallicity or metallicity > max_metallicity: return -np.inf
-        if T <= np.min(calculator.T_grid) or T >= np.max(calculator.T_grid): return -np.inf
-        if T <= self.abundance_getter.get_min_temperature(): return -np.inf
-        if cloudtop_P <= low_P or cloudtop_P >= high_P: return -np.inf
+        if metallicity < min_metallicity or metallicity > max_metallicity:
+            return -np.inf
+        if T <= np.min(calculator.T_grid) or T >= np.max(calculator.T_grid):
+            return -np.inf
+        if T <= self.abundance_getter.get_min_temperature():
+            return -np.inf
+        if cloudtop_P <= low_P or cloudtop_P >= high_P:
+            return -np.inf
 
+        self.num_calls += 1
         P_profile = np.logspace(np.log10(low_P), np.log10(high_P), num_P)
         T_profile = np.ones(num_P) * T
         abundances = self.abundance_getter.interp(metallicity)
@@ -62,6 +70,32 @@ class Retriever:
         np.save(output_prefix + "_chain.npy", sampler.chain)
         np.save(output_prefix + "_lnprob.npy", sampler.lnprobability)
 
+    def run_multinest(self, wavelength_bins, depths, errors, fit_info, output_prefix):
+        calculator = TransitDepthCalculator(fit_info.get("star_radius"), fit_info.get("g"))
+        calculator.change_wavelength_bins(wavelength_bins)
+        
+        def multinest_prior(cube):
+            new_cube = np.zeros(len(cube))
+            for i in range(len(cube)):
+                low_guess, high_guess = fit_info.get_guess_bounds(i)
+                new_cube[i] = cube[i]*(high_guess - low_guess) + low_guess
+
+            return new_cube
+
+
+        def multinest_ln_prob(cube):
+            result = self.ln_prob(cube, calculator, fit_info, depths, errors)
+            #print result, cube
+            return result
+
+        def callback(callback_info):
+            print callback_info["it"], self.num_calls, callback_info["logz"], multinest_prior(callback_info["active_u"][0])
+        
+        result = nestle.sample(multinest_ln_prob, multinest_prior, fit_info.get_num_fit_params(), callback=callback, method='multi')
+        print result
+        
+        
+        
     def plot_result(self, wavelength_bins, depths, errors, fit_info, parameter_array):
         calculator = TransitDepthCalculator(fit_info.get("star_radius"), fit_info.get("g"))
         calculator.change_wavelength_bins(wavelength_bins)
@@ -148,13 +182,13 @@ fit_info = FitInfo({'R': R_guess, 'T': T_guess, 'logZ': np.log10(metallicity_gue
 fit_info.add_fit_param('R', 0.9*R_guess, 1.1*R_guess, 0, np.inf)
 fit_info.add_fit_param('T', 0.5*T_guess, 1.5*T_guess, 0, np.inf)
 fit_info.add_fit_param('logZ', -1, 3, -1, 3)
-fit_info.add_fit_param('log_cloudtop_P', -1, 6, 0, np.inf)
+fit_info.add_fit_param('log_cloudtop_P', -1, 4, -np.inf, np.inf)
 fit_info.add_fit_param('log_scatt_factor', 0, 1, 0, 3)
 fit_info.add_fit_param('error_multiple', 0.1, 10, 0, np.inf)
 
 
+retriever.run_multinest(bins, depths, errors, fit_info, output_prefix="ggchem_error")
 
-retriever.run_emcee(bins, depths, errors, fit_info, output_prefix="ggchem_error", nsteps=10000)
 
 #retriever.plot_result(bins, depths, errors, fit_info, [1.35868222866*7.1e7, 1108.28033324, np.log10(0.718669990058), np.log10(940.472706829), np.log10(2.87451662752)])
 

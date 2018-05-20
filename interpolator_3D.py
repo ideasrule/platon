@@ -44,8 +44,20 @@ def fast_interpolate(data, grid_x, grid_y, target_x, target_y):
         return data[:, y_indices_lower, 0]*(1-y_indices_frac) + \
             data[:, y_indices_upper, 0] * y_indices_frac
 
+    if len(grid_y) == 1:
+        interpolator = interp1d(grid_x, x_mesh.T.flatten())
+        x_indices = interpolator(target_x)
+        x_indices_lower = x_indices.astype(int)
+        x_indices_upper = x_indices_lower + 1
+        x_indices_frac = x_indices - x_indices_lower
+        return data[:, 0, x_indices_lower] * (1-x_indices_frac) + \
+            data[:, 0, x_indices_upper] * x_indices_frac
+    
     #print grid_x, grid_y
+    #print "interpolator", grid_x, grid_y, target_x, target_y
     interpolator = RectBivariateSpline(grid_x, grid_y, x_mesh.T, kx=1, ky=1)
+    #print "interpolator", grid_y
+
     x_indices = interpolator.ev(target_x, target_y)
     interpolator = RectBivariateSpline(grid_x, grid_y, y_mesh.T, kx=1, ky=1)
     y_indices = interpolator.ev(target_x, target_y)

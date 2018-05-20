@@ -77,5 +77,7 @@ class FitInfo:
     def get_num_fit_params(self):
         return len(self.fit_params)
         
-        
+    def get_guess_bounds(self, index):
+        name = self.fit_params[index]
+        return self.all_params[name].low_guess, self.all_params[name].high_guess
     

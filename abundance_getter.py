@@ -44,18 +44,12 @@ class AbundanceGetter:
             sub_dir = "gas_only"
             self.min_temperature = 100
             
-        file_exists = np.ones(len(all_logZ), dtype=bool)
-        
         for i,logZ in enumerate(all_logZ):
-            filename = "abundances/{0}/abund_dict_{1}.pkl".format(sub_dir, str(logZ))
-            if not os.path.isfile(filename):
-                file_exists[i] = False
-                continue
-
+            filename = "abundances/{}/abund_dict_{:.2f}.pkl".format(sub_dir, logZ)
             with open(filename) as f:                
                 self.abundances.append(pickle.load(f))
             
-        self.metallicities = self.metallicities[file_exists]
+
 
     def interp(self, metallicity):
         result = dict()

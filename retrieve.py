@@ -1,14 +1,19 @@
-import eos_reader
+from __future__ import print_function
+
+import os
+
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.interpolate
-from transit_depth_calculator import TransitDepthCalculator
 import emcee
-from fit_info import FitInfo
-import os
-from abundance_getter import AbundanceGetter
-import pickle
 import nestle
+
+import eos_reader
+from transit_depth_calculator import TransitDepthCalculator
+from fit_info import FitInfo
+from abundance_getter import AbundanceGetter
+
+
 
 class Retriever:
     def __init__(self, abundance_format='ggchem', include_condensates=False):
@@ -63,7 +68,7 @@ class Retriever:
 
         for i, result in enumerate(sampler.sample(initial_positions, iterations=nsteps)):
             if (i+1) % 10 == 0:
-                print str(i+1) + "/" + str(nsteps), sampler.lnprobability[0,i], sampler.chain[0,i]
+                print(str(i+1) + "/" + str(nsteps), sampler.lnprobability[0,i], sampler.chain[0,i])
         
         np.save(output_prefix + "_chain.npy", sampler.chain)
         np.save(output_prefix + "_lnprob.npy", sampler.lnprobability)
@@ -87,10 +92,11 @@ class Retriever:
             return result
 
         def callback(callback_info):
-            print callback_info["it"], callback_info["logz"], multinest_prior(callback_info["active_u"][0])
+            print(callback_info["it"], callback_info["logz"], multinest_prior(callback_info["active_u"][0]))
         
         result = nestle.sample(multinest_ln_prob, multinest_prior, fit_info.get_num_fit_params(), callback=callback, method='multi')
-        print result
+        print(result)
+        return result
         
         
         

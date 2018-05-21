@@ -2,7 +2,9 @@ import numpy as np
 import os
 import eos_reader
 import scipy
-import pickle
+from io import open
+
+from compatible_loader import load_dict_from_pickle
 
 class AbundanceGetter:
     def __init__(self, format='ggchem', include_condensates=False):
@@ -48,11 +50,10 @@ class AbundanceGetter:
             
         for i,logZ in enumerate(all_logZ):
             filename = "abundances/{}/abund_dict_{:.2f}.pkl".format(sub_dir, logZ)
-            with open(filename) as f:                
-                self.abundances.append(pickle.load(f))
-                self.species_set.update(self.abundances[-1].keys())
+            abund = load_dict_from_pickle(filename)
+            self.abundances.append(abund)
+            self.species_set.update(abund.keys())
             
-
 
     def interp(self, metallicity):
         result = dict()

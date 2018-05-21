@@ -6,8 +6,9 @@ from tau_calculator import get_line_of_sight_tau
 import numpy as np
 import matplotlib.pyplot as plt
 import time
-import pickle
 from constants import K_B, AMU
+
+from compatible_loader import load_numpy_array
 
 class TransitDepthCalculator:
     def __init__(self, star_radius, g, absorption_dir="Absorption", species_info_file="species_info", lambda_grid_file="wavelengths.npy", P_grid_file="pressures.npy", T_grid_file="temperatures.npy", collisional_absorption_file="collisional_absorption.pkl"):
@@ -15,11 +16,11 @@ class TransitDepthCalculator:
         self.g = g
         self.absorption_data, self.mass_data, self.polarizability_data = read_species_data(absorption_dir, species_info_file)
 
-        self.collisional_absorption_data = np.load(collisional_absorption_file)
+        self.collisional_absorption_data = load_numpy_array(collisional_absorption_file)
 
-        self.lambda_grid = np.load(lambda_grid_file)
-        self.P_grid = np.load(P_grid_file)
-        self.T_grid = np.load(T_grid_file)
+        self.lambda_grid = load_numpy_array(lambda_grid_file)
+        self.P_grid = load_numpy_array(P_grid_file)
+        self.T_grid = load_numpy_array(T_grid_file)
 
         self.N_lambda = len(self.lambda_grid)
         self.N_T = len(self.T_grid)

@@ -2,4 +2,5 @@ numpy
 scipy
 matplotlib
 emcee
-
+nestle
+future

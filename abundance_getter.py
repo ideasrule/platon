@@ -8,6 +8,7 @@ class AbundanceGetter:
     def __init__(self, format='ggchem', include_condensates=False):
         self.metallicities = None
         self.abundances = None
+        self.species_set = set()
         self.min_temperature = None
         
         if format == 'ggchem':
@@ -31,6 +32,7 @@ class AbundanceGetter:
             m_str = str(m).replace('.', 'p')
             filename = "EOS/eos_{0}Xsolar_{1}.dat".format(m_str, suffix)
             self.abundances.append(eos_reader.get_abundances(filename))
+            self.species_set.update(self.abundances[-1].keys())
 
     def load_ggchem_files(self, include_condensates):
         all_logZ = np.linspace(-1, 3, 81)
@@ -48,12 +50,13 @@ class AbundanceGetter:
             filename = "abundances/{}/abund_dict_{:.2f}.pkl".format(sub_dir, logZ)
             with open(filename) as f:                
                 self.abundances.append(pickle.load(f))
+                self.species_set.update(self.abundances[-1].keys())
             
 
 
     def interp(self, metallicity):
         result = dict()
-        for key in self.abundances[0]:
+        for key in self.species_set:
             grids = [self.abundances[i][key] for i in range(len(self.abundances))]
             interpolator = scipy.interpolate.interp1d(self.metallicities, grids, axis=0)
             result[key] = interpolator(metallicity)

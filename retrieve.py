@@ -13,7 +13,6 @@ import nestle
 class Retriever:
     def __init__(self, abundance_format='ggchem', include_condensates=False):
         self.abundance_getter = AbundanceGetter(abundance_format, include_condensates)
-        self.num_calls = 0
         
 
     def ln_prob(self, params, calculator, fit_info, measured_depths, measured_errors, low_P=0.1, high_P=2e5, num_P=400, max_scatt_factor=10, plot=False):
@@ -38,7 +37,6 @@ class Retriever:
         if cloudtop_P <= low_P or cloudtop_P >= high_P:
             return -np.inf
 
-        self.num_calls += 1
         P_profile = np.logspace(np.log10(low_P), np.log10(high_P), num_P)
         T_profile = np.ones(num_P) * T
         abundances = self.abundance_getter.interp(metallicity)
@@ -89,7 +87,7 @@ class Retriever:
             return result
 
         def callback(callback_info):
-            print callback_info["it"], self.num_calls, callback_info["logz"], multinest_prior(callback_info["active_u"][0])
+            print callback_info["it"], callback_info["logz"], multinest_prior(callback_info["active_u"][0])
         
         result = nestle.sample(multinest_ln_prob, multinest_prior, fit_info.get_num_fit_params(), callback=callback, method='multi')
         print result

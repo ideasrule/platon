@@ -58,10 +58,10 @@ class TransitDepthCalculator:
         
     def get_gas_absorption(self, abundances, P_cond, T_cond):
         absorption_coeff = np.zeros((self.N_lambda, np.sum(P_cond), np.sum(T_cond)))         
-        for species_name in abundances.keys():
-            assert(abundances[species_name].shape == (self.N_P, self.N_T))
+        for species_name, species_abundance in abundances.items():
+            assert(species_abundance.shape == (self.N_P, self.N_T))
             if species_name in self.absorption_data:
-                absorption_coeff += self.absorption_data[species_name][:,P_cond,:][:,:,T_cond] * abundances[species_name][P_cond,:][:,T_cond]
+                absorption_coeff += self.absorption_data[species_name][:,P_cond,:][:,:,T_cond] * species_abundance[P_cond,:][:,T_cond]
                 
         return absorption_coeff
 

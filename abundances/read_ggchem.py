@@ -60,6 +60,7 @@ for i, h in enumerate(header):
         assert(False)
 
 output_filename = "abund_dict_{0}.pkl".format(logZ)
-pickle.dump(abund_dict, open(output_filename, "wb"))    
+with open(output_filename, "wb") as f:
+    pickle.dump(abund_dict, f, protocol=pickle.HIGHEST_PROTOCOL)    
 
 

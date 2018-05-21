@@ -46,11 +46,11 @@ def fast_interpolate(data, grid_x, grid_y, target_x, target_y):
     x_mesh, y_mesh = np.meshgrid(np.arange(len(grid_x)), np.arange(len(grid_y)))
     interpolator = RectBivariateSpline(grid_x, grid_y, x_mesh.T, kx=1, ky=1)
     x_indices = interpolator.ev(target_x, target_y)
-    assert(np.max(x_indices) <= len(target_x))
+    assert(np.max(x_indices) <= len(grid_x))
     
     interpolator = RectBivariateSpline(grid_x, grid_y, y_mesh.T, kx=1, ky=1)
     y_indices = interpolator.ev(target_x, target_y)
-    assert(np.max(y_indices) <= len(target_y))
+    assert(np.max(y_indices) <= len(grid_y))
     
     x_indices_lower = x_indices.astype(int)
     x_indices_upper = x_indices_lower + 1

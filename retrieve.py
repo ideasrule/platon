@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import scipy.interpolate
 import emcee
 import nestle
+import corner
 
 import eos_reader
 from transit_depth_calculator import TransitDepthCalculator
@@ -17,34 +18,33 @@ from abundance_getter import AbundanceGetter
 
 class Retriever:
     def __init__(self, abundance_format='ggchem', include_condensates=False):
-        self.abundance_getter = AbundanceGetter(abundance_format, include_condensates)
+        self.abundance_getter = AbundanceGetter(include_condensates)
         
 
     def ln_prob(self, params, calculator, fit_info, measured_depths, measured_errors, low_P=0.1, high_P=2e5, num_P=400, max_scatt_factor=10, plot=False):
         if not fit_info.within_limits(params):
             return -np.inf
+
         params_dict = fit_info.interpret_param_array(params)
 
         R = params_dict["R"]
         T = params_dict["T"]
         metallicity = 10.0**params_dict["logZ"]
+        CO_ratio = params_dict["CO_ratio"]
         scatt_factor = 10.0**params_dict["log_scatt_factor"]
         cloudtop_P = 10.0**params_dict["log_cloudtop_P"]
-        min_metallicity, max_metallicity = self.abundance_getter.get_metallicity_bounds()
         error_multiple = params_dict["error_multiple"]
-        
-        if metallicity < min_metallicity or metallicity > max_metallicity:
-            return -np.inf
+
+        if not self.abundance_getter.is_in_bounds(metallicity, CO_ratio, T):
+            return -np.inf        
         if T <= np.min(calculator.T_grid) or T >= np.max(calculator.T_grid):
-            return -np.inf
-        if T <= self.abundance_getter.get_min_temperature():
             return -np.inf
         if cloudtop_P <= low_P or cloudtop_P >= high_P:
             return -np.inf
 
         P_profile = np.logspace(np.log10(low_P), np.log10(high_P), num_P)
         T_profile = np.ones(num_P) * T
-        abundances = self.abundance_getter.interp(metallicity)
+        abundances = self.abundance_getter.get(metallicity, CO_ratio)
         
         wavelengths, calculated_depths = calculator.compute_depths(R, P_profile, T_profile, abundances, scattering_factor=scatt_factor, cloudtop_pressure=cloudtop_P)
         residuals = calculated_depths - measured_depths
@@ -95,7 +95,9 @@ class Retriever:
             print(callback_info["it"], callback_info["logz"], multinest_prior(callback_info["active_u"][0]))
         
         result = nestle.sample(multinest_ln_prob, multinest_prior, fit_info.get_num_fit_params(), callback=callback, method='multi')
-        print(result)
+        best_params_arr = result.samples[np.argmax(result.logl)]
+        best_params_dict = fit_info.interpret_param_array(best_params_arr)
+        print("Best params", best_params_dict)
         return result
         
         
@@ -161,19 +163,19 @@ stis_bins, stis_depths, stis_errors = hd209458b_stis()
 wfc3_bins, wfc3_depths, wfc3_errors = hd209458b_wfc3()
 spitzer_bins, spitzer_depths, spitzer_errors = hd209458b_spitzer()
 
-#bins = np.concatenate([stis_bins, wfc3_bins, spitzer_bins])
-#depths = np.concatenate([stis_depths, wfc3_depths, spitzer_depths])
-#errors = np.concatenate([stis_errors, wfc3_errors, spitzer_errors])
+bins = np.concatenate([stis_bins, wfc3_bins, spitzer_bins])
+depths = np.concatenate([stis_depths, wfc3_depths, spitzer_depths])
+errors = np.concatenate([stis_errors, wfc3_errors, spitzer_errors])
 
-bins = wfc3_bins
-depths = wfc3_depths
-errors = wfc3_errors
+#bins = wfc3_bins
+#depths = wfc3_depths
+#errors = wfc3_errors
 
 
 #plt.errorbar([(start+end)/2 for (start,end) in bins], depths, yerr=errors, fmt='.')
 #plt.show()
         
-retriever = Retriever('ggchem', include_condensates=True)
+retriever = Retriever('ggchem', include_condensates=False)
 
 R_guess = 9.7e7
 T_guess = 1200
@@ -181,17 +183,24 @@ metallicity_guess = 1
 scatt_factor_guess = 1
 cloudtop_P_guess = 1e6
 
-fit_info = FitInfo({'R': R_guess, 'T': T_guess, 'logZ': np.log10(metallicity_guess), 'log_scatt_factor': np.log10(scatt_factor_guess), 'log_cloudtop_P': np.log10(cloudtop_P_guess), 'star_radius': 8.0e8, 'g': 9.311, 'error_multiple': 1})
+fit_info = FitInfo({'R': R_guess, 'T': T_guess, 'logZ': np.log10(metallicity_guess), 'CO_ratio': 0.53, 'log_scatt_factor': np.log10(scatt_factor_guess), 'log_cloudtop_P': np.log10(cloudtop_P_guess), 'star_radius': 8.0e8, 'g': 9.311, 'error_multiple': 1})
 
 fit_info.add_fit_param('R', 0.9*R_guess, 1.1*R_guess, 0, np.inf)
 fit_info.add_fit_param('T', 0.5*T_guess, 1.5*T_guess, 0, np.inf)
 fit_info.add_fit_param('logZ', -1, 3, -1, 3)
+fit_info.add_fit_param('CO_ratio', 0.2, 1.5, 0.2, 2.0)
 fit_info.add_fit_param('log_cloudtop_P', -1, 4, -np.inf, np.inf)
-fit_info.add_fit_param('log_scatt_factor', 0, 1, 0, 3)
+#fit_info.add_fit_param('log_scatt_factor', 0, 1, 0, 3)
 fit_info.add_fit_param('error_multiple', 0.1, 10, 0, np.inf)
 
 
-retriever.run_multinest(bins, depths, errors, fit_info, output_prefix="ggchem_error")
+result = retriever.run_multinest(bins, depths, errors, fit_info, output_prefix="ggchem_error")
+
+np.save("samples.npy", result.samples)
+np.save("weights.npy", result.weights)
+np.save("logl.npy", result.logl)
+fig = corner.corner(result.samples, weights=result.weights)
+fig.savefig("multinest_corner.png")
 
 
 #retriever.plot_result(bins, depths, errors, fit_info, [1.35868222866*7.1e7, 1108.28033324, np.log10(0.718669990058), np.log10(940.472706829), np.log10(2.87451662752)])

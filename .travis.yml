@@ -8,4 +8,5 @@ install:
 script:
   - python test_tau_calculator.py
   - python test_interpolation.py
+  - python retrieve_example.py
 

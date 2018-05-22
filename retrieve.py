@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 import scipy.interpolate
 import emcee
 import nestle
-import corner
 
 import eos_reader
 from transit_depth_calculator import TransitDepthCalculator
@@ -15,13 +14,15 @@ from fit_info import FitInfo
 from abundance_getter import AbundanceGetter
 
 
-
 class Retriever:
     def __init__(self, abundance_format='ggchem', include_condensates=False):
         self.abundance_getter = AbundanceGetter(include_condensates)
         
 
-    def ln_prob(self, params, calculator, fit_info, measured_depths, measured_errors, low_P=0.1, high_P=2e5, num_P=400, max_scatt_factor=10, plot=False):
+    def ln_prob(self, params, calculator, fit_info, measured_depths,
+                measured_errors, low_P=0.1, high_P=2e5, num_P=400,
+                max_scatt_factor=10, plot=False):
+        
         if not fit_info.within_limits(params):
             return -np.inf
 
@@ -46,7 +47,9 @@ class Retriever:
         T_profile = np.ones(num_P) * T
         abundances = self.abundance_getter.get(metallicity, CO_ratio)
         
-        wavelengths, calculated_depths = calculator.compute_depths(R, P_profile, T_profile, abundances, scattering_factor=scatt_factor, cloudtop_pressure=cloudtop_P)
+        wavelengths, calculated_depths = calculator.compute_depths(
+            R, P_profile, T_profile, abundances,
+            scattering_factor=scatt_factor, cloudtop_pressure=cloudtop_P)
         residuals = calculated_depths - measured_depths
         scaled_errors = error_multiple * measured_errors
         result = -0.5 * np.sum(residuals**2/scaled_errors**2 + np.log(scaled_errors**2))
@@ -59,12 +62,15 @@ class Retriever:
             plt.show()
         return result
     
-    def run_emcee(self, wavelength_bins, depths, errors, fit_info, nwalkers=50, nsteps=10000, output_prefix="output"):        
+    def run_emcee(self, wavelength_bins, depths, errors, fit_info, nwalkers=50,
+                  nsteps=10000, output_prefix="output"):        
         initial_positions = fit_info.generate_rand_param_arrays(nwalkers)
         calculator = TransitDepthCalculator(fit_info.get("star_radius"), fit_info.get("g"))
         calculator.change_wavelength_bins(wavelength_bins)        
         
-        sampler = emcee.EnsembleSampler(nwalkers, fit_info.get_num_fit_params(), self.ln_prob, args=(calculator, fit_info, depths, errors))
+        sampler = emcee.EnsembleSampler(
+            nwalkers, fit_info.get_num_fit_params(), self.ln_prob,
+            args=(calculator, fit_info, depths, errors))
 
         for i, result in enumerate(sampler.sample(initial_positions, iterations=nsteps)):
             if (i+1) % 10 == 0:
@@ -73,28 +79,28 @@ class Retriever:
         np.save(output_prefix + "_chain.npy", sampler.chain)
         np.save(output_prefix + "_lnprob.npy", sampler.lnprobability)
 
-    def run_multinest(self, wavelength_bins, depths, errors, fit_info, output_prefix):
+    def run_multinest(self, wavelength_bins, depths, errors, fit_info, maxiter=None):
         calculator = TransitDepthCalculator(fit_info.get("star_radius"), fit_info.get("g"))
         calculator.change_wavelength_bins(wavelength_bins)
         
-        def multinest_prior(cube):
+        def transform_prior(cube):
             new_cube = np.zeros(len(cube))
             for i in range(len(cube)):
                 low_guess, high_guess = fit_info.get_guess_bounds(i)
                 new_cube[i] = cube[i]*(high_guess - low_guess) + low_guess
-
             return new_cube
 
-
         def multinest_ln_prob(cube):
-            result = self.ln_prob(cube, calculator, fit_info, depths, errors)
-            #print result, cube
-            return result
+            return self.ln_prob(cube, calculator, fit_info, depths, errors)
 
         def callback(callback_info):
-            print(callback_info["it"], callback_info["logz"], multinest_prior(callback_info["active_u"][0]))
+            print(callback_info["it"], callback_info["logz"],
+                  transform_prior(callback_info["active_u"][0]))
         
-        result = nestle.sample(multinest_ln_prob, multinest_prior, fit_info.get_num_fit_params(), callback=callback, method='multi')
+        result = nestle.sample(
+            multinest_ln_prob, transform_prior, fit_info.get_num_fit_params(),
+            callback=callback, method='multi', maxiter=maxiter)
+        
         best_params_arr = result.samples[np.argmax(result.logl)]
         best_params_dict = fit_info.interpret_param_array(best_params_arr)
         print("Best params", best_params_dict)
@@ -109,7 +115,7 @@ class Retriever:
         
 
 
-def hd209458b_stis():
+'''def hd209458b_stis():
     #http://iopscience.iop.org/article/10.1086/510111/pdf
     star_radius = 7.826625e8
     jupiter_radius = 7.1492e7
@@ -167,6 +173,9 @@ bins = np.concatenate([stis_bins, wfc3_bins, spitzer_bins])
 depths = np.concatenate([stis_depths, wfc3_depths, spitzer_depths])
 errors = np.concatenate([stis_errors, wfc3_errors, spitzer_errors])
 
+for i in range(len(bins)):
+    print(bins[i][0], bins[i][1], depths[i], errors[i])
+
 #bins = wfc3_bins
 #depths = wfc3_depths
 #errors = wfc3_errors
@@ -204,4 +213,4 @@ fig.savefig("multinest_corner.png")
 
 
 #retriever.plot_result(bins, depths, errors, fit_info, [1.35868222866*7.1e7, 1108.28033324, np.log10(0.718669990058), np.log10(940.472706829), np.log10(2.87451662752)])
-
+'''

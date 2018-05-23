@@ -98,7 +98,7 @@ fit_info.add_fit_param('log_cloudtop_P', -1, 4, -np.inf, np.inf)
 fit_info.add_fit_param('error_multiple', 0.1, 10, 0, np.inf)
 
 
-result = retriever.run_multinest(bins, depths, errors, fit_info, output_prefix="ggchem_error")
+result = retriever.run_multinest(bins, depths, errors, fit_info)
 
 np.save("samples.npy", result.samples)
 np.save("weights.npy", result.weights)

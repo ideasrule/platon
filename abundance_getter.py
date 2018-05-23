@@ -32,7 +32,7 @@ class AbundanceGetter:
 
         self.abundances = np.load("abundances/{}/all_data.npy".format(sub_dir))
         self.abundances[np.isnan(self.abundances)] = -1
-        self.all_species = np.loadtxt("abundances/{}/all_species".format(sub_dir), dtype=str)
+        self.all_species = np.loadtxt("abundances/{}/included_species".format(sub_dir), dtype=str)
         
     def get(self, metallicity, CO_ratio=0.53):
         N_P, N_T, N_species, N_CO, N_Z = self.abundances.shape

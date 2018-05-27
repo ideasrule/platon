@@ -61,7 +61,7 @@ class TransitDepthCalculator:
         self.T_meshgrid = T_meshgrid
         
         
-    def get_gas_absorption(self, abundances, P_cond, T_cond):
+    def _get_gas_absorption(self, abundances, P_cond, T_cond):
         absorption_coeff = np.zeros((self.N_lambda, np.sum(P_cond), np.sum(T_cond)))         
         for species_name, species_abundance in abundances.items():
             assert(species_abundance.shape == (self.N_P, self.N_T))
@@ -71,7 +71,7 @@ class TransitDepthCalculator:
         return absorption_coeff
 
         
-    def get_scattering_absorption(self, abundances, P_cond, T_cond):
+    def _get_scattering_absorption(self, abundances, P_cond, T_cond):
         cross_section = np.zeros((self.N_lambda, np.sum(P_cond), np.sum(T_cond)))
         scatt_prefactor = 8*np.pi/3 * (2*np.pi/self.lambda_grid)**4
         scatt_prefactor = scatt_prefactor.reshape((self.N_lambda,1,1))
@@ -83,7 +83,7 @@ class TransitDepthCalculator:
         return cross_section * self.P_meshgrid[:,P_cond,:][:,:,T_cond]/(K_B*self.T_meshgrid[:,P_cond,:][:,:,T_cond])
 
     
-    def get_collisional_absorption(self, abundances, P_cond, T_cond):
+    def _get_collisional_absorption(self, abundances, P_cond, T_cond):
         absorption_coeff = np.zeros((self.N_lambda, np.sum(P_cond), np.sum(T_cond)))
         n = self.P_meshgrid[:,P_cond,:][:,:,T_cond]/(K_B * self.T_meshgrid[:,P_cond,:][:,:,T_cond])
         
@@ -97,7 +97,7 @@ class TransitDepthCalculator:
         return absorption_coeff
     
 
-    def get_above_cloud_r_and_dr(self, P, T, abundances, planet_radius, P_cond):
+    def _get_above_cloud_r_and_dr(self, P, T, abundances, planet_radius, P_cond):
         mu = np.zeros(len(P))
         for species_name in abundances:
             interpolator = RectBivariateSpline(self.P_grid, self.T_grid, abundances[species_name], kx=1, ky=1)
@@ -149,16 +149,16 @@ class TransitDepthCalculator:
         abundances = self._get_abundances_array(logZ, CO_ratio, custom_abundances)
 
         above_clouds = P < cloudtop_pressure
-        radii, dr = self.get_above_cloud_r_and_dr(P, T, abundances, planet_radius, above_clouds)
+        radii, dr = self._get_above_cloud_r_and_dr(P, T, abundances, planet_radius, above_clouds)
         P = P[above_clouds]
         T = T[above_clouds]
         
         T_cond = interpolator_3D.get_condition_array(T, self.T_grid)
         P_cond = interpolator_3D.get_condition_array(P, self.P_grid, cloudtop_pressure)
      
-        absorption_coeff = self.get_gas_absorption(abundances, P_cond, T_cond)
-        if add_scattering: absorption_coeff += scattering_factor * self.get_scattering_absorption(abundances, P_cond, T_cond)
-        if add_collisional_absorption: absorption_coeff += self.get_collisional_absorption(abundances, P_cond, T_cond)    
+        absorption_coeff = self._get_gas_absorption(abundances, P_cond, T_cond)
+        if add_scattering: absorption_coeff += scattering_factor * self._get_scattering_absorption(abundances, P_cond, T_cond)
+        if add_collisional_absorption: absorption_coeff += self._get_collisional_absorption(abundances, P_cond, T_cond)    
 
         absorption_coeff_atm = interpolator_3D.fast_interpolate(absorption_coeff, self.T_grid[T_cond], self.P_grid[P_cond], T, P)
 

@@ -15,7 +15,7 @@ from fit_info import FitInfo
 
 class Retriever:
     def ln_prob(self, params, calculator, fit_info, measured_depths,
-                measured_errors, low_P=0.1, high_P=2e5, num_P=400,
+                measured_errors, low_P=0.1, high_P=2e5,
                 max_scatt_factor=10, plot=False):
         
         if not fit_info.within_limits(params):
@@ -38,11 +38,8 @@ class Retriever:
         if cloudtop_P <= low_P or cloudtop_P >= high_P:
             return -np.inf
 
-        P_profile = np.logspace(np.log10(low_P), np.log10(high_P), num_P)
-        T_profile = np.ones(num_P) * T
-        
         wavelengths, calculated_depths = calculator.compute_depths(
-            R, P_profile, T_profile, logZ, CO_ratio,
+            R, T, logZ, CO_ratio,
             scattering_factor=scatt_factor, cloudtop_pressure=cloudtop_P)
         residuals = calculated_depths - measured_depths
         scaled_errors = error_multiple * measured_errors

@@ -135,7 +135,7 @@ class TransitDepthCalculator:
     def is_in_bounds(self, logZ, CO_ratio, T):
         return self.abundance_getter.is_in_bounds(logZ, CO_ratio, T)
     
-    def compute_depths(self, planet_radius, P, T, logZ, CO_ratio, add_scattering=True, scattering_factor=1, add_collisional_absorption=True, cloudtop_pressure=np.inf, custom_abundances=None):
+    def compute_depths(self, planet_radius, temperature, logZ, CO_ratio, add_scattering=True, scattering_factor=1, add_collisional_absorption=True, cloudtop_pressure=np.inf, custom_abundances=None, low_P=0.1, high_P=2e5, num_P=400):
         '''
         P: List of pressures in atmospheric P-T profile, in ascending order
         T: List of temperatures corresponding to pressures in P
@@ -144,23 +144,23 @@ class TransitDepthCalculator:
         add_collisional_absorption: whether collisionally induced absorption is taken into account
         cloudtop_pressure: pressure level below which light cannot penetrate'''
 
-        if len(P) != len(T): raise ValueError("P and T must have the same length")
+        P_profile = np.logspace(np.log10(low_P), np.log10(high_P), num_P)
+        T_profile = np.ones(num_P) * temperature
         
         abundances = self._get_abundances_array(logZ, CO_ratio, custom_abundances)
-
-        above_clouds = P < cloudtop_pressure
-        radii, dr = self._get_above_cloud_r_and_dr(P, T, abundances, planet_radius, above_clouds)
-        P = P[above_clouds]
-        T = T[above_clouds]
+        above_clouds = P_profile < cloudtop_pressure
+        radii, dr = self._get_above_cloud_r_and_dr(P_profile, T_profile, abundances, planet_radius, above_clouds)
+        P_profile = P_profile[above_clouds]
+        T_profile = T_profile[above_clouds]
         
-        T_cond = interpolator_3D.get_condition_array(T, self.T_grid)
-        P_cond = interpolator_3D.get_condition_array(P, self.P_grid, cloudtop_pressure)
+        T_cond = interpolator_3D.get_condition_array(T_profile, self.T_grid)
+        P_cond = interpolator_3D.get_condition_array(P_profile, self.P_grid, cloudtop_pressure)
      
         absorption_coeff = self._get_gas_absorption(abundances, P_cond, T_cond)
         if add_scattering: absorption_coeff += scattering_factor * self._get_scattering_absorption(abundances, P_cond, T_cond)
         if add_collisional_absorption: absorption_coeff += self._get_collisional_absorption(abundances, P_cond, T_cond)    
 
-        absorption_coeff_atm = interpolator_3D.fast_interpolate(absorption_coeff, self.T_grid[T_cond], self.P_grid[P_cond], T, P)
+        absorption_coeff_atm = interpolator_3D.fast_interpolate(absorption_coeff, self.T_grid[T_cond], self.P_grid[P_cond], T_profile, P_profile)
 
         tau_los = get_line_of_sight_tau(absorption_coeff_atm, radii)
 

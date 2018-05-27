@@ -9,9 +9,11 @@ import time
 from constants import K_B, AMU
 
 from compatible_loader import load_numpy_array
+import eos_reader
+from abundance_getter import AbundanceGetter
 
 class TransitDepthCalculator:
-    def __init__(self, star_radius, g, absorption_dir="Absorption", species_info_file="species_info", lambda_grid_file="wavelengths.npy", P_grid_file="pressures.npy", T_grid_file="temperatures.npy", collisional_absorption_file="collisional_absorption.pkl"):
+    def __init__(self, star_radius, g, absorption_dir="Absorption", species_info_file="species_info", lambda_grid_file="wavelengths.npy", P_grid_file="pressures.npy", T_grid_file="temperatures.npy", collisional_absorption_file="collisional_absorption.pkl", include_condensates=True):
         self.star_radius = star_radius
         self.g = g
         self.absorption_data, self.mass_data, self.polarizability_data = read_species_data(absorption_dir, species_info_file)
@@ -32,6 +34,8 @@ class TransitDepthCalculator:
 
         self.wavelength_rebinned = False
         self.wavelength_bins = None
+
+        self.abundance_getter = AbundanceGetter(include_condensates)
         
    
     def change_wavelength_bins(self, bins):
@@ -109,8 +113,29 @@ class TransitDepthCalculator:
         radii = radius_with_atm - np.cumsum(dr)
         radii = np.append(radius_with_atm, radii[P_cond])
         return radii, dr[P_cond]
+
+    def _get_abundances_array(self, logZ, CO_ratio, custom_abundances):
+        if custom_abundances is None:
+            return self.abundance_getter.get(logZ, CO_ratio)
+        
+        if type(custom_abundances) is str:
+            # Interpret as filename
+            return eos_reader.get_abundances(custom_abundances)
+
+        if type(custom_abundances) is dict:
+            for key, value in custom_abundances.items():
+                if type(value) is not np.ndarray:
+                    raise ValueError("custom_abundances must map species names to arrays")
+                if value.shape != (self.N_P, self.N_T):
+                    raise ValueError("custom_abundances has array of invalid size")
+            return custom_abundances
+        
+        raise ValueError("Unrecognized format for custom_abundances")
+
+    def is_in_bounds(self, logZ, CO_ratio, T):
+        return self.abundance_getter.is_in_bounds(logZ, CO_ratio, T)
     
-    def compute_depths(self, planet_radius, P, T, abundances, add_scattering=True, scattering_factor=1, add_collisional_absorption=True, cloudtop_pressure=np.inf):
+    def compute_depths(self, planet_radius, P, T, logZ, CO_ratio, add_scattering=True, scattering_factor=1, add_collisional_absorption=True, cloudtop_pressure=np.inf, custom_abundances=None):
         '''
         P: List of pressures in atmospheric P-T profile, in ascending order
         T: List of temperatures corresponding to pressures in P
@@ -118,8 +143,10 @@ class TransitDepthCalculator:
         add_scattering: whether Rayleigh scattering opacity is taken into account
         add_collisional_absorption: whether collisionally induced absorption is taken into account
         cloudtop_pressure: pressure level below which light cannot penetrate'''
-        start = time.time()
-        assert(len(P) == len(T))
+
+        if len(P) != len(T): raise ValueError("P and T must have the same length")
+        
+        abundances = self._get_abundances_array(logZ, CO_ratio, custom_abundances)
 
         above_clouds = P < cloudtop_pressure
         radii, dr = self.get_above_cloud_r_and_dr(P, T, abundances, planet_radius, above_clouds)
@@ -140,8 +167,6 @@ class TransitDepthCalculator:
         absorption_fraction = 1 - np.exp(-tau_los)
         
         transit_depths = (planet_radius/self.star_radius)**2 + 2/self.star_radius**2 * absorption_fraction.dot(radii[1:] * dr)
-        end = time.time()
-        #print "Time taken", end-start
         
         binned_wavelengths = []
         binned_depths = []

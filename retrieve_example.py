@@ -79,7 +79,7 @@ errors = np.concatenate([stis_errors, wfc3_errors, spitzer_errors])
 #plt.errorbar([(start+end)/2 for (start,end) in bins], depths, yerr=errors, fmt='.')
 #plt.show()
         
-retriever = Retriever('ggchem', include_condensates=False)
+retriever = Retriever()
 
 R_guess = 9.7e7
 T_guess = 1200

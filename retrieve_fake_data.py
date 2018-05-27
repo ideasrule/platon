@@ -37,7 +37,7 @@ wavelengths, transit_depths = depth_calculator.compute_depths(Rp, P_profile, T_p
 #wavelengths, depths2 = depth_calculator.compute_depths(71414515.1348402, P_prof
 print transit_depths
 
-retriever = Retriever(include_condensates=True)
+retriever = Retriever()
 
 fit_info = FitInfo({'R': 0.99*Rp, 'T': 0.9*temperature, 'logZ': np.log10(2), 'CO_ratio': 1, 'log_scatt_factor': np.log10(1), 'log_cloudtop_P': log_cloudtop_P+1, 'star_radius': Rs, 'g': g, 'error_multiple': 1})
 

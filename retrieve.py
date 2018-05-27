@@ -11,14 +11,9 @@ import nestle
 import eos_reader
 from transit_depth_calculator import TransitDepthCalculator
 from fit_info import FitInfo
-from abundance_getter import AbundanceGetter
 
 
 class Retriever:
-    def __init__(self, abundance_format='ggchem', include_condensates=False):
-        self.abundance_getter = AbundanceGetter(include_condensates)
-        
-
     def ln_prob(self, params, calculator, fit_info, measured_depths,
                 measured_errors, low_P=0.1, high_P=2e5, num_P=400,
                 max_scatt_factor=10, plot=False):
@@ -36,7 +31,7 @@ class Retriever:
         cloudtop_P = 10.0**params_dict["log_cloudtop_P"]
         error_multiple = params_dict["error_multiple"]
 
-        if not self.abundance_getter.is_in_bounds(logZ, CO_ratio, T):
+        if not calculator.is_in_bounds(logZ, CO_ratio, T):
             return -np.inf        
         if T <= np.min(calculator.T_grid) or T >= np.max(calculator.T_grid):
             return -np.inf
@@ -45,10 +40,9 @@ class Retriever:
 
         P_profile = np.logspace(np.log10(low_P), np.log10(high_P), num_P)
         T_profile = np.ones(num_P) * T
-        abundances = self.abundance_getter.get(logZ, CO_ratio)
         
         wavelengths, calculated_depths = calculator.compute_depths(
-            R, P_profile, T_profile, abundances,
+            R, P_profile, T_profile, logZ, CO_ratio,
             scattering_factor=scatt_factor, cloudtop_pressure=cloudtop_P)
         residuals = calculated_depths - measured_depths
         scaled_errors = error_multiple * measured_errors
@@ -63,9 +57,10 @@ class Retriever:
         return result
     
     def run_emcee(self, wavelength_bins, depths, errors, fit_info, nwalkers=50,
-                  nsteps=10000, output_prefix="output"):        
+                  nsteps=10000, include_condensates=True,
+                  output_prefix="output"):        
         initial_positions = fit_info.generate_rand_param_arrays(nwalkers)
-        calculator = TransitDepthCalculator(fit_info.get("star_radius"), fit_info.get("g"))
+        calculator = TransitDepthCalculator(fit_info.get("star_radius"), fit_info.get("g"), include_condensates=include_condensates)
         calculator.change_wavelength_bins(wavelength_bins)        
         
         sampler = emcee.EnsembleSampler(
@@ -79,8 +74,8 @@ class Retriever:
         np.save(output_prefix + "_chain.npy", sampler.chain)
         np.save(output_prefix + "_lnprob.npy", sampler.lnprobability)
 
-    def run_multinest(self, wavelength_bins, depths, errors, fit_info, maxiter=None):
-        calculator = TransitDepthCalculator(fit_info.get("star_radius"), fit_info.get("g"))
+    def run_multinest(self, wavelength_bins, depths, errors, fit_info, maxiter=None, include_condensates=True):
+        calculator = TransitDepthCalculator(fit_info.get("star_radius"), fit_info.get("g"), include_condensates=include_condensates)
         calculator.change_wavelength_bins(wavelength_bins)
         
         def transform_prior(cube):

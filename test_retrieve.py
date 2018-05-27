@@ -15,7 +15,7 @@ class TestRetriever(unittest.TestCase):
         wavelength_bins = np.array([min_wavelength, max_wavelength]).T
         self.wavelength_bins = wavelength_bins
 
-        self.retriever = Retriever('ggchem', include_condensates=False)
+        self.retriever = Retriever()
 
         self.fit_info = FitInfo({'R': R_guess, 'T': T_guess, 'logZ': np.log10(metallicity_guess), 'CO_ratio': 0.53, 'log_scatt_factor': np.log10(scatt_factor_guess), 'log_cloudtop_P': np.log10(cloudtop_P_guess), 'star_radius': 8.0e8, 'g': 9.311, 'error_multiple': 1})
 
@@ -29,19 +29,19 @@ class TestRetriever(unittest.TestCase):
 
     
     def test_emcee(self):
-        retriever = Retriever(include_condensates=False)
-        retriever.run_emcee(self.wavelength_bins, self.depths, self.errors, self.fit_info, nsteps=30)
+        retriever = Retriever()
+        retriever.run_emcee(self.wavelength_bins, self.depths, self.errors, self.fit_info, nsteps=30, include_condensates=False)
 
-        retriever = Retriever(include_condensates=True)
-        retriever.run_emcee(self.wavelength_bins, self.depths, self.errors, self.fit_info, nsteps=30)
+        retriever = Retriever()
+        retriever.run_emcee(self.wavelength_bins, self.depths, self.errors, self.fit_info, nsteps=30, include_condensates=True)
                 
 
     def test_multinest(self):
-        retriever = Retriever(include_condensates=False)
-        retriever.run_multinest(self.wavelength_bins, self.depths, self.errors, self.fit_info, maxiter=100)
+        retriever = Retriever()
+        retriever.run_multinest(self.wavelength_bins, self.depths, self.errors, self.fit_info, maxiter=100, include_condensates=False)
 
-        retriever = Retriever(include_condensates=True)
-        retriever.run_multinest(self.wavelength_bins, self.depths, self.errors, self.fit_info, maxiter=100)
+        retriever = Retriever()
+        retriever.run_multinest(self.wavelength_bins, self.depths, self.errors, self.fit_info, maxiter=100, include_condensates=True)
 
 if __name__ == '__main__':
     unittest.main()

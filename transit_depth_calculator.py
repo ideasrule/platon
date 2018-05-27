@@ -66,8 +66,14 @@ class TransitDepthCalculator:
         for species_name, species_abundance in abundances.items():
             assert(species_abundance.shape == (self.N_P, self.N_T))
             if species_name in self.absorption_data:
+                #if species_name == 'HCl': continue
+                #if species_name == 'K' or species_name=='Na': continue
                 absorption_coeff += self.absorption_data[species_name][:,P_cond,:][:,:,T_cond] * species_abundance[P_cond,:][:,T_cond]
-                
+                #test = np.log(self.absorption_data[species_name][2525:2550,5,7] * species_abundance[5,7])
+                #plt.plot(test, label=species_name)
+                #plt.show()
+        #plt.legend()
+        #plt.show()
         return absorption_coeff
 
         
@@ -136,7 +142,7 @@ class TransitDepthCalculator:
         if T <= np.min(self.T_grid) or T >= np.max(self.T_grid): return False
         return self.abundance_getter.is_in_bounds(logZ, CO_ratio, T)
     
-    def compute_depths(self, planet_radius, temperature, logZ, CO_ratio, add_scattering=True, scattering_factor=1, add_collisional_absorption=True, cloudtop_pressure=np.inf, custom_abundances=None, low_P=0.1, high_P=2e5, num_P=400):
+    def compute_depths(self, planet_radius, temperature, logZ=0, CO_ratio=0.53, add_scattering=True, scattering_factor=1, add_collisional_absorption=True, cloudtop_pressure=np.inf, custom_abundances=None, low_P=0.1, high_P=1e5, num_P=400):
         '''
         P: List of pressures in atmospheric P-T profile, in ascending order
         T: List of temperatures corresponding to pressures in P

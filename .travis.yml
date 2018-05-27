@@ -11,4 +11,4 @@ script:
   - python test_tau_calculator.py
   - python test_interpolation.py
   - python test_retrieve.py
-
+  - python test_transit_depth_calculator.py

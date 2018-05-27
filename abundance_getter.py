@@ -9,7 +9,7 @@ from interpolator_3D import fast_interpolate
 from compatible_loader import load_dict_from_pickle
 
 class AbundanceGetter:
-    def __init__(self, include_condensates=False):
+    def __init__(self, include_condensates=True):
         self.min_temperature = 300
         self.logZs = np.linspace(-1, 3, 81)
         self.CO_ratios = np.arange(0.2, 2.2, 0.2)

@@ -30,6 +30,8 @@ def normal_interpolate(data, grid_x, grid_y, target_x, target_y):
     
 
 def fast_interpolate(data, grid_x, grid_y, target_x, target_y):
+    target_x = np.atleast_1d(target_x)
+    target_y = np.atleast_1d(target_y)
     assert(len(target_x) == len(target_y))
     
     if len(grid_x) == 1:

@@ -30,13 +30,13 @@ class Retriever:
 
         R = params_dict["R"]
         T = params_dict["T"]
-        metallicity = 10.0**params_dict["logZ"]
+        logZ = params_dict["logZ"]
         CO_ratio = params_dict["CO_ratio"]
         scatt_factor = 10.0**params_dict["log_scatt_factor"]
         cloudtop_P = 10.0**params_dict["log_cloudtop_P"]
         error_multiple = params_dict["error_multiple"]
 
-        if not self.abundance_getter.is_in_bounds(metallicity, CO_ratio, T):
+        if not self.abundance_getter.is_in_bounds(logZ, CO_ratio, T):
             return -np.inf        
         if T <= np.min(calculator.T_grid) or T >= np.max(calculator.T_grid):
             return -np.inf
@@ -45,14 +45,14 @@ class Retriever:
 
         P_profile = np.logspace(np.log10(low_P), np.log10(high_P), num_P)
         T_profile = np.ones(num_P) * T
-        abundances = self.abundance_getter.get(metallicity, CO_ratio)
+        abundances = self.abundance_getter.get(logZ, CO_ratio)
         
         wavelengths, calculated_depths = calculator.compute_depths(
             R, P_profile, T_profile, abundances,
             scattering_factor=scatt_factor, cloudtop_pressure=cloudtop_P)
         residuals = calculated_depths - measured_depths
         scaled_errors = error_multiple * measured_errors
-        result = -0.5 * np.sum(residuals**2/scaled_errors**2 + np.log(scaled_errors**2))
+        result = -0.5 * np.sum(residuals**2/scaled_errors**2 + np.log(2*np.pi*scaled_errors**2))
 
         if plot:
             plt.errorbar(1e6*wavelengths, measured_depths, yerr=measured_errors, fmt='.')

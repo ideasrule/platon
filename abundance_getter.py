@@ -10,51 +10,38 @@ from compatible_loader import load_dict_from_pickle
 
 class AbundanceGetter:
     def __init__(self, include_condensates=False):
-        self.metallicities = None
-        self.CO_ratios = None
-        self.abundances = None
-        self.species_set = set()
-        self.min_temperature = None
-        
-        self.load_ggchem_files(include_condensates)
-
-
-    def load_ggchem_files(self, include_condensates):
-        all_logZ = np.linspace(-1, 3, 81)
-        self.metallicities = 10**all_logZ
-        self.CO_ratios = np.arange(0.2, 2.2, 0.2)
         self.min_temperature = 300
+        self.logZs = np.linspace(-1, 3, 81)
+        self.CO_ratios = np.arange(0.2, 2.2, 0.2)
         
         if include_condensates:
             sub_dir = "cond"
         else:
             sub_dir = "gas_only"
 
-        self.abundances = np.load("abundances/{}/all_data.npy".format(sub_dir))
-        self.abundances[np.isnan(self.abundances)] = -1
-        self.all_species = np.loadtxt("abundances/{}/included_species".format(sub_dir), dtype=str)
+        self.log_abundances = np.log10(np.load("abundances/{}/all_data.npy".format(sub_dir)))
+        self.included_species = np.loadtxt("abundances/{}/included_species".format(sub_dir), dtype=str)
+
         
-    def get(self, metallicity, CO_ratio=0.53):
-        N_P, N_T, N_species, N_CO, N_Z = self.abundances.shape
+    def get(self, logZ, CO_ratio=0.53):
+        N_P, N_T, N_species, N_CO, N_Z = self.log_abundances.shape
         
-        reshaped_abundances = self.abundances.reshape((-1, N_CO, N_Z))
-        interp_abundances = fast_interpolate(reshaped_abundances, self.metallicities, self.CO_ratios, [metallicity], [CO_ratio])
-        interp_abundances = interp_abundances.reshape((N_P, N_T, N_species))
+        reshaped_log_abund = self.log_abundances.reshape((-1, N_CO, N_Z))
+        interp_log_abund = 10 ** fast_interpolate(
+            reshaped_log_abund, self.logZs, np.log10(self.CO_ratios),
+            logZ, np.log10(CO_ratio))
+        interp_log_abund = interp_log_abund.reshape((N_P, N_T, N_species))
         
         abund_dict = {}
-        for i, s in enumerate(self.all_species):
-            abund_dict[s] = interp_abundances[:,:,i]
+        for i, s in enumerate(self.included_species):
+            abund_dict[s] = interp_log_abund[:,:,i]
 
         return abund_dict
 
-    def is_in_bounds(self, metallicity, CO_ratio, T):
+    
+    def is_in_bounds(self, logZ, CO_ratio, T):
         if T <= self.min_temperature: return False
-        if metallicity <= np.min(self.metallicities) or metallicity >= np.max(self.metallicities): return False
+        if logZ <= np.min(self.logZs) or logZ >= np.max(self.logZs): return False
         if CO_ratio <= np.min(self.CO_ratios) or CO_ratio >= np.max(self.CO_ratios): return False
         return True
     
-    def get_metallicity_bounds(self):
-        return np.min(self.metallicities), np.max(self.metallicities)
-
-    def get_min_temperature(self):
-        return self.min_temperature

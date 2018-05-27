@@ -8,6 +8,7 @@ def get_condition_array(target_data, interp_data, max_cutoff=np.inf):
 
     start_index = None
     end_index = None
+
     for i in range(len(cond)):
         if start_index is None:
             if interp_data[i] > np.min(target_data): start_index = i-1

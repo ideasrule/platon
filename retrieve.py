@@ -30,7 +30,7 @@ class Retriever:
         cloudtop_P = 10.0**params_dict["log_cloudtop_P"]
         error_multiple = params_dict["error_multiple"]
 
-        if not calculator.is_in_bounds(logZ, CO_ratio, T):
+        if not calculator.is_in_bounds(logZ, CO_ratio, T, cloudtop_P):
             return -np.inf        
 
         wavelengths, calculated_depths = calculator.compute_depths(

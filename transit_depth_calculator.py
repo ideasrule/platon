@@ -13,7 +13,7 @@ import eos_reader
 from abundance_getter import AbundanceGetter
 
 class TransitDepthCalculator:
-    def __init__(self, star_radius, g, absorption_dir="Absorption", species_info_file="species_info", lambda_grid_file="wavelengths.npy", P_grid_file="pressures.npy", T_grid_file="temperatures.npy", collisional_absorption_file="collisional_absorption.pkl", include_condensates=True):
+    def __init__(self, star_radius, g, absorption_dir="Absorption", species_info_file="species_info", lambda_grid_file="wavelengths.npy", P_grid_file="pressures.npy", T_grid_file="temperatures.npy", collisional_absorption_file="collisional_absorption.pkl", include_condensates=True, min_P_profile=0.1, max_P_profile=1e4, num_profile_heights=400):
         self.star_radius = star_radius
         self.g = g
         self.absorption_data, self.mass_data, self.polarizability_data = read_species_data(absorption_dir, species_info_file)
@@ -36,6 +36,10 @@ class TransitDepthCalculator:
         self.wavelength_bins = None
 
         self.abundance_getter = AbundanceGetter(include_condensates)
+
+        self.min_P_profile = min_P_profile
+        self.max_P_profile = max_P_profile
+        self.num_profile_heights = num_profile_heights
         
    
     def change_wavelength_bins(self, bins):
@@ -132,11 +136,12 @@ class TransitDepthCalculator:
         
         raise ValueError("Unrecognized format for custom_abundances")
 
-    def is_in_bounds(self, logZ, CO_ratio, T):
+    def is_in_bounds(self, logZ, CO_ratio, T, cloudtop_P):
         if T <= np.min(self.T_grid) or T >= np.max(self.T_grid): return False
+        if cloudtop_P <= self.min_P_profile or cloudtop_P >= self.max_P_profile: return False
         return self.abundance_getter.is_in_bounds(logZ, CO_ratio, T)
     
-    def compute_depths(self, planet_radius, temperature, logZ=0, CO_ratio=0.53, add_scattering=True, scattering_factor=1, add_collisional_absorption=True, cloudtop_pressure=np.inf, custom_abundances=None, low_P=0.1, high_P=1e5, num_P=400):
+    def compute_depths(self, planet_radius, temperature, logZ=0, CO_ratio=0.53, add_scattering=True, scattering_factor=1, add_collisional_absorption=True, cloudtop_pressure=np.inf, custom_abundances=None):
         '''
         P: List of pressures in atmospheric P-T profile, in ascending order
         T: List of temperatures corresponding to pressures in P
@@ -145,8 +150,8 @@ class TransitDepthCalculator:
         add_collisional_absorption: whether collisionally induced absorption is taken into account
         cloudtop_pressure: pressure level below which light cannot penetrate'''
 
-        P_profile = np.logspace(np.log10(low_P), np.log10(high_P), num_P)
-        T_profile = np.ones(num_P) * temperature
+        P_profile = np.logspace(np.log10(self.min_P_profile), np.log10(self.max_P_profile), self.num_profile_heights)
+        T_profile = np.ones(len(P_profile)) * temperature
         
         abundances = self._get_abundances_array(logZ, CO_ratio, custom_abundances)
         above_clouds = P_profile < cloudtop_pressure

@@ -133,6 +133,7 @@ class TransitDepthCalculator:
         raise ValueError("Unrecognized format for custom_abundances")
 
     def is_in_bounds(self, logZ, CO_ratio, T):
+        if T <= np.min(self.T_grid) or T >= np.max(self.T_grid): return False
         return self.abundance_getter.is_in_bounds(logZ, CO_ratio, T)
     
     def compute_depths(self, planet_radius, temperature, logZ, CO_ratio, add_scattering=True, scattering_factor=1, add_collisional_absorption=True, cloudtop_pressure=np.inf, custom_abundances=None, low_P=0.1, high_P=2e5, num_P=400):

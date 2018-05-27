@@ -66,14 +66,8 @@ class TransitDepthCalculator:
         for species_name, species_abundance in abundances.items():
             assert(species_abundance.shape == (self.N_P, self.N_T))
             if species_name in self.absorption_data:
-                #if species_name == 'HCl': continue
-                #if species_name == 'K' or species_name=='Na': continue
                 absorption_coeff += self.absorption_data[species_name][:,P_cond,:][:,:,T_cond] * species_abundance[P_cond,:][:,T_cond]
-                #test = np.log(self.absorption_data[species_name][2525:2550,5,7] * species_abundance[5,7])
-                #plt.plot(test, label=species_name)
-                #plt.show()
-        #plt.legend()
-        #plt.show()
+
         return absorption_coeff
 
         

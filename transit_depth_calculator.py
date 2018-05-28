@@ -1,12 +1,13 @@
 from species_data_reader import read_species_data
 import interpolator_3D
 import eos_reader
-from scipy.interpolate import RectBivariateSpline
+from scipy.interpolate import RectBivariateSpline, UnivariateSpline
 from tau_calculator import get_line_of_sight_tau
 import numpy as np
 import matplotlib.pyplot as plt
 import time
 from constants import K_B, AMU
+from scipy import integrate
 
 from compatible_loader import load_numpy_array
 import eos_reader
@@ -40,8 +41,8 @@ class TransitDepthCalculator:
         self.min_P_profile = min_P_profile
         self.max_P_profile = max_P_profile
         self.num_profile_heights = num_profile_heights
-        
-   
+
+
     def change_wavelength_bins(self, bins):
         if self.wavelength_rebinned:
             raise NotImplementedError("Multiple re-binnings not yet supported")
@@ -56,17 +57,17 @@ class TransitDepthCalculator:
 
         for key in self.collisional_absorption_data:
             self.collisional_absorption_data[key] = self.collisional_absorption_data[key][cond]
-        
+
         self.lambda_grid = self.lambda_grid[cond]
         self.N_lambda = len(self.lambda_grid)
-        
+
         P_meshgrid, lambda_meshgrid, T_meshgrid = np.meshgrid(self.P_grid, self.lambda_grid, self.T_grid)
         self.P_meshgrid = P_meshgrid
         self.T_meshgrid = T_meshgrid
-        
-        
+
+
     def _get_gas_absorption(self, abundances, P_cond, T_cond):
-        absorption_coeff = np.zeros((self.N_lambda, np.sum(P_cond), np.sum(T_cond)))         
+        absorption_coeff = np.zeros((self.N_lambda, np.sum(P_cond), np.sum(T_cond)))
         for species_name, species_abundance in abundances.items():
             assert(species_abundance.shape == (self.N_P, self.N_T))
             if species_name in self.absorption_data:
@@ -74,23 +75,23 @@ class TransitDepthCalculator:
 
         return absorption_coeff
 
-        
+
     def _get_scattering_absorption(self, abundances, P_cond, T_cond):
         cross_section = np.zeros((self.N_lambda, np.sum(P_cond), np.sum(T_cond)))
         scatt_prefactor = 8*np.pi/3 * (2*np.pi/self.lambda_grid)**4
         scatt_prefactor = scatt_prefactor.reshape((self.N_lambda,1,1))
-        
+
         for species_name in abundances:
             if species_name in self.polarizability_data:
                 cross_section += abundances[species_name][P_cond,:][:,T_cond] * self.polarizability_data[species_name]**2 * scatt_prefactor
-        
+
         return cross_section * self.P_meshgrid[:,P_cond,:][:,:,T_cond]/(K_B*self.T_meshgrid[:,P_cond,:][:,:,T_cond])
 
-    
+
     def _get_collisional_absorption(self, abundances, P_cond, T_cond):
         absorption_coeff = np.zeros((self.N_lambda, np.sum(P_cond), np.sum(T_cond)))
         n = self.P_meshgrid[:,P_cond,:][:,:,T_cond]/(K_B * self.T_meshgrid[:,P_cond,:][:,:,T_cond])
-        
+
         for s1, s2 in self.collisional_absorption_data:
             if s1 in abundances and s2 in abundances:
                 n1 = (abundances[s1][P_cond, :][:,T_cond]*n)
@@ -99,7 +100,7 @@ class TransitDepthCalculator:
                 absorption_coeff += abs_data * n1 * n2
 
         return absorption_coeff
-    
+
 
     def _get_above_cloud_r_and_dr(self, P, T, abundances, planet_radius, P_cond):
         mu = np.zeros(len(P))
@@ -108,20 +109,48 @@ class TransitDepthCalculator:
             atm_abundances = interpolator.ev(P, T)
             mu += atm_abundances * self.mass_data[species_name]
 
-        dP = P[1:] - P[0:-1]
-        dr = dP/P[1:] * K_B * T[1:]/(mu[1:] * AMU * self.g)
-        dr = np.append(K_B*T[0]/(mu[0] * AMU * self.g), dr)
-        
-        #dz goes from top to bottom of atmosphere
-        radius_with_atm = np.sum(dr) + planet_radius
-        radii = radius_with_atm - np.cumsum(dr)
-        radii = np.append(radius_with_atm, radii[P_cond])
+        atm_weight = UnivariateSpline(P,mu)
+        T_profile = UnivariateSpline(P,T)
+        GM = self.g*planet_radius**2
+
+        R_hill = 0.5*self.star_radius*(6000.0/T[0])**2 * (GM/(3*1.32712440018*10**20))**(1/3)   #Hill radius for a sun like star
+
+        if np.log(P[-1]/P[0]) > GM*mu[0]*AMU/(K_B*T[0])*(1/planet_radius - 1/R_hill):   #total number of scale heights required gives a radius that's larger than the hill radius
+            print('The atmosphere is likely to be unbound. The scale height of the atmosphere is too large. Reverting to the constant g assumption')
+
+            dP = P[1:] - P[0:-1]
+            dr = dP/P[1:] * K_B * T[1:]/(mu[1:] * AMU * self.g)
+            dr = np.append(K_B*T[0]/(mu[0] * AMU * self.g), dr)
+
+            #dz goes from top to bottom of atmosphere
+            radius_with_atm = np.sum(dr) + planet_radius
+            radii = radius_with_atm - np.cumsum(dr)
+            radii = np.append(radius_with_atm, radii[P_cond])
+
+            return radii, dr[P_cond]
+
+        def hydrostatic(y, P):
+            r = y
+            T_local = T_profile(P)
+            local_mu = atm_weight(P)
+            rho = local_mu*P*AMU / (K_B * T_local)
+            dydP = r**2/(GM * rho)
+            return dydP
+
+        y0 = planet_radius
+
+        radii_ode = np.transpose(integrate.odeint(hydrostatic,y0,P))[0]
+
+        radii = np.flipud(radii_ode)[P_cond]
+        dr = np.flipud(np.diff(radii_ode))
+        dr = np.append(dr,0.0)
+
         return radii, dr[P_cond]
 
     def _get_abundances_array(self, logZ, CO_ratio, custom_abundances):
         if custom_abundances is None:
             return self.abundance_getter.get(logZ, CO_ratio)
-        
+
         if type(custom_abundances) is str:
             # Interpret as filename
             return eos_reader.get_abundances(custom_abundances)
@@ -133,14 +162,14 @@ class TransitDepthCalculator:
                 if value.shape != (self.N_P, self.N_T):
                     raise ValueError("custom_abundances has array of invalid size")
             return custom_abundances
-        
+
         raise ValueError("Unrecognized format for custom_abundances")
 
     def is_in_bounds(self, logZ, CO_ratio, T, cloudtop_P):
         if T <= np.min(self.T_grid) or T >= np.max(self.T_grid): return False
         if cloudtop_P <= self.min_P_profile or cloudtop_P >= self.max_P_profile: return False
         return self.abundance_getter.is_in_bounds(logZ, CO_ratio, T)
-    
+
     def compute_depths(self, planet_radius, temperature, logZ=0, CO_ratio=0.53, add_scattering=True, scattering_factor=1, add_collisional_absorption=True, cloudtop_pressure=np.inf, custom_abundances=None):
         '''
         P: List of pressures in atmospheric P-T profile, in ascending order
@@ -152,28 +181,28 @@ class TransitDepthCalculator:
 
         P_profile = np.logspace(np.log10(self.min_P_profile), np.log10(self.max_P_profile), self.num_profile_heights)
         T_profile = np.ones(len(P_profile)) * temperature
-        
+
         abundances = self._get_abundances_array(logZ, CO_ratio, custom_abundances)
         above_clouds = P_profile < cloudtop_pressure
         radii, dr = self._get_above_cloud_r_and_dr(P_profile, T_profile, abundances, planet_radius, above_clouds)
         P_profile = P_profile[above_clouds]
         T_profile = T_profile[above_clouds]
-        
+
         T_cond = interpolator_3D.get_condition_array(T_profile, self.T_grid)
         P_cond = interpolator_3D.get_condition_array(P_profile, self.P_grid, cloudtop_pressure)
-     
+
         absorption_coeff = self._get_gas_absorption(abundances, P_cond, T_cond)
         if add_scattering: absorption_coeff += scattering_factor * self._get_scattering_absorption(abundances, P_cond, T_cond)
-        if add_collisional_absorption: absorption_coeff += self._get_collisional_absorption(abundances, P_cond, T_cond)    
+        if add_collisional_absorption: absorption_coeff += self._get_collisional_absorption(abundances, P_cond, T_cond)
 
         absorption_coeff_atm = interpolator_3D.fast_interpolate(absorption_coeff, self.T_grid[T_cond], self.P_grid[P_cond], T_profile, P_profile)
 
         tau_los = get_line_of_sight_tau(absorption_coeff_atm, radii)
 
         absorption_fraction = 1 - np.exp(-tau_los)
-        
+
         transit_depths = (planet_radius/self.star_radius)**2 + 2/self.star_radius**2 * absorption_fraction.dot(radii[1:] * dr)
-        
+
         binned_wavelengths = []
         binned_depths = []
         if self.wavelength_bins is not None:
@@ -182,14 +211,14 @@ class TransitDepthCalculator:
                 binned_wavelengths.append(np.mean(self.lambda_grid[cond]))
                 binned_depths.append(np.mean(transit_depths[cond]))
             return np.array(binned_wavelengths), np.array(binned_depths)
-        
+
         return self.lambda_grid, transit_depths
-        
+
 
 '''index, P, T = np.loadtxt("T_P/t_p_800K.dat", unpack=True, skiprows=1)
 T = T*0.9
 abundances = eos_reader.get_abundances("EOS/eos_1Xsolar_cond.dat")
-    
+
 depth_calculator = TransitDepthCalculator(7e8, 9.8)
 wfc_wavelengths = np.linspace(1.1e-6, 1.7e-6, 30)
 wavelength_bins = []
@@ -209,4 +238,3 @@ plt.plot(ref_wavelengths, ref_depths, label="ExoTransmit")
 plt.plot(wavelengths, transit_depths, label="PyExoTransmit")
 plt.legend()
 plt.show()'''
-

@@ -1,5 +1,4 @@
 language: python
-
 matrix:
     include:
         - os: linux
@@ -16,7 +15,6 @@ matrix:
         - os: osx
           language: generic
           env: TOXENV=py36
-	 
 os:
   - linux
   - osx

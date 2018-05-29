@@ -2,9 +2,13 @@ language: python
 python:
   - "2.7"
   - "3.6"
+os:
+  - linux
+  - osx
 cache: pip
 before_install:
-  - sudo apt-get install -y libopenblas-dev libopenblas-base
+  - if [ $TRAVIS_OS_NAME = linux ]; then sudo apt-get install -y libopenblas-dev; else brew install openblas; fi
+
 install:
   - pip install -r requirements.txt 
 script:

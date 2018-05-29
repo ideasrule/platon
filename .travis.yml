@@ -22,14 +22,14 @@ before_install:  |
     sudo apt-get install -y libopenblas-dev
   else
     brew update
-    case "${TOXENV}" in
-        py27)
-	    brew install python
-	    virtualenv venv -p python
-        py36)
-	    brew install python3
-	    virtualenv venv -p python3
-    esac
+    if [ $TOXENV = py27 ]
+    then
+       brew install python
+       virtualenv venv -p python
+    elif [ $TOXENV = py36 ]
+       brew install python3
+       virtualenv venv -p python3
+    fi
 
     source venv/bin/activate
     brew install openblas

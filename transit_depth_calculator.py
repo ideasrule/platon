@@ -6,7 +6,7 @@ from tau_calculator import get_line_of_sight_tau
 import numpy as np
 import matplotlib.pyplot as plt
 import time
-from constants import K_B, AMU, GM_sun, T_sun
+from constants import K_B, AMU, GM_sun, Teff_sun
 from scipy import integrate
 
 from compatible_loader import load_numpy_array
@@ -113,7 +113,7 @@ class TransitDepthCalculator:
         T_profile = UnivariateSpline(P,T)
         GM = self.g*planet_radius**2
 
-        R_hill = 0.5*self.star_radius*(T_sun/T[0])**2 * (GM/(3*GM_sun))**(1/3)   #Hill radius for a sun like star
+        R_hill = 0.5*self.star_radius*(Teff_sun/T[0])**2 * (GM/(3*GM_sun))**(1/3)   #Hill radius for a sun like star
 
         if np.log(P[-1]/P[0]) > GM*mu[0]*AMU/(K_B*T[0])*(1/planet_radius - 1/R_hill):   #total number of scale heights required gives a radius that's larger than the hill radius
             print('The atmosphere is likely to be unbound. The scale height of the atmosphere is too large. Reverting to the constant g assumption')

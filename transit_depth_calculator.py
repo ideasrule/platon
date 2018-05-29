@@ -140,10 +140,11 @@ class TransitDepthCalculator:
         y0 = planet_radius
 
         radii_ode = np.transpose(integrate.odeint(hydrostatic,y0,P))[0]
-
-        radii = np.flipud(radii_ode)[P_cond]
-        dr = np.flipud(np.diff(radii_ode))
-        dr = np.append(dr,0.0)
+        dr = np.diff(radii_ode)
+        dr = np.flipud(np.append(dr,K_B*T[0]/(mu[0] * AMU * self.g)))
+        radius_with_atm = planet_radius + np.sum(dr)
+        radii = radius_with_atm - np.cumsum(dr)
+        radii = np.append(radius_with_atm, radii[P_cond])
 
         return radii, dr[P_cond]
 

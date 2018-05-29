@@ -8,14 +8,17 @@ from abundance_getter import AbundanceGetter
 from transit_depth_calculator import TransitDepthCalculator
 from retrieve import Retriever
 
-depth_calculator = TransitDepthCalculator(7e8, 9.8, max_P_profile=1.014e5)
-custom_abundances = eos_reader.get_abundances("EOS/eos_1Xsolar_cond.dat")
-wavelengths, transit_depths = depth_calculator.compute_depths(6.4e6, 800, custom_abundances=custom_abundances)
+# All quantities in SI
+Rs = 6.57e8
+g = 21.7
+Rp = 1.16e7
+T = 2200
 
-ref_wavelengths, ref_depths = np.loadtxt("testing_data/ref_spectra.dat", unpack=True, skiprows=2)
-ref_depths /= 100
+depth_calculator = TransitDepthCalculator(Rs, g)
+wavelengths, transit_depths = depth_calculator.compute_depths(Rp, T)
 
-plt.plot(ref_wavelengths, ref_depths, label="ExoTransmit")
-plt.plot(wavelengths, transit_depths, label="PyExoTransmit")
-plt.legend()
-plt.show()
+print "#Wavelength(m)       Depth"
+for i in range(len(wavelengths)):
+    print wavelengths[i], transit_depths[i]
+
+

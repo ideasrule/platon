@@ -27,6 +27,7 @@ before_install:  |
        brew install python
        virtualenv venv -p python
     elif [ $TOXENV = py36 ]
+    then
        brew install python3
        virtualenv venv -p python3
     fi

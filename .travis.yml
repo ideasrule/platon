@@ -6,8 +6,14 @@ os:
   - linux
   - osx
 cache: pip
-before_install:
-  - if [ $TRAVIS_OS_NAME = linux ]; then sudo apt-get install -y libopenblas-dev; else brew install openblas; fi
+before_install:  |
+  if [ $TRAVIS_OS_NAME = linux ]; then
+    sudo apt-get install -y libopenblas-dev
+  else
+    sudo -H easy_install pip
+    sudo -H easy_install virtualenv
+    brew install openblas
+  fi
 
 install:
   - pip install -r requirements.txt 

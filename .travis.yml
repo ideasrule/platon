@@ -33,7 +33,6 @@ before_install:  |
     fi
 
     source venv/bin/activate
-    brew install openblas
   fi
 
 install:

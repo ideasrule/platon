@@ -19,12 +19,23 @@ class FitInfo:
         for key in guesses_dict:
             self.all_params[key] = FitParam(guesses_dict[key])
 
-    def add_fit_param(self, name, low_guess, high_guess, low_lim, high_lim, value=None):
+    def add_fit_param(self, name, low_guess, high_guess, low_lim=None, high_lim=None, value=None):
         if value is None:
             value = self.all_params[name].value
+        if low_lim is None:
+            low_lim = low_guess
+        if high_lim is None:
+            high_lim = high_guess
+            
         self.fit_param_names.append(name)
-        self.all_params[name] = FitParam(value, low_guess, high_guess, low_lim, high_lim)
+        self.all_params[name] = FitParam(value, low_guess, high_guess, low_lim, high_lim)    
 
+    def freeze_fit_param(self, name, value=None):
+        if value is not None:
+            self.all_params[name].value = value
+        self.fit_param_names.remove(name)
+
+        
     def get_param_array(self):
         result = []
         for name in self.fit_param_names:

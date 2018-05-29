@@ -26,10 +26,12 @@ before_install:  |
     then
        brew install python
        virtualenv venv -p python
+       curl https://bootstrap.pypa.io/get-pip.py | python
     elif [ $TOXENV = py36 ]
     then
        brew install python3
        virtualenv venv -p python3
+       curl https://bootstrap.pypa.io/get-pip.py | python3
     fi
 
     source venv/bin/activate

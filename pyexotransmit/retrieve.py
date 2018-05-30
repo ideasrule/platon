@@ -8,8 +8,8 @@ import scipy.interpolate
 import emcee
 import nestle
 
-from transit_depth_calculator import TransitDepthCalculator
-from fit_info import FitInfo
+from .transit_depth_calculator import TransitDepthCalculator
+from .fit_info import FitInfo
 
 
 class Retriever:

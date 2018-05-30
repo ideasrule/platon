@@ -29,6 +29,9 @@ before_install:  |
        brew uninstall --ignore-dependencies python
        brew install python@3
     fi
+    
+    sudo mkdir -p /usr/local/man
+    sudo chown -R "$USER:admin" /usr/local/man
   fi
 
 install:

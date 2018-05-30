@@ -1,18 +1,19 @@
 from pkg_resources import resource_filename
-from species_data_reader import read_species_data
-import interpolator_3D
-import eos_reader
+
 from scipy.interpolate import RectBivariateSpline, UnivariateSpline
-from tau_calculator import get_line_of_sight_tau
 import numpy as np
 import matplotlib.pyplot as plt
 import time
-from constants import K_B, AMU, GM_SUN, TEFF_SUN
 from scipy import integrate
 
-from compatible_loader import load_numpy_array
-import eos_reader
-from abundance_getter import AbundanceGetter
+from .compatible_loader import load_numpy_array
+from . import eos_reader
+from .abundance_getter import AbundanceGetter
+from .species_data_reader import read_species_data
+from . import interpolator_3D
+from .tau_calculator import get_line_of_sight_tau
+from .constants import K_B, AMU, GM_SUN, TEFF_SUN
+
 
 class TransitDepthCalculator:
     def __init__(self, star_radius, g, include_condensates=True, min_P_profile=0.1, max_P_profile=1e4, num_profile_heights=400):

@@ -4,17 +4,17 @@ matrix:
         - os: linux
           sudo: required
           python: 2.7
-          env: TOXENV=py27
+          env: TOXENV=py27 
         - os: linux
           sudo: required
           python: 3.6
-          env: TOXENV=py36
+          env: TOXENV=py36 
         - os: osx
           language: generic
-          env: TOXENV=py27
+          env: TOXENV=py27 PATH=/usr/local/opt/python2/python:$PATH
         - os: osx
           language: generic
-          env: TOXENV=py36
+          env: TOXENV=py36 PATH=/usr/local/opt/python3/python3:$PATH
 
 cache: pip
 before_install:  |
@@ -24,12 +24,10 @@ before_install:  |
     if [ $TOXENV = py27 ]
     then
        brew install python@2
-       export PATH=/usr/local/opt/python2:$PATH
     elif [ $TOXENV = py36 ]
     then
        brew uninstall --ignore-dependencies python
        brew install python@3
-       export PATH=/usr/local/opt/python3:$PATH
        ln -s /usr/local/opt/python3/bin/python3 /usr/local/opt/python3/bin/python
     fi
   fi

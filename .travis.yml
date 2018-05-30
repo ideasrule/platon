@@ -26,6 +26,7 @@ before_install:  |
        brew install python@2 || true
        brew unlink python@2 || true
        brew link --overwrite python@2 || true
+       pip install --upgrade pip setuptools
     elif [ $TOXENV = py36 ]
     then
        brew uninstall --ignore-dependencies python

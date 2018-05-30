@@ -13,7 +13,7 @@ class TestTransitDepthCalculator(unittest.TestCase):
 
         # This ExoTransmit run is done without SH, since it's not present in
         # GGchem
-        ref_wavelengths, ref_depths = np.loadtxt("testing_data/hot_jupiter_spectra.dat", unpack=True, skiprows=2)
+        ref_wavelengths, ref_depths = np.loadtxt("tests/testing_data/hot_jupiter_spectra.dat", unpack=True, skiprows=2)
         ref_depths /= 100
 
         frac_dev = np.abs(ref_depths - transit_depths) / ref_depths

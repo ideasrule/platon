@@ -12,7 +12,7 @@ class TestRetriever(unittest.TestCase):
         scatt_slope_guess = 4
         cloudtop_P_guess = 1e5
 
-        min_wavelength, max_wavelength, self.depths, self.errors = np.loadtxt("testing_data/hd209458b_transit_depths", unpack=True)
+        min_wavelength, max_wavelength, self.depths, self.errors = np.loadtxt("tests/testing_data/hd209458b_transit_depths", unpack=True)
         wavelength_bins = np.array([min_wavelength, max_wavelength]).T
         self.wavelength_bins = wavelength_bins
 

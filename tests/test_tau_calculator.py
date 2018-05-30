@@ -7,9 +7,9 @@ from pyexotransmit import tau_calculator
 class TestTauLOS(unittest.TestCase):
 
     def test_realistic(self):
-        absorption_coeffs = np.loadtxt("testing_data/exotransmit_kappa")
-        heights = np.loadtxt("testing_data/exotransmit_heights")
-        expected_tau = np.loadtxt("testing_data/exotransmit_tau")
+        absorption_coeffs = np.loadtxt("tests/testing_data/exotransmit_kappa")
+        heights = np.loadtxt("tests/testing_data/exotransmit_heights")
+        expected_tau = np.loadtxt("tests/testing_data/exotransmit_tau")
 
         tau = tau_calculator.get_line_of_sight_tau(absorption_coeffs, heights)
 

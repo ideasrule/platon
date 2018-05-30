@@ -45,7 +45,7 @@ class TestInterpolation(unittest.TestCase):
 
     def test_realistic(self):
         #Test an array from a real run of interpolation
-        dirname = "testing_data/"
+        dirname = "tests/testing_data/"
         data = np.load(dirname + "interp_data.npy")
         grid_x = np.load(dirname + "interp_grid_x.npy")
         grid_y = np.load(dirname + "interp_grid_y.npy")

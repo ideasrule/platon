@@ -8,7 +8,6 @@ import scipy.interpolate
 import emcee
 import nestle
 
-import eos_reader
 from transit_depth_calculator import TransitDepthCalculator
 from fit_info import FitInfo
 
@@ -16,7 +15,6 @@ from fit_info import FitInfo
 class Retriever:
     def ln_prob(self, params, calculator, fit_info, measured_depths,
                 measured_errors, plot=False):
-        
         if not fit_info.within_limits(params):
             return -np.inf
 

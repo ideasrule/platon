@@ -4,6 +4,7 @@ import eos_reader
 import scipy
 from io import open
 import time
+from pkg_resources import resource_filename
 
 from interpolator_3D import fast_interpolate
 from compatible_loader import load_dict_from_pickle
@@ -19,8 +20,12 @@ class AbundanceGetter:
         else:
             sub_dir = "gas_only"
 
-        self.log_abundances = np.log10(np.load("abundances/{}/all_data.npy".format(sub_dir)))
-        self.included_species = np.loadtxt("abundances/{}/included_species".format(sub_dir), dtype=str)
+        abundances_path = "data/abundances/{}/all_data.npy".format(sub_dir)
+        species_path = "data/abundances/{}/included_species".format(sub_dir)
+        self.log_abundances = np.log10(np.load(
+            resource_filename(__name__, abundances_path)))
+        self.included_species = np.loadtxt(
+            resource_filename(__name__, species_path), dtype=str)
 
         
     def get(self, logZ, CO_ratio=0.53):

@@ -1,3 +1,4 @@
+from pkg_resources import resource_filename
 from species_data_reader import read_species_data
 import interpolator_3D
 import eos_reader
@@ -6,7 +7,7 @@ from tau_calculator import get_line_of_sight_tau
 import numpy as np
 import matplotlib.pyplot as plt
 import time
-from constants import K_B, AMU, GM_sun, Teff_sun
+from constants import K_B, AMU, GM_SUN, TEFF_SUN
 from scipy import integrate
 
 from compatible_loader import load_numpy_array
@@ -14,22 +15,29 @@ import eos_reader
 from abundance_getter import AbundanceGetter
 
 class TransitDepthCalculator:
-    def __init__(self, star_radius, g, absorption_dir="Absorption", species_info_file="species_info", lambda_grid_file="wavelengths.npy", P_grid_file="pressures.npy", T_grid_file="temperatures.npy", collisional_absorption_file="collisional_absorption.pkl", include_condensates=True, min_P_profile=0.1, max_P_profile=1e4, num_profile_heights=400):
+    def __init__(self, star_radius, g, include_condensates=True, min_P_profile=0.1, max_P_profile=1e4, num_profile_heights=400):
         self.star_radius = star_radius
         self.g = g
-        self.absorption_data, self.mass_data, self.polarizability_data = read_species_data(absorption_dir, species_info_file)
 
-        self.collisional_absorption_data = load_numpy_array(collisional_absorption_file)
+        self.absorption_data, self.mass_data, self.polarizability_data = read_species_data(
+            resource_filename(__name__, "data/Absorption"),
+            resource_filename(__name__, "data/species_info"))
 
-        self.lambda_grid = load_numpy_array(lambda_grid_file)
-        self.P_grid = load_numpy_array(P_grid_file)
-        self.T_grid = load_numpy_array(T_grid_file)
+        self.collisional_absorption_data = load_numpy_array(
+            resource_filename(__name__, "data/collisional_absorption.pkl"))
+        self.lambda_grid = load_numpy_array(
+            resource_filename(__name__, "data/wavelengths.npy"))
+        self.P_grid = load_numpy_array(
+            resource_filename(__name__, "data/pressures.npy"))
+        self.T_grid = load_numpy_array(
+            resource_filename(__name__, "data/temperatures.npy"))
 
         self.N_lambda = len(self.lambda_grid)
         self.N_T = len(self.T_grid)
         self.N_P = len(self.P_grid)
 
-        P_meshgrid, lambda_meshgrid, T_meshgrid = np.meshgrid(self.P_grid, self.lambda_grid, self.T_grid)
+        P_meshgrid, lambda_meshgrid, T_meshgrid = np.meshgrid(
+            self.P_grid, self.lambda_grid, self.T_grid)
         self.P_meshgrid = P_meshgrid
         self.T_meshgrid = T_meshgrid
 
@@ -113,7 +121,7 @@ class TransitDepthCalculator:
         T_profile = UnivariateSpline(P,T)
         GM = self.g*planet_radius**2
 
-        R_hill = 0.5*self.star_radius*(Teff_sun/T[0])**2 * (GM/(3*GM_sun))**(1/3)   #Hill radius for a sun like star
+        R_hill = 0.5*self.star_radius*(TEFF_SUN/T[0])**2 * (GM/(3*GM_SUN))**(1/3)   #Hill radius for a sun like star
 
         if np.log(P[-1]/P[0]) > GM*mu[0]*AMU/(K_B*T[0])*(1/planet_radius - 1/R_hill):   #total number of scale heights required gives a radius that's larger than the hill radius
             print('The atmosphere is likely to be unbound. The scale height of the atmosphere is too large. Reverting to the constant g assumption')

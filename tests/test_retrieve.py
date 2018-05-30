@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
-from retrieve import Retriever
-from fit_info import FitInfo
+from pyexotransmit.retrieve import Retriever
+from pyexotransmit.fit_info import FitInfo
 
 class TestRetriever(unittest.TestCase):
     def setUp(self):
@@ -9,9 +9,9 @@ class TestRetriever(unittest.TestCase):
         T_guess = 1200
         metallicity_guess = 1
         scatt_factor_guess = 1
-        cloudtop_P_guess = 1e6
+        cloudtop_P_guess = 1e5
         
-        min_wavelength, max_wavelength, self.depths, self.errors = np.loadtxt("testing_data/hd209458b_transit_depths", unpack=True)
+        min_wavelength, max_wavelength, self.depths, self.errors = np.loadtxt("tests/testing_data/hd209458b_transit_depths", unpack=True)
         wavelength_bins = np.array([min_wavelength, max_wavelength]).T
         self.wavelength_bins = wavelength_bins
 
@@ -30,10 +30,10 @@ class TestRetriever(unittest.TestCase):
     
     def test_emcee(self):
         retriever = Retriever()
-        retriever.run_emcee(self.wavelength_bins, self.depths, self.errors, self.fit_info, nsteps=30, include_condensates=False)
+        retriever.run_emcee(self.wavelength_bins, self.depths, self.errors, self.fit_info, nsteps=30, nwalkers=20, include_condensates=False)
 
         retriever = Retriever()
-        retriever.run_emcee(self.wavelength_bins, self.depths, self.errors, self.fit_info, nsteps=30, include_condensates=True)
+        retriever.run_emcee(self.wavelength_bins, self.depths, self.errors, self.fit_info, nsteps=30, nwalkers=20, include_condensates=True)
                 
 
     def test_multinest(self):

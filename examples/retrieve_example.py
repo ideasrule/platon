@@ -9,8 +9,8 @@ import emcee
 import nestle
 import corner
 
-from fit_info import FitInfo
-from retrieve import Retriever
+from pyexotransmit.fit_info import FitInfo
+from pyexotransmit.retrieve import Retriever
 
 
 def hd209458b_stis():

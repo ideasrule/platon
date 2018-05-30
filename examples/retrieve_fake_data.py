@@ -2,11 +2,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import corner
 
-from fit_info import FitInfo
-import eos_reader
-from abundance_getter import AbundanceGetter
-from transit_depth_calculator import TransitDepthCalculator
-from retrieve import Retriever
+from pyexotransmit.fit_info import FitInfo
+from pyexotransmit.transit_depth_calculator import TransitDepthCalculator
+from pyexotransmit.retrieve import Retriever
 
 Rs = 7e8
 g = 9.8

@@ -11,10 +11,10 @@ matrix:
           env: TOXENV=py36 
         - os: osx
           language: generic
-          env: TOXENV=py27 PATH=/usr/local/opt/python/libexec/bin:$PATH
+          env: TOXENV=py27 PATH=/usr/local/opt/python2/bin:$PATH
         - os: osx
           language: generic
-          env: TOXENV=py36 PATH=/usr/local/opt/python/libexec/bin::$PATH
+          env: TOXENV=py36 PATH=/usr/local/opt/python/libexec/bin:$PATH
 
 cache: pip
 before_install:  |
@@ -24,9 +24,6 @@ before_install:  |
     if [ $TOXENV = py27 ]
     then
        brew install python@2 || true
-       brew unlink python@2 || true
-       brew link --overwrite python@2 || true
-       pip install --upgrade pip setuptools
     elif [ $TOXENV = py36 ]
     then
        brew uninstall --ignore-dependencies python
@@ -36,8 +33,7 @@ before_install:  |
 
 install:
   - pip install -r requirements.txt
+  - python setup.py install 
 script:
-  - python test_tau_calculator.py
-  - python test_interpolation.py
-  - python test_retrieve.py
-  - python test_transit_depth_calculator.py
+  - nosetests -v
+

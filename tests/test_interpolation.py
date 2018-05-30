@@ -1,4 +1,4 @@
-from interpolator_3D import fast_interpolate, normal_interpolate
+from pyexotransmit.interpolator_3D import fast_interpolate, normal_interpolate
 import unittest
 import numpy as np
 
@@ -45,12 +45,13 @@ class TestInterpolation(unittest.TestCase):
 
     def test_realistic(self):
         #Test an array from a real run of interpolation
-        data = np.load("testing_data/interp_data.npy")
-        grid_x = np.load("testing_data/interp_grid_x.npy")
-        grid_y = np.load("testing_data/interp_grid_y.npy")
-        target_x = np.load("testing_data/interp_target_x.npy")
-        target_y = np.load("testing_data/interp_target_y.npy")
-        expected_result = np.load("testing_data/interp_result.npy")
+        dirname = "tests/testing_data/"
+        data = np.load(dirname + "interp_data.npy")
+        grid_x = np.load(dirname + "interp_grid_x.npy")
+        grid_y = np.load(dirname + "interp_grid_y.npy")
+        target_x = np.load(dirname + "interp_target_x.npy")
+        target_y = np.load(dirname + "interp_target_y.npy")
+        expected_result = np.load(dirname + "interp_result.npy")
 
         result = fast_interpolate(data, grid_x, grid_y, target_x, target_y)
         self.assertTrue(np.allclose(result, expected_result))

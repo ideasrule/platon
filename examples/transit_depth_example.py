@@ -2,11 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import corner
 
-from fit_info import FitInfo
-import eos_reader
-from abundance_getter import AbundanceGetter
-from transit_depth_calculator import TransitDepthCalculator
-from retrieve import Retriever
+from pyexotransmit.transit_depth_calculator import TransitDepthCalculator
 
 # All quantities in SI
 Rs = 6.57e8

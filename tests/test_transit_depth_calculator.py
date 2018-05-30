@@ -3,8 +3,8 @@ import unittest
 import numpy as np
 import matplotlib.pyplot as plt
 
-import eos_reader
-from transit_depth_calculator import TransitDepthCalculator
+from pyexotransmit import eos_reader
+from pyexotransmit.transit_depth_calculator import TransitDepthCalculator
 
 class TestTransitDepthCalculator(unittest.TestCase):
     def get_frac_dev(self, logZ, CO_ratio, custom_abundances):
@@ -13,7 +13,7 @@ class TestTransitDepthCalculator(unittest.TestCase):
 
         # This ExoTransmit run is done without SH, since it's not present in
         # GGchem
-        ref_wavelengths, ref_depths = np.loadtxt("testing_data/hot_jupiter_spectra.dat", unpack=True, skiprows=2)
+        ref_wavelengths, ref_depths = np.loadtxt("tests/testing_data/hot_jupiter_spectra.dat", unpack=True, skiprows=2)
         ref_depths /= 100
                 
         frac_dev = np.abs(ref_depths - transit_depths) / ref_depths

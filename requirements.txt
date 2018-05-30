@@ -4,4 +4,6 @@ matplotlib
 emcee
 nestle
 future
+nose
+setuptools
 

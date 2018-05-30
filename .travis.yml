@@ -23,15 +23,14 @@ before_install:  |
   else
     if [ $TOXENV = py27 ]
     then
-	brew install python@2
-	export PATH=/usr/local/opt/python2:$PATH
+       brew install python@2
+       export PATH=/usr/local/opt/python2:$PATH
     elif [ $TOXENV = py36 ]
     then
-	brew uninstall --ignore-dependencies python
-	brew install python@3
-
-	export PATH=/usr/local/opt/python3:$PATH
-	ln -s /usr/local/opt/python3/bin/python3 /usr/local/opt/python3/bin/python
+       brew uninstall --ignore-dependencies python
+       brew install python@3
+       export PATH=/usr/local/opt/python3:$PATH
+       ln -s /usr/local/opt/python3/bin/python3 /usr/local/opt/python3/bin/python
     fi
   fi
 

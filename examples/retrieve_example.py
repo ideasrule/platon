@@ -19,7 +19,7 @@ def hd209458b_stis():
     jupiter_radius = 7.1492e7
     wave_bins = [[293,347], [348,402], [403,457], [458,512], [512,567], [532,629], [629,726], [727,824], [825,922], [922,1019]]
     wave_bins = 1e-9 * np.array(wave_bins)
-    
+
     planet_radii = [1.3263, 1.3254, 1.32, 1.3179, 1.3177, 1.3246, 1.3176, 1.3158, 1.32, 1.3268]
     radii_errors = [0.0018, 0.0010, 0.0006, 0.0006, 0.0010, 0.0006, 0.0005, 0.0006, 0.0006, 0.0013]
     transit_depths = (np.array(planet_radii)*jupiter_radius/star_radius)**2 + 60e-6
@@ -60,7 +60,7 @@ def hd209458b_spitzer():
     RpRs = np.average([0.12007, 0.11991], weights=1.0/np.array([0.00114, 0.00073]))
     depths.append(RpRs**2)
     errors.append(0.00073/RpRs * 2 * depths[-1])
-    
+
     return 1e-6*np.array(wave_bins), np.array(depths), np.array(errors)
 
 stis_bins, stis_depths, stis_errors = hd209458b_stis()
@@ -78,17 +78,21 @@ errors = np.concatenate([stis_errors, wfc3_errors, spitzer_errors])
 
 #plt.errorbar([(start+end)/2 for (start,end) in bins], depths, yerr=errors, fmt='.')
 #plt.show()
-        
+
 retriever = Retriever()
 
 R_guess = 9.7e7
 T_guess = 1200
 metallicity_guess = 1
 scatt_factor_guess = 1
+scatt_slope_guess = 4
 cloudtop_P_guess = 1e6
 
 fit_info = retriever.get_default_fit_info(8.08e8, 9.311, R_guess, T_guess)
-fit_info.freeze_fit_param("log_scatt_factor")
+fit_info.add_fit_param("log_scatt_factor",0,1,value=0)
+fit_info.add_fit_param("scatt_slope",0,5,value=4)
+#fit_info.freeze_fit_param("log_scatt_factor")
+#fit_info.freeze_fit_param("scatt_slope")
 
 
 result = retriever.run_multinest(bins, depths, errors, fit_info)
@@ -100,4 +104,3 @@ fig = corner.corner(result.samples, weights=result.weights)
 fig.savefig("multinest_corner.png")
 
 #retriever.plot_result(bins, depths, errors, fit_info, [1.35868222866*7.1e7, 1108.28033324, np.log10(0.718669990058), np.log10(940.472706829), np.log10(2.87451662752)])
-

@@ -14,7 +14,6 @@ from . import interpolator_3D
 from .tau_calculator import get_line_of_sight_tau
 from .constants import K_B, AMU, GM_SUN, TEFF_SUN
 
-
 class TransitDepthCalculator:
     def __init__(self, star_radius, g, include_condensates=True, min_P_profile=0.1, max_P_profile=1e4, num_profile_heights=400):
         self.star_radius = star_radius
@@ -180,7 +179,7 @@ class TransitDepthCalculator:
         if cloudtop_P <= self.min_P_profile or cloudtop_P >= self.max_P_profile: return False
         return self.abundance_getter.is_in_bounds(logZ, CO_ratio, T)
 
-    def compute_depths(self, planet_radius, temperature, logZ=0, CO_ratio=0.53, add_scattering=True, scattering_factor=1, add_collisional_absorption=True, cloudtop_pressure=np.inf, custom_abundances=None):
+    def compute_depths(self, planet_radius, temperature, logZ=0, CO_ratio=0.53, add_scattering=True, scattering_factor=1, scattering_slope = 4, scattering_ref_wavelength = 10**-6 , add_collisional_absorption=True, cloudtop_pressure=np.inf, custom_abundances=None):
         '''
         P: List of pressures in atmospheric P-T profile, in ascending order
         T: List of temperatures corresponding to pressures in P
@@ -202,7 +201,12 @@ class TransitDepthCalculator:
         P_cond = interpolator_3D.get_condition_array(P_profile, self.P_grid, cloudtop_pressure)
 
         absorption_coeff = self._get_gas_absorption(abundances, P_cond, T_cond)
-        if add_scattering: absorption_coeff += scattering_factor * self._get_scattering_absorption(abundances, P_cond, T_cond)
+        if add_scattering:
+            if scattering_slope == 4:
+                absorption_coeff += scattering_factor * self._get_scattering_absorption(abundances, P_cond, T_cond)
+            else:
+                absorption_coeff += scattering_factor * self._get_scattering_absorption(abundances, P_cond, T_cond) * (self.lambda_grid.reshape((self.N_lambda,1,1))/(2*np.pi*(scattering_ref_wavelength)))**(4-scattering_slope)
+
         if add_collisional_absorption: absorption_coeff += self._get_collisional_absorption(abundances, P_cond, T_cond)
 
         absorption_coeff_atm = interpolator_3D.fast_interpolate(absorption_coeff, self.T_grid[T_cond], self.P_grid[P_cond], T_profile, P_profile)

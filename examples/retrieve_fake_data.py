@@ -32,6 +32,10 @@ retriever = Retriever()
 
 fit_info = retriever.get_default_fit_info(Rs, g, 0.99*Rp, 0.9*temperature, logZ=2, CO_ratio=1)
 fit_info.freeze_fit_param('error_multiple', 1)
+fit_info.add_fit_param("log_scatt_factor",0,1,value=0)
+fit_info.add_fit_param("scatt_slope",0,5,value=4)
+fit_info.freeze_fit_param("log_scatt_factor")
+fit_info.freeze_fit_param("scatt_slope")
 
 errors = np.random.normal(scale=1000e-6, size=len(transit_depths))
 transit_depths += errors

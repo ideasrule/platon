@@ -26,7 +26,7 @@ for (start, end) in wavelength_bins:
     center_wavelengths.append((start + end)/2.0)
 
 mean_depths = np.array(mean_depths)
-    
+
 Rs = 7e8
 g = 9.8
 Rp = 7.14e7
@@ -38,7 +38,7 @@ temperature = 1200
 
 retriever = Retriever()
 
-fit_info = FitInfo({'R': 0.99*Rp, 'T': 0.9*temperature, 'logZ': np.log10(2), 'CO_ratio': 1, 'log_scatt_factor': np.log10(1), 'log_cloudtop_P': log_cloudtop_P+1, 'star_radius': Rs, 'g': g, 'error_multiple': 1})
+fit_info = FitInfo({'R': 0.99*Rp, 'T': 0.9*temperature, 'logZ': np.log10(2), 'CO_ratio': 1, 'log_scatt_factor': np.log10(1), 'scatt_slope' : 4, 'log_cloudtop_P': log_cloudtop_P+1, 'star_radius': Rs, 'g': g, 'error_multiple': 1})
 
 fit_info.add_fit_param('R', 0.9*Rp, 1.1*Rp, 0, np.inf)
 fit_info.add_fit_param('T', 0.5*temperature, 1.5*temperature, 0, np.inf)
@@ -46,6 +46,7 @@ fit_info.add_fit_param('logZ', -1, 3, -1, 3)
 fit_info.add_fit_param('CO_ratio', 0.2, 1.5, 0.2, 2.0)
 fit_info.add_fit_param('log_cloudtop_P', -1, 4, -np.inf, np.inf)
 fit_info.add_fit_param('log_scatt_factor', 0, 1, 0, 3)
+fit_info.add_fit_param('scatt_slope', 0, 5, 0, 10)
 fit_info.add_fit_param('error_multiple', 0.1, 10, 0, np.inf)
 
 errors = np.random.normal(scale=50e-6, size=len(mean_depths))
@@ -57,8 +58,3 @@ np.save("weights.npy", result.weights)
 np.save("logl.npy", result.logl)
 fig = corner.corner(result.samples, weights=result.weights, range=[0.99] * result.samples.shape[1], labels=fit_info.fit_param_names, truths=[Rp, temperature, logZ, CO, log_cloudtop_P, 0, 1])
 fig.savefig("multinest_corner.png")
-    
-    
-
-
-

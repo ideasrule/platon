@@ -7,12 +7,12 @@ from pyexotransmit import tau_calculator
 class TestTauLOS(unittest.TestCase):
 
     def test_realistic(self):
-        absorption_coeffs = np.loadtxt("tests/testing_data/exotransmit_kappa")
-        heights = np.loadtxt("tests/testing_data/exotransmit_heights")
-        expected_tau = np.loadtxt("tests/testing_data/exotransmit_tau")
+        absorption_coeffs = np.loadtxt("testing_data/exotransmit_kappa")
+        heights = np.loadtxt("testing_data/exotransmit_heights")
+        expected_tau = np.loadtxt("testing_data/exotransmit_tau")
 
         tau = tau_calculator.get_line_of_sight_tau(absorption_coeffs, heights)
-        
+
         self.assertTrue(np.allclose(tau, expected_tau))
 
     def test_dl(self):
@@ -23,7 +23,7 @@ class TestTauLOS(unittest.TestCase):
             for j in range(dl.shape[1]):
                 r_prime = radii[i+1]
                 r_prime_higher = radii[i]
-                                
+
                 r = radii[j+1]
                 dist_higher = 2*np.sqrt(r_prime_higher**2 - r**2)
                 dist_lower = 2*np.sqrt(r_prime**2 - r**2)
@@ -55,11 +55,11 @@ class TestTauLOS(unittest.TestCase):
         analytic_tau = np.array(analytic_tau)
         rel_diff = (tau - analytic_tau)/analytic_tau
         self.assertTrue(np.all(rel_diff < 0.01))
-        
+
         #print tau[0,0:100], analytic_tau[0:100]
-            
-        
-    
-        
+
+
+
+
 if __name__ == '__main__':
     unittest.main()

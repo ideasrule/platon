@@ -6,7 +6,7 @@ with open("README.md", "r") as fh:
 setuptools.setup(
     name="pyexotransmit",
     version="1.0.alpha",
-    author="Michael Zhang, Yayaati Chan",
+    author="Michael Zhang, Yayaati Chachan",
     author_email="zmzhang@caltech.edu",
     description="A package to compute transmission spectra and retrieve atmospheric parameters from transmission spectra",
     long_description=long_description,

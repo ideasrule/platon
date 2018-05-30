@@ -11,10 +11,10 @@ matrix:
           env: TOXENV=py36 
         - os: osx
           language: generic
-          env: TOXENV=py27 PATH=/usr/local/opt/python2/python:$PATH
+          env: TOXENV=py27 PATH=/usr/local/opt/python2:$PATH
         - os: osx
           language: generic
-          env: TOXENV=py36 PATH=/usr/local/opt/python3/python3:$PATH
+          env: TOXENV=py36 PATH=/usr/local/opt/python3:$PATH
 
 cache: pip
 before_install:  |

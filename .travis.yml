@@ -21,15 +21,17 @@ before_install:  |
   if [ $TRAVIS_OS_NAME = linux ]; then
     sudo apt-get install -y libopenblas-dev
   else
-    brew update
     if [ $TOXENV = py27 ]
     then
-       curl https://bootstrap.pypa.io/get-pip.py | sudo python
+	brew install python@2
+	export PATH=/usr/local/opt/python2:$PATH
     elif [ $TOXENV = py36 ]
     then
-       brew upgrade python
-       alias python=python3
-       curl https://bootstrap.pypa.io/get-pip.py | sudo python3
+	brew uninstall --ignore-dependencies python
+	brew install python@3
+
+	export PATH=/usr/local/opt/python3:$PATH
+	ln -s /usr/local/opt/python3/bin/python3 /usr/local/opt/python3/bin/python
     fi
   fi
 

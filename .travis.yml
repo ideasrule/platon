@@ -11,10 +11,10 @@ matrix:
           env: TOXENV=py36 
         - os: osx
           language: generic
-          env: TOXENV=py27 PATH=/usr/local/opt/python2:$PATH
+          env: TOXENV=py27 PATH=/usr/local/opt/python/libexec/bin:$PATH
         - os: osx
           language: generic
-          env: TOXENV=py36 PATH=/usr/local/opt/python3:$PATH
+          env: TOXENV=py36 PATH=/usr/local/opt/python/libexec/bin::$PATH
 
 cache: pip
 before_install:  |
@@ -23,12 +23,13 @@ before_install:  |
   else
     if [ $TOXENV = py27 ]
     then
-       brew install python@2
+       brew install python@2 || true
+       brew unlink python@2 || true
+       brew link --overwrite python@2 || true
     elif [ $TOXENV = py36 ]
     then
        brew uninstall --ignore-dependencies python
        brew install python@3
-       ln -s /usr/local/opt/python3/bin/python3 /usr/local/opt/python3/bin/python
     fi
   fi
 

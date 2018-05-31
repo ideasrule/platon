@@ -84,16 +84,18 @@ class TransitDepthCalculator:
         return absorption_coeff
 
 
-    def _get_scattering_absorption(self, abundances, P_cond, T_cond):
-        cross_section = np.zeros((self.N_lambda, np.sum(P_cond), np.sum(T_cond)))
-        scatt_prefactor = 8*np.pi/3 * (2*np.pi/self.lambda_grid)**4
-        scatt_prefactor = scatt_prefactor.reshape((self.N_lambda,1,1))
+    def _get_scattering_absorption(self, abundances, P_cond, T_cond,
+                                   multiple=1, slope=4, ref_wavelength=1e-6):
+        sum_polarizability_sqr = np.zeros((np.sum(P_cond), np.sum(T_cond)))
 
         for species_name in abundances:
             if species_name in self.polarizability_data:
-                cross_section += abundances[species_name][P_cond,:][:,T_cond] * self.polarizability_data[species_name]**2 * scatt_prefactor
-
-        return cross_section * self.P_meshgrid[:,P_cond,:][:,:,T_cond]/(K_B*self.T_meshgrid[:,P_cond,:][:,:,T_cond])
+                sum_polarizability_sqr += abundances[species_name][P_cond,:][:,T_cond] * self.polarizability_data[species_name]**2
+                
+        n = self.P_meshgrid[:,P_cond,:][:,:,T_cond]/(K_B*self.T_meshgrid[:,P_cond,:][:,:,T_cond])
+        reshaped_lambda = self.lambda_grid.reshape((self.N_lambda, 1, 1))
+        
+        return multiple * (128.0/3 * np.pi**5) * n * sum_polarizability_sqr * ref_wavelength**(slope-4) / reshaped_lambda**slope
 
 
     def _get_collisional_absorption(self, abundances, P_cond, T_cond):
@@ -202,12 +204,11 @@ class TransitDepthCalculator:
 
         absorption_coeff = self._get_gas_absorption(abundances, P_cond, T_cond)
         if add_scattering:
-            if scattering_slope == 4:
-                absorption_coeff += scattering_factor * self._get_scattering_absorption(abundances, P_cond, T_cond)
-            else:
-                absorption_coeff += scattering_factor * self._get_scattering_absorption(abundances, P_cond, T_cond) * (self.lambda_grid.reshape((self.N_lambda,1,1))/(2*np.pi*(scattering_ref_wavelength)))**(4-scattering_slope)
+            absorption_coeff += self._get_scattering_absorption(
+                abundances, P_cond, T_cond, scattering_factor, scattering_slope)
 
-        if add_collisional_absorption: absorption_coeff += self._get_collisional_absorption(abundances, P_cond, T_cond)
+        if add_collisional_absorption:
+            absorption_coeff += self._get_collisional_absorption(abundances, P_cond, T_cond)
 
         absorption_coeff_atm = interpolator_3D.fast_interpolate(absorption_coeff, self.T_grid[T_cond], self.P_grid[P_cond], T_profile, P_profile)
 

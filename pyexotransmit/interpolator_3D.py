@@ -38,11 +38,19 @@ def fast_interpolate(data, grid_x, grid_y, target_x, target_y):
     if len(grid_x) == 1:
         #Stupid hack to get around refusal of RectBivariateSpline to
         #interpolate with only one element
+        #print len(grid_y), len(data)
+        if len(grid_y) == 1:
+            # interp1d can't handle only 1 element either
+            assert(grid_y == target_y)
+            return data.reshape((data.shape[0], 1))
         interpolator = interp1d(grid_y, data, axis=1)
         return interpolator(target_y).reshape((data.shape[0], len(target_y)))
 
     if len(grid_y) == 1:
-        #Same as above
+        #Same hack as above
+        if len(grid_x) == 1:
+            assert(grid_x == target_x)
+            return data.reshape((data.shape[0], 1))
         interpolator = interp1d(grid_x, data, axis=2)
         return interpolator(target_x).reshape((data.shape[0], len(target_x)))
     

@@ -52,6 +52,23 @@ class TransitDepthCalculator:
 
 
     def change_wavelength_bins(self, bins):
+        """Specify wavelength bins, instead of using the full wavelength grid
+        in self.lambda_grid.  This makes the code much faster, as
+        `compute_depths` will only compute depths at wavelengths that fall
+        within a bin.
+        
+        Parameters
+        ----------
+        bins : array_like, shape (N, 2)
+            Wavelength bins, where bins[i][0] is the start wavelength and
+            bins[i][1] is the end wavelength for bin i.
+
+        Raises
+        ------
+        NotImplementedError
+            Raised when `change_wavelength_bins` is called more than once,
+            which is not supported.        
+        """
         if self.wavelength_rebinned:
             raise NotImplementedError("Multiple re-binnings not yet supported")
 
@@ -177,18 +194,70 @@ class TransitDepthCalculator:
         raise ValueError("Unrecognized format for custom_abundances")
 
     def is_in_bounds(self, logZ, CO_ratio, T, cloudtop_P):
+        '''Tests whether a certain combination of parameters is within the
+        bounds of the data files. The arguments are the same as those in
+        `compute_depths.`'''
+
         if T <= np.min(self.T_grid) or T >= np.max(self.T_grid): return False
         if cloudtop_P <= self.min_P_profile or cloudtop_P >= self.max_P_profile: return False
         return self.abundance_getter.is_in_bounds(logZ, CO_ratio, T)
 
-    def compute_depths(self, planet_radius, temperature, logZ=0, CO_ratio=0.53, add_scattering=True, scattering_factor=1, scattering_slope = 4, scattering_ref_wavelength = 10**-6 , add_collisional_absorption=True, cloudtop_pressure=np.inf, custom_abundances=None):
+    def compute_depths(self, planet_radius, temperature, logZ=0, CO_ratio=0.53,
+                       add_scattering=True, scattering_factor=1,
+                       scattering_slope = 4, scattering_ref_wavelength = 1e-6,
+                       add_collisional_absorption=True,
+                       cloudtop_pressure=np.inf, custom_abundances=None):
         '''
-        P: List of pressures in atmospheric P-T profile, in ascending order
-        T: List of temperatures corresponding to pressures in P
-        abundances: dictionary mapping species name to (N_T, N_P) array, where N_T is the number of temperature points in the absorption data files, and N_P is the number of pressure points in those files
-        add_scattering: whether Rayleigh scattering opacity is taken into account
-        add_collisional_absorption: whether collisionally induced absorption is taken into account
-        cloudtop_pressure: pressure level below which light cannot penetrate'''
+        Computes transit depths at a range of wavelengths, assuming an
+        isothermal atmosphere.  To choose bins, call change_wavelength_bins().
+        
+        Parameters
+        ----------
+        planet_radius : float
+            radius of the planet at self.max_P_profile (by default,
+            100,000 Pa).  Must be in metres.
+        temperature : float
+            Temperature of the isothermal atmosphere, in Kelvin
+        logZ : float
+            Base-10 logarithm of the metallicity, in solar units
+        CO_ratio : float, optional
+            C/O atomic ratio in the atmosphere.  The solar value is 0.53.
+        add_scattering : bool, optional
+            whether Rayleigh scattering is taken into account
+        scattering_factor : float, optional
+            if `add_scattering` is True, make scattering this many
+            times as strong. If `scattering_slope` is 4, corresponding to
+            Rayleigh scattering, the absorption coefficients are simply
+            multiplied by `scattering_factor`. If slope is not 4, 
+            `scattering_factor` is defined such that the absorption coefficient
+            is that many times as strong as Rayleigh scattering at 
+            `scattering_ref_wavelength`.
+        scattering_slope : float, optional
+            Wavelength dependence of scattering, with 4 being Rayleigh.
+        scattering_ref_wavelength : float, optional
+            Scattering is `scattering_factor` as strong as Rayleigh at this
+            wavelength, expressed in metres.
+        add_collisional_absorption : float, optional
+            Whether collisionally induced absorption is taken into account
+        cloudtop_pressure : float, optional
+            Pressure level (in Pa) below which light cannot penetrate.
+            Use np.inf for a cloudless atmosphere.
+        custom_abundances : str or dict of np.ndarray, optional
+            If specified, overrides `logZ` and `CO_ratio`.  Can specify a
+            filename, in which case the abundances are read from a file in the
+            format of the EOS/ files.  These are identical to ExoTransmit's
+            EOS files.  It is also possible, though highly discouraged, to
+            specify a dictionary mapping species names to numpy arrays, so that
+            custom_abundances['Na'][3,4] would mean the fractional number
+            abundance of Na at a pressure of self.P_grid[3] and temperature of
+            self.T_grid[4].  
+        Returns
+        -------
+        wavelengths : array of float
+            Central wavelengths, in metres
+        transit_depths : array of float
+            Transit depths at `wavelengths`
+       '''
 
         P_profile = np.logspace(np.log10(self.min_P_profile), np.log10(self.max_P_profile), self.num_profile_heights)
         T_profile = np.ones(len(P_profile)) * temperature
@@ -205,7 +274,8 @@ class TransitDepthCalculator:
         absorption_coeff = self._get_gas_absorption(abundances, P_cond, T_cond)
         if add_scattering:
             absorption_coeff += self._get_scattering_absorption(
-                abundances, P_cond, T_cond, scattering_factor, scattering_slope)
+                abundances, P_cond, T_cond,
+                scattering_factor, scattering_slope, scattering_ref_wavelength)
 
         if add_collisional_absorption:
             absorption_coeff += self._get_collisional_absorption(abundances, P_cond, T_cond)

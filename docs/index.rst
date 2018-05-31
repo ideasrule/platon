@@ -11,7 +11,7 @@ Welcome to pyexotransmit's documentation!
    :caption: Contents
 
    source/modules
-.. include:: ../README.rst
+
 
 Indices and tables
 ==================

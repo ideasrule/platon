@@ -90,7 +90,11 @@ cloudtop_P_guess = 1e6
 
 fit_info = retriever.get_default_fit_info(8.08e8, 9.311, R_guess, T_guess)
 fit_info.add_fit_param("log_scatt_factor",0,1,value=0)
-fit_info.add_fit_param("scatt_slope",0,5,value=4)
+fit_info.add_fit_param("scatt_slope",0,10,value=4)
+fit_info.freeze_fit_param("logZ")
+fit_info.freeze_fit_param("CO_ratio")
+fit_info.freeze_fit_param("T")
+
 #fit_info.freeze_fit_param("log_scatt_factor")
 #fit_info.freeze_fit_param("scatt_slope")
 
@@ -100,7 +104,7 @@ result = retriever.run_multinest(bins, depths, errors, fit_info)
 np.save("samples.npy", result.samples)
 np.save("weights.npy", result.weights)
 np.save("logl.npy", result.logl)
-fig = corner.corner(result.samples, weights=result.weights)
+fig = corner.corner(result.samples, weights=result.weights, range=[0.99] * result.samples.shape[1], labels=fit_info.fit_param_names)
 fig.savefig("multinest_corner.png")
 
 #retriever.plot_result(bins, depths, errors, fit_info, [1.35868222866*7.1e7, 1108.28033324, np.log10(0.718669990058), np.log10(940.472706829), np.log10(2.87451662752)])

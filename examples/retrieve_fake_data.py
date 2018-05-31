@@ -16,8 +16,13 @@ temperature = 1200
 
 
 depth_calculator = TransitDepthCalculator(Rs, g)
-wfc_wavelengths = np.linspace(1.1e-6, 1.7e-6, 30)
+
 wavelength_bins = []
+stis_wavelengths = np.linspace(0.4e-6, 0.7e-6, 30)
+for i in range(len(stis_wavelengths) - 1):
+    wavelength_bins.append([stis_wavelengths[i], stis_wavelengths[i+1]])
+
+wfc_wavelengths = np.linspace(1.1e-6, 1.7e-6, 30)
 for i in range(len(wfc_wavelengths) - 1):
     wavelength_bins.append([wfc_wavelengths[i], wfc_wavelengths[i+1]])
 
@@ -34,15 +39,15 @@ fit_info = retriever.get_default_fit_info(Rs, g, 0.99*Rp, 0.9*temperature, logZ=
 fit_info.freeze_fit_param('error_multiple', 1)
 fit_info.add_fit_param("log_scatt_factor",0,1,value=0)
 fit_info.add_fit_param("scatt_slope",0,5,value=4)
-fit_info.freeze_fit_param("log_scatt_factor")
-fit_info.freeze_fit_param("scatt_slope")
 
-errors = np.random.normal(scale=1000e-6, size=len(transit_depths))
+errors = np.random.normal(scale=50e-6, size=len(transit_depths))
 transit_depths += errors
 
 result = retriever.run_multinest(wavelength_bins, transit_depths, errors, fit_info)
 np.save("samples.npy", result.samples)
 np.save("weights.npy", result.weights)
 np.save("logl.npy", result.logl)
-fig = corner.corner(result.samples, weights=result.weights, range=[0.99] * result.samples.shape[1], labels=fit_info.fit_param_names, truths=[Rp, temperature, logZ, CO, log_cloudtop_P, 0, 1])
+
+print fit_info.fit_param_names
+fig = corner.corner(result.samples, weights=result.weights, range=[0.99] * result.samples.shape[1], labels=fit_info.fit_param_names)
 fig.savefig("multinest_corner.png")

@@ -7,12 +7,11 @@ Welcome to pyexotransmit's documentation!
 =========================================
 
 .. toctree::
-   :maxdepth: 2
-	      
-   readme
-   :caption: Contents:
+   :maxdepth: 2	      
+   :caption: Contents
 
-
+   source/modules
+.. include:: ../README.rst
 
 Indices and tables
 ==================

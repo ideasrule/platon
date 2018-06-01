@@ -10,6 +10,9 @@ Welcome to pyexotransmit's documentation!
    :maxdepth: 2	      
    :caption: Contents
 
+   intro
+   install
+   quickstart
    source/modules
 
 

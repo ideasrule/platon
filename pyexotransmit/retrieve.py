@@ -19,7 +19,6 @@ class Retriever:
             return -np.inf
 
         params_dict = fit_info.interpret_param_array(params)
-
         R = params_dict["R"]
         T = params_dict["T"]
         logZ = params_dict["logZ"]
@@ -102,20 +101,25 @@ class Retriever:
 
     @staticmethod
     def get_default_fit_info(Rs, g, Rp, T, logZ=0, CO_ratio=0.53,
-                             cloudtop_P=1e4, error_multiple=1): # scatt_factor=1,
+                             cloudtop_P=1e3, log_scatt_factor=0,
+                             scatt_slope=4, error_multiple=1,
+                             add_fit_params=False):
 
         fit_info = FitInfo({'R': Rp, 'T': T, 'logZ': logZ,
                             'CO_ratio': CO_ratio,
-                            #'log_scatt_factor': np.log10(scatt_factor),
+                            'log_scatt_factor': log_scatt_factor,
+                            'scatt_slope': scatt_slope,
                             'log_cloudtop_P': np.log10(cloudtop_P),
                             'star_radius': Rs, 'g': g,
                             'error_multiple': error_multiple})
 
-        fit_info.add_fit_param('R', 0.9*Rp, 1.1*Rp, 0, np.inf)
-        fit_info.add_fit_param('T', 0.5*T, 1.5*T, 0, np.inf)
-        fit_info.add_fit_param('logZ', -1, 3, -1, 3)
-        fit_info.add_fit_param('CO_ratio', 0.2, 1.5, 0.2, 2.0)
-        fit_info.add_fit_param('log_cloudtop_P', -1, 4, -np.inf, np.inf)
-        #fit_info.add_fit_param('log_scatt_factor', 0, 1, 0, 3)
-        fit_info.add_fit_param('error_multiple', 0.1, 10, 0, np.inf)
+        if add_fit_params:
+            fit_info.add_fit_param('R', 0.9*Rp, 1.1*Rp, 0, np.inf)
+            fit_info.add_fit_param('T', 0.5*T, 1.5*T, 0, np.inf)
+            fit_info.add_fit_param('logZ', -1, 3, -1, 3)
+            fit_info.add_fit_param('CO_ratio', 0.2, 1.5, 0.2, 2.0)
+            fit_info.add_fit_param('log_cloudtop_P', -1, 4, -np.inf, np.inf)
+            fit_info.add_fit_param('log_scatt_factor', 0, 1, 0, 3)
+            fit_info.add_fit_param('scatt_slope', 0, 8, 0, 8)
+            fit_info.add_fit_param('error_multiple', 0.1, 10, 0, np.inf)
         return fit_info

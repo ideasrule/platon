@@ -15,7 +15,7 @@ from .tau_calculator import get_line_of_sight_tau
 from .constants import K_B, AMU, GM_SUN, TEFF_SUN
 
 class TransitDepthCalculator:
-    def __init__(self, star_radius, g, include_condensates=True, min_P_profile=0.1, max_P_profile=1e4, num_profile_heights=400):
+    def __init__(self, star_radius, g, include_condensates=True, min_P_profile=0.1, max_P_profile=1e5, num_profile_heights=400):
         self.star_radius = star_radius
         self.g = g
 

@@ -89,14 +89,10 @@ scatt_slope_guess = 4
 cloudtop_P_guess = 1e6
 
 fit_info = retriever.get_default_fit_info(8.08e8, 9.311, R_guess, T_guess)
-fit_info.add_fit_param("log_scatt_factor",0,1,value=0)
-fit_info.add_fit_param("scatt_slope",0,10,value=4)
-fit_info.freeze_fit_param("logZ")
-fit_info.freeze_fit_param("CO_ratio")
-fit_info.freeze_fit_param("T")
-
-#fit_info.freeze_fit_param("log_scatt_factor")
-#fit_info.freeze_fit_param("scatt_slope")
+fit_info.add_fit_param('R', 0.9*R_guess, 1.1*R_guess, 0, np.inf)
+fit_info.add_fit_param("log_scatt_factor", 0, 1, value=0)
+fit_info.add_fit_param("scatt_slope", 0, 10, value=4)
+fit_info.add_fit_param("logZ", -1, 2)
 
 
 result = retriever.run_multinest(bins, depths, errors, fit_info)

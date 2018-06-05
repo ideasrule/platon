@@ -1,5 +1,5 @@
 platon
-=============
+======
 
 .. toctree::
    :maxdepth: 4

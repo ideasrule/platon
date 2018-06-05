@@ -4,7 +4,7 @@
    contain the root `toctree` directive.
 
 Welcome to PLATON's documentation!
-=================================
+==================================
 
 .. toctree::
    :maxdepth: 2	      

@@ -1,6 +1,6 @@
 import unittest
 import numpy as np
-from platon.retrieve import Retriever
+from platon.retriever import Retriever
 from platon.fit_info import FitInfo
 
 class TestRetriever(unittest.TestCase):

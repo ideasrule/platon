@@ -10,7 +10,7 @@ import nestle
 import corner
 
 from platon.fit_info import FitInfo
-from platon.retrieve import Retriever
+from platon.retriever import Retriever
 
 
 def hd209458b_stis():

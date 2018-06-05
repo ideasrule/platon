@@ -4,7 +4,7 @@ import corner
 
 from platon.fit_info import FitInfo
 from platon.transit_depth_calculator import TransitDepthCalculator
-from platon.retrieve import Retriever
+from platon.retriever import Retriever
 
 Rs = 7e8
 g = 9.8

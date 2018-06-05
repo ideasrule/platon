@@ -1,11 +1,11 @@
 platon package
-=====================
+==============
 
 Submodules
 ----------
 
 platon.abundance\_getter module
---------------------------------------
+-------------------------------
 
 .. automodule:: platon.abundance_getter
     :members:
@@ -13,7 +13,7 @@ platon.abundance\_getter module
     :show-inheritance:
 
 platon.compatible\_loader module
----------------------------------------
+--------------------------------
 
 .. automodule:: platon.compatible_loader
     :members:
@@ -21,7 +21,7 @@ platon.compatible\_loader module
     :show-inheritance:
 
 platon.constants module
-------------------------------
+-----------------------
 
 .. automodule:: platon.constants
     :members:
@@ -29,7 +29,7 @@ platon.constants module
     :show-inheritance:
 
 platon.eos\_reader module
---------------------------------
+-------------------------
 
 .. automodule:: platon.eos_reader
     :members:
@@ -37,7 +37,7 @@ platon.eos\_reader module
     :show-inheritance:
 
 platon.fit\_info module
-------------------------------
+-----------------------
 
 .. automodule:: platon.fit_info
     :members:
@@ -45,23 +45,23 @@ platon.fit\_info module
     :show-inheritance:
 
 platon.interpolator\_3D module
--------------------------------------
+------------------------------
 
 .. automodule:: platon.interpolator_3D
     :members:
     :undoc-members:
     :show-inheritance:
 
-platon.retrieve module
------------------------------
+platon.retriever module
+-----------------------
 
-.. automodule:: platon.retrieve
+.. automodule:: platon.retriever
     :members:
     :undoc-members:
     :show-inheritance:
 
 platon.species\_data\_reader module
-------------------------------------------
+-----------------------------------
 
 .. automodule:: platon.species_data_reader
     :members:
@@ -69,7 +69,7 @@ platon.species\_data\_reader module
     :show-inheritance:
 
 platon.tau\_calculator module
-------------------------------------
+-----------------------------
 
 .. automodule:: platon.tau_calculator
     :members:
@@ -77,7 +77,7 @@ platon.tau\_calculator module
     :show-inheritance:
 
 platon.transit\_depth\_calculator module
------------------------------------------------
+----------------------------------------
 
 .. automodule:: platon.transit_depth_calculator
     :members:

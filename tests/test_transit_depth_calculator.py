@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 import matplotlib.pyplot as plt
 
-from platon import eos_reader
+from platon.abundance_getter import AbundanceGetter
 from platon.transit_depth_calculator import TransitDepthCalculator
 
 class TestTransitDepthCalculator(unittest.TestCase):
@@ -28,8 +28,8 @@ class TestTransitDepthCalculator(unittest.TestCase):
 
         return frac_dev
 
-    def test_EOS_file(self):
-        custom_abundances = eos_reader.get_abundances("EOS/eos_1Xsolar_cond.dat")
+    def test_custom_file(self):
+        custom_abundances = AbundanceGetter.from_file("tests/testing_data/abund_1Xsolar_cond.dat")
         custom_abundances["SH"] *= 0
         frac_dev = self.get_frac_dev(None, None, custom_abundances)
         self.assertTrue(np.all(frac_dev < 0.02))

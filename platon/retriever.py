@@ -66,6 +66,29 @@ class Retriever:
         return sampler
 
     def run_multinest(self, wavelength_bins, depths, errors, fit_info, maxiter=None, include_condensates=True):
+        '''Runs nested sampling to retrieve atmospheric parameters.
+
+        Parameters
+        ----------
+        wavelength_bins : array_like, shape (N,2)
+            Wavelength bins, where wavelength_bins[i][0] is the start 
+            wavelength and wavelength_bins[i][1] is the end wavelength for 
+            bin i.
+        depths : array_like, length N
+            Measured transit depths for the specified wavelength bins
+        errors : array_like, length N
+            Errors on the aforementioned transit depths
+        fit_info : :class:`.FitInfo` object
+            Tells us what parameters to
+            freely vary, and in what range those parameters can vary. Also
+            sets default values for the fixed parameters.
+        maxiter : bool, optional
+            If not None, run at most this many iterations of nestled sampling
+        include_condensates : bool, optional
+            When determining atmospheric abundances, whether to include
+            condensation.'''
+            
+        
         calculator = TransitDepthCalculator(fit_info.get("star_radius"), fit_info.get("g"), include_condensates=include_condensates)
         calculator.change_wavelength_bins(wavelength_bins)
 

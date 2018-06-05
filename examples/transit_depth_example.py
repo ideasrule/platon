@@ -1,6 +1,7 @@
+from __future__ import print_function
+
 import numpy as np
 import matplotlib.pyplot as plt
-import corner
 
 from platon.transit_depth_calculator import TransitDepthCalculator
 
@@ -14,9 +15,9 @@ T = 2150        #Temperature of isothermal part of the atmosphere
 depth_calculator = TransitDepthCalculator(Rs, g)
 wavelengths, transit_depths = depth_calculator.compute_depths(Rp, T)
 
-print "#Wavelength(m)       Depth"
+print("#Wavelength(m)       Depth")
 for i in range(len(wavelengths)):
-    print wavelengths[i], transit_depths[i]
+    print(wavelengths[i], transit_depths[i])
 
 plt.plot(wavelengths, transit_depths)
 plt.show()

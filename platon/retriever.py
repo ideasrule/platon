@@ -10,10 +10,10 @@ import nestle
 
 from .transit_depth_calculator import TransitDepthCalculator
 from .fit_info import FitInfo
-
+from .constants import METRES_TO_UM
 
 class Retriever:
-    def ln_prob(self, params, calculator, fit_info, measured_depths,
+    def _ln_prob(self, params, calculator, fit_info, measured_depths,
                 measured_errors, plot=False):
         if not fit_info.within_limits(params):
             return -np.inf
@@ -39,8 +39,8 @@ class Retriever:
         result = -0.5 * np.sum(residuals**2/scaled_errors**2 + np.log(2*np.pi*scaled_errors**2))
 
         if plot:
-            plt.errorbar(1e6*wavelengths, measured_depths, yerr=measured_errors, fmt='.')
-            plt.plot(1e6*wavelengths, calculated_depths)
+            plt.errorbar(METRES_TO_UM*wavelengths, measured_depths, yerr=measured_errors, fmt='.')
+            plt.plot(METRES_TO_UM*wavelengths, calculated_depths)
             plt.xlabel("Wavelength (um)")
             plt.ylabel("Transit depth")
             plt.show()
@@ -48,24 +48,68 @@ class Retriever:
 
     def run_emcee(self, wavelength_bins, depths, errors, fit_info, nwalkers=50,
                   nsteps=10000, include_condensates=True,
-                  output_prefix="output"):
+                  plot_best=False):
+        '''Runs affine-invariant MCMC to retrieve atmospheric parameters.
+
+        Parameters
+        ----------
+        wavelength_bins : array_like, shape (N,2)
+            Wavelength bins, where wavelength_bins[i][0] is the start 
+            wavelength and wavelength_bins[i][1] is the end wavelength for 
+            bin i.
+        depths : array_like, length N
+            Measured transit depths for the specified wavelength bins
+        errors : array_like, length N
+            Errors on the aforementioned transit depths
+        fit_info : :class:`.FitInfo` object
+            Tells the method what parameters to
+            freely vary, and in what range those parameters can vary. Also
+            sets default values for the fixed parameters.
+        nwalkers : int, optional
+            Number of walkers to use
+        nsteps : int, optional
+            Number of steps that the walkers should walk for
+        include_condensates : bool, optional
+            When determining atmospheric abundances, whether to include
+            condensation.
+        plot_best : bool, optional
+            If True, plots the best fit model with the data
+            
+        Returns
+        -------
+        result : EnsembleSampler object
+            This returns emcee's EnsembleSampler object.  The most useful
+            attributes in this item are result.chain, which is a (W x S X P)
+            array where W is the number of walkers, S is the number of steps,
+            and P is the number of parameters; and result.lnprobability, a
+            (W x S) array of log probabilities.  For your convenience, this
+            object also contains result.flatchain, which is a (WS x P) array
+            where WS = W x S is the number of samples; and 
+            result.flatlnprobability, an array of length WS      
+        '''
+        
         initial_positions = fit_info.generate_rand_param_arrays(nwalkers)
-        calculator = TransitDepthCalculator(fit_info.get("star_radius"), fit_info.get("g"), include_condensates=include_condensates)
+        calculator = TransitDepthCalculator(fit_info.get("star_radius"), fit_info.get("g"),
+                                            include_condensates=include_condensates)
         calculator.change_wavelength_bins(wavelength_bins)
 
         sampler = emcee.EnsembleSampler(
-            nwalkers, fit_info.get_num_fit_params(), self.ln_prob,
+            nwalkers, fit_info.get_num_fit_params(), self._ln_prob,
             args=(calculator, fit_info, depths, errors))
 
         for i, result in enumerate(sampler.sample(initial_positions, iterations=nsteps)):
             if (i+1) % 10 == 0:
                 print(str(i+1) + "/" + str(nsteps), sampler.lnprobability[0,i], sampler.chain[0,i])
+                
+        best_params_arr = sampler.flatchain[np.argmax(sampler.flatlnprobability)]
+        best_params_dict = fit_info.interpret_param_array(best_params_arr)
+        print("Best params", best_params_dict)
 
-        np.save(output_prefix + "_chain.npy", sampler.chain)
-        np.save(output_prefix + "_lnprob.npy", sampler.lnprobability)
+        if plot_best:
+            self._ln_prob(best_params_arr, calculator, fit_info, depths, errors, plot=True)
         return sampler
 
-    def run_multinest(self, wavelength_bins, depths, errors, fit_info, maxiter=None, include_condensates=True):
+    def run_multinest(self, wavelength_bins, depths, errors, fit_info, maxiter=None, include_condensates=True, plot_best=False):
         '''Runs nested sampling to retrieve atmospheric parameters.
 
         Parameters
@@ -86,10 +130,23 @@ class Retriever:
             If not None, run at most this many iterations of nestled sampling
         include_condensates : bool, optional
             When determining atmospheric abundances, whether to include
-            condensation.'''
-            
-        
-        calculator = TransitDepthCalculator(fit_info.get("star_radius"), fit_info.get("g"), include_condensates=include_condensates)
+            condensation.
+        plot_best : bool, optional
+            If True, plots the best fit model with the data
+
+        Returns
+        -------
+        result : Result object
+            This returns the object returned by nestle.sample  The object is
+            dictionary-like and has many useful items.  For example,
+            result.samples (or alternatively, result["samples"]) are the
+            parameter values of each sample, result.weights contains the
+            weights, and result.logl contains the log likelihoods.  result.logz
+            is the natural logarithm of the evidence.
+        '''
+                    
+        calculator = TransitDepthCalculator(fit_info.get("star_radius"), fit_info.get("g"),
+                                            include_condensates=include_condensates)
         calculator.change_wavelength_bins(wavelength_bins)
 
         def transform_prior(cube):
@@ -100,7 +157,7 @@ class Retriever:
             return new_cube
 
         def multinest_ln_prob(cube):
-            return self.ln_prob(cube, calculator, fit_info, depths, errors)
+            return self._ln_prob(cube, calculator, fit_info, depths, errors)
 
         def callback(callback_info):
             print(callback_info["it"], callback_info["logz"],
@@ -113,14 +170,11 @@ class Retriever:
         best_params_arr = result.samples[np.argmax(result.logl)]
         best_params_dict = fit_info.interpret_param_array(best_params_arr)
         print("Best params", best_params_dict)
+        
+        if plot_best:
+            self._ln_prob(best_params_arr, calculator, fit_info, depths, errors, plot=True)
         return result
 
-
-
-    def plot_result(self, wavelength_bins, depths, errors, fit_info, parameter_array):
-        calculator = TransitDepthCalculator(fit_info.get("star_radius"), fit_info.get("g"))
-        calculator.change_wavelength_bins(wavelength_bins)
-        self.ln_prob(parameter_array, calculator, fit_info, depths, errors, plot=True)
 
     @staticmethod
     def get_default_fit_info(Rs, g, Rp, T, logZ=0, CO_ratio=0.53,

@@ -13,9 +13,9 @@ The two main modules are:
       are metallicity, C/O ratio, cloudtop pressure, scattering strength,
       and scattering slope
 
-The transit spectrum is calculating from 300 nm to 30 um, taking into
-account gas absorption, collisionally induced gas absorption, and
-Rayleigh scattering.  :class:`.TransitDepthCalculator` is written
+The transit spectrum is calculated from 300 nm to 30 um, taking into
+account gas absorption, collisionally induced gas absorption, clouds, 
+and scattering.  :class:`.TransitDepthCalculator` is written
 entirely in Python and is designed for performance. By default, it
 calculates transit depths on a fine wavelength grid (λ/Δλ = 1000 with
 4616 wavelength points), which takes ~170 milliseconds on a midrange

@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="platon",
-    version="1.0.alpha",
+    version="1.0.beta",
     author="Michael Zhang, Yayaati Chachan",
     author_email="zmzhang@caltech.edu",
     description="A package to compute transmission spectra and retrieve atmospheric parameters from transmission spectra",
@@ -19,5 +19,5 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ),
     include_package_data = True,
-    zip_safe = True
+    zip_safe = False
 )

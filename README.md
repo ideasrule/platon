@@ -2,7 +2,7 @@
 
 # PLATON
 
-PLATON calculates the transmission spectrum of a planet from 300 nm to 30 um, taking into account gas absorption, collisionally induced gas absorption, and Rayleigh scattering.  It is derived from ExoTransmit by Eliza Kempton (https://github.com/elizakempton/Exo_Transmit).
+PLATON (PLanetary Atmospheric Transmission for Observer Noobs) calculates the transmission spectrum of a planet from 300 nm to 30 um, taking into account gas absorption, collisionally induced gas absorption, and Rayleigh scattering.  It is derived from ExoTransmit by Eliza Kempton (https://github.com/elizakempton/Exo_Transmit).
 
 PLATON is written entirely in Python and is fast enough to be used in the inner loop of emcee.  By default, the code calculates transit depths
 on a fine wavelength grid (λ/Δλ = 1000 with 4616 wavelength points), which takes ~0.4 seconds. The user can instead specify bins which are

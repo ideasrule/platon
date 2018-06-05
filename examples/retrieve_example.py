@@ -79,8 +79,10 @@ errors = np.concatenate([stis_errors, wfc3_errors, spitzer_errors])
 #plt.errorbar([(start+end)/2 for (start,end) in bins], depths, yerr=errors, fmt='.')
 #plt.show()
 
+#create a Retriever object
 retriever = Retriever()
 
+#provide initial guesses for the parameters
 R_guess = 9.7e7
 T_guess = 1200
 metallicity_guess = 1
@@ -88,13 +90,20 @@ scatt_factor_guess = 1
 scatt_slope_guess = 4
 cloudtop_P_guess = 1e6
 
-fit_info = retriever.get_default_fit_info(8.08e8, 9.311, R_guess, T_guess)
+#Radius of star and planet's gravitational acceleration (at 1 bar by default)
+R_star = 8.08e8
+g = 9.311
+
+#create a FitInfo object and parse the default arguments
+fit_info = retriever.get_default_fit_info(R_star, g, R_guess, T_guess)
+#Add fitting parameters - this specifies which parameters you want to fit
+#e.g. since we have not included cloudtop_P, it will be fixed at the value specified in the constructor
 fit_info.add_fit_param('R', 0.9*R_guess, 1.1*R_guess, 0, np.inf)
 fit_info.add_fit_param("log_scatt_factor", 0, 1, value=0)
 fit_info.add_fit_param("scatt_slope", 0, 10, value=4)
 fit_info.add_fit_param("logZ", -1, 2)
 
-
+#Use Nested Sampling to do the fitting
 result = retriever.run_multinest(bins, depths, errors, fit_info)
 
 np.save("samples.npy", result.samples)

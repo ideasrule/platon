@@ -6,4 +6,4 @@ nestle
 future
 nose
 setuptools
-requests
+

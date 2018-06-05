@@ -1,9 +1,12 @@
 from __future__ import print_function
+from future.standard_library import install_aliases
+install_aliases()
+from urllib.request import urlopen
+
 from pkg_resources import resource_filename
 
-import requests
 import sys
-import urllib2
+
 import zipfile
 import os
 import shutil
@@ -12,10 +15,9 @@ def get_data():
     url = "https://github.com/ideasrule/platon/archive/beta.zip"
 
     file_name = url.split('/')[-1]
-    u = urllib2.urlopen(url)
+    u = urlopen(url)
     f = open(file_name, 'wb')
-    meta = u.info()
-    file_size = int(meta.getheaders("Content-Length")[0])
+    file_size = int(u.getheader("Content-Length"))
     print("Downloading {0}: {1} MB".format(file_name, file_size/2**20))
 
     file_size_dl = 0

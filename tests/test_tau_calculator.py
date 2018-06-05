@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 import scipy.integrate
 
-from platon import tau_calculator
+from platon import _tau_calculator
 
 class TestTauLOS(unittest.TestCase):
 
@@ -11,13 +11,13 @@ class TestTauLOS(unittest.TestCase):
         heights = np.loadtxt("tests/testing_data/exotransmit_heights")
         expected_tau = np.loadtxt("tests/testing_data/exotransmit_tau")
 
-        tau = tau_calculator.get_line_of_sight_tau(absorption_coeffs, heights)
+        tau = _tau_calculator.get_line_of_sight_tau(absorption_coeffs, heights)
 
         self.assertTrue(np.allclose(tau, expected_tau))
 
     def test_dl(self):
         radii = np.array([124,100,44,33,10,3.1,2.45])
-        dl = tau_calculator.get_dl(radii)
+        dl = _tau_calculator.get_dl(radii)
 
         for i in range(dl.shape[0]):
             for j in range(dl.shape[1]):
@@ -36,7 +36,7 @@ class TestTauLOS(unittest.TestCase):
         Rp = 1000
         radii = Rp + np.linspace(0, 100, 101)
         radii = np.flip(radii, 0)
-        tau = tau_calculator.get_line_of_sight_tau(absorption_coeff, radii)
+        tau = _tau_calculator.get_line_of_sight_tau(absorption_coeff, radii)
         expected_tau = 2*np.sqrt(radii[0]**2 - radii[1:]**2)
         for t in tau:
             np.allclose(t, expected_tau)
@@ -51,7 +51,7 @@ class TestTauLOS(unittest.TestCase):
         for i, r in enumerate(radii[1:]):
             absorption_coeff[:,i] *= np.exp(-(r-Rp)/scale_height)
             analytic_tau.append(2*scipy.integrate.quad(lambda x: np.exp(-(x-Rp)/scale_height)*x/np.sqrt(x**2 - r**2), r, radii[0])[0])
-        tau = tau_calculator.get_line_of_sight_tau(absorption_coeff, radii)
+        tau = _tau_calculator.get_line_of_sight_tau(absorption_coeff, radii)
         analytic_tau = np.array(analytic_tau)
         rel_diff = (tau - analytic_tau)/analytic_tau
         self.assertTrue(np.all(rel_diff < 0.01))

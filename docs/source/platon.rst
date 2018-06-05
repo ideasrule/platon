@@ -58,7 +58,7 @@ platon.retriever module
 .. automodule:: platon.retriever
     :members:
     :undoc-members:
-    :show-inheritance:
+    :show-inheritance:   
 
 platon.species\_data\_reader module
 -----------------------------------
@@ -83,6 +83,7 @@ platon.transit\_depth\_calculator module
     :members:
     :undoc-members:
     :show-inheritance:
+    :special-members: __init__
 
 
 Module contents

@@ -36,7 +36,7 @@ To retrieve atmospheric parameters, look at retrieve_example.py, then go to
 :class:`.Retriever` for more info.  In short::
 
   from plato.fit_info import FitInfo
-  from plato.retrieve import Retriever
+  from plato.retriever import Retriever
 
   # Set your best guess
   fit_info = retriever.get_default_fit_info(star_radius, planet_g, planet_radius,

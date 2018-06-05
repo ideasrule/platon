@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 from scipy import integrate
+import os
 
 from ._compatible_loader import load_numpy_array
 from .abundance_getter import AbundanceGetter
@@ -12,6 +13,7 @@ from ._species_data_reader import read_species_data
 from . import _interpolator_3D
 from ._tau_calculator import get_line_of_sight_tau
 from .constants import K_B, AMU, GM_SUN, TEFF_SUN
+from ._get_data import get_data
 
 class TransitDepthCalculator:
     def __init__(self, star_radius, g, include_condensates=True, min_P_profile=0.1, max_P_profile=1e5, num_profile_heights=400):
@@ -40,6 +42,8 @@ class TransitDepthCalculator:
         self.star_radius = star_radius
         self.g = g
 
+        if not os.path.isdir(resource_filename(__name__, "data/")):
+            get_data()
         self.absorption_data, self.mass_data, self.polarizability_data = read_species_data(
             resource_filename(__name__, "data/Absorption"),
             resource_filename(__name__, "data/species_info"))

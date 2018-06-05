@@ -4,14 +4,14 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="pyexotransmit",
+    name="platon",
     version="1.0.alpha",
     author="Michael Zhang, Yayaati Chachan",
     author_email="zmzhang@caltech.edu",
     description="A package to compute transmission spectra and retrieve atmospheric parameters from transmission spectra",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/ideasrule/PyExoTransmit",
+    url="https://github.com/ideasrule/platon",
     packages=setuptools.find_packages(),
     classifiers=(
         "Programming Language :: Python :: 2.7+, 3",

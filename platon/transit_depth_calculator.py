@@ -24,10 +24,10 @@ class TransitDepthCalculator:
         star_radius : float
             Radius of the star
         g : float
-            Acceleration due to gravity of the planet at a pressure of 
+            Acceleration due to gravity of the planet at a pressure of
             max_P_profile
         include_condensates : bool
-            Whether to use equilibrium abundances that take condensation into 
+            Whether to use equilibrium abundances that take condensation into
             account.
         min_P_profile : float
             For the radiative transfer calculation, the atmosphere is divided
@@ -35,9 +35,9 @@ class TransitDepthCalculator:
         max_P_profile: float
             The pressure at the bottommost zone of the atmosphere
         num_profile_heights : int
-            The number of zones the atmosphere is divided into                
+            The number of zones the atmosphere is divided into
         '''
-        
+
         self.star_radius = star_radius
         self.g = g
 
@@ -78,7 +78,7 @@ class TransitDepthCalculator:
         in self.lambda_grid.  This makes the code much faster, as
         `compute_depths` will only compute depths at wavelengths that fall
         within a bin.
-        
+
         Parameters
         ----------
         bins : array_like, shape (N, 2)
@@ -89,7 +89,7 @@ class TransitDepthCalculator:
         ------
         NotImplementedError
             Raised when `change_wavelength_bins` is called more than once,
-            which is not supported.        
+            which is not supported.
         """
         if self.wavelength_rebinned:
             raise NotImplementedError("Multiple re-binnings not yet supported")
@@ -130,10 +130,10 @@ class TransitDepthCalculator:
         for species_name in abundances:
             if species_name in self.polarizability_data:
                 sum_polarizability_sqr += abundances[species_name][P_cond,:][:,T_cond] * self.polarizability_data[species_name]**2
-                
+
         n = self.P_meshgrid[:,P_cond,:][:,:,T_cond]/(K_B*self.T_meshgrid[:,P_cond,:][:,:,T_cond])
         reshaped_lambda = self.lambda_grid.reshape((self.N_lambda, 1, 1))
-        
+
         return multiple * (128.0/3 * np.pi**5) * n * sum_polarizability_sqr * ref_wavelength**(slope-4) / reshaped_lambda**slope
 
 
@@ -232,7 +232,7 @@ class TransitDepthCalculator:
         '''
         Computes transit depths at a range of wavelengths, assuming an
         isothermal atmosphere.  To choose bins, call change_wavelength_bins().
-        
+
         Parameters
         ----------
         planet_radius : float
@@ -250,9 +250,9 @@ class TransitDepthCalculator:
             if `add_scattering` is True, make scattering this many
             times as strong. If `scattering_slope` is 4, corresponding to
             Rayleigh scattering, the absorption coefficients are simply
-            multiplied by `scattering_factor`. If slope is not 4, 
+            multiplied by `scattering_factor`. If slope is not 4,
             `scattering_factor` is defined such that the absorption coefficient
-            is that many times as strong as Rayleigh scattering at 
+            is that many times as strong as Rayleigh scattering at
             `scattering_ref_wavelength`.
         scattering_slope : float, optional
             Wavelength dependence of scattering, with 4 being Rayleigh.
@@ -272,7 +272,7 @@ class TransitDepthCalculator:
             specify a dictionary mapping species names to numpy arrays, so that
             custom_abundances['Na'][3,4] would mean the fractional number
             abundance of Na at a pressure of self.P_grid[3] and temperature of
-            self.T_grid[4].  
+            self.T_grid[4].
         Returns
         -------
         wavelengths : array of float
@@ -342,6 +342,6 @@ transit_depths *= 100
 
 ref_wavelengths, ref_depths = np.loadtxt("ref_spectra.dat", unpack=True, skiprows=2)
 plt.plot(ref_wavelengths, ref_depths, label="ExoTransmit")
-plt.plot(wavelengths, transit_depths, label="PyExoTransmit")
+plt.plot(wavelengths, transit_depths, label="platon")
 plt.legend()
 plt.show()'''

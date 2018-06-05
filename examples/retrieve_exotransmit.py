@@ -3,8 +3,8 @@ import matplotlib.pyplot as plt
 import corner
 import sys
 
-from pyexotransmit.fit_info import FitInfo
-from pyexotransmit.retrieve import Retriever
+from platon.fit_info import FitInfo
+from platon.retrieve import Retriever
 
 wavelengths, depths = np.loadtxt(sys.argv[1], skiprows=2, unpack=True)
 depths /= 100

@@ -1,4 +1,4 @@
-from pyexotransmit.interpolator_3D import fast_interpolate, normal_interpolate
+from platon.interpolator_3D import fast_interpolate, normal_interpolate
 import unittest
 import numpy as np
 

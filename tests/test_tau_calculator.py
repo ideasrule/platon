@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 import scipy.integrate
 
-from pyexotransmit import tau_calculator
+from platon import tau_calculator
 
 class TestTauLOS(unittest.TestCase):
 

@@ -2,9 +2,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import corner
 
-from pyexotransmit.fit_info import FitInfo
-from pyexotransmit.transit_depth_calculator import TransitDepthCalculator
-from pyexotransmit.retrieve import Retriever
+from platon.fit_info import FitInfo
+from platon.transit_depth_calculator import TransitDepthCalculator
+from platon.retrieve import Retriever
 
 Rs = 7e8
 g = 9.8

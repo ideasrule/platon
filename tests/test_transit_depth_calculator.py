@@ -3,8 +3,8 @@ import unittest
 import numpy as np
 import matplotlib.pyplot as plt
 
-from pyexotransmit import eos_reader
-from pyexotransmit.transit_depth_calculator import TransitDepthCalculator
+from platon import eos_reader
+from platon.transit_depth_calculator import TransitDepthCalculator
 
 class TestTransitDepthCalculator(unittest.TestCase):
     def get_frac_dev(self, logZ, CO_ratio, custom_abundances):
@@ -18,7 +18,7 @@ class TestTransitDepthCalculator(unittest.TestCase):
 
         frac_dev = np.abs(ref_depths - transit_depths) / ref_depths
 
-        '''plt.plot(wavelengths, transit_depths, label="PyExoTransmit")
+        '''plt.plot(wavelengths, transit_depths, label="platon")
         plt.plot(ref_wavelengths, ref_depths, label="ExoTransmit")
         plt.legend()
 

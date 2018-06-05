@@ -1,1 +1,1 @@
-recursive-include pyexotransmit/data *
+recursive-include platon/data *

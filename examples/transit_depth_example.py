@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import corner
 
-from pyexotransmit.transit_depth_calculator import TransitDepthCalculator
+from platon.transit_depth_calculator import TransitDepthCalculator
 
 # All quantities in SI
 Rs = 6.57e8

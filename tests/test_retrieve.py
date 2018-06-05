@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
-from pyexotransmit.retrieve import Retriever
-from pyexotransmit.fit_info import FitInfo
+from platon.retrieve import Retriever
+from platon.fit_info import FitInfo
 
 class TestRetriever(unittest.TestCase):
     def setUp(self):

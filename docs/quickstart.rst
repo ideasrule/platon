@@ -17,28 +17,39 @@ To compute transit depths, look at transit_depth_example.py, then go to
   planet_temperature = 1200
 
   calculator = TransitDepthCalculator(star_radius, planet_g)
-  calculator.compute_depths(planet_radius, planet_temperature)
+  calculator.compute_depths(planet_radius, planet_temperature, logZ=0, CO_ratio=0.53)
 
-You can adjust a variety of parameters, including the metallicity and C/O
-ratio.  You can also specify custom abundances, such as by providing the
-filename of one of the EOS files included in the package.
+You can adjust a variety of parameters, including the metallicity (Z) and C/O
+ratio. By default, logZ = 0 and C/O = 0.53. Any other value for
+logZ and C/O in the range -1 < logZ < 3 and 0.2 < C/O < 2 can also be used.
+You can use a dictionary of numpy arrays to specify abundances as well
+(See the API).
+You can also specify custom abundances, such as by providing the filename or
+one of the abundance files included in the package (from ExoTransmit). The
+custom abundance files specified by the user must be compatible with the
+ExoTransmit format::
 
-To retrieve on atmospheric parameters, look at retrieve_example.py, then go to
+  calculator.compute_depths(planet_radius, planet_temperature, logZ=None,
+                            CO_ratio=None, custom_abundances = filename)
+
+To retrieve atmospheric parameters, look at retrieve_example.py, then go to
 :class:`.Retriever` for more info.  In short::
 
   from plato.fit_info import FitInfo
   from plato.retrieve import Retriever
 
   # Set your best guess
-  fit_info = retriever.get_default_fit_info(star_radius, planet_g, planet_radius, planet_temperature, logZ=0)
+  fit_info = retriever.get_default_fit_info(star_radius, planet_g, planet_radius,
+                                            planet_temperature, logZ=0)
 
   # Decide what you want to fit for, then set the lower and upper limits for
   # those quantities
-  
+
   fit_info.add_fit_param('R', 0.9*planet_radius, 1.1*planet_radius)
   fit_info.add_fit_param('T', 0.5*planet_temperature, 1.5*planet_temperature)
   fit_info.add_fit_param("logZ", -1, 2)
 
+  #Fit using Nested Sampling
   result = retriever.run_multinest(bins, depths, errors, fit_info)
 
 Here, `bins` is a N x 2 array representing the start and end wavelengths of the
@@ -53,7 +64,9 @@ and the error multiple--which multiplies all errors by a constant.
 
 Once you get the `result` object, you can make a corner plot::
 
-  fig = corner.corner(result.samples, weights=result.weights, range=[0.99] * result.samples.shape[1], labels=fit_info.fit_param_names)
+  fig = corner.corner(result.samples, weights=result.weights,
+                      range=[0.99] * result.samples.shape[1],
+                      labels=fit_info.fit_param_names)
 
 Additionally, result.logl stores the log likelihoods of the points in
 result.samples.

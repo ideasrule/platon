@@ -71,14 +71,6 @@ bins = np.concatenate([stis_bins, wfc3_bins, spitzer_bins])
 depths = np.concatenate([stis_depths, wfc3_depths, spitzer_depths])
 errors = np.concatenate([stis_errors, wfc3_errors, spitzer_errors])
 
-#bins = wfc3_bins
-#depths = wfc3_depths
-#errors = wfc3_errors
-
-
-#plt.errorbar([(start+end)/2 for (start,end) in bins], depths, yerr=errors, fmt='.')
-#plt.show()
-
 #create a Retriever object
 retriever = Retriever()
 
@@ -104,7 +96,7 @@ fit_info.add_fit_param("scatt_slope", 0, 10, value=4)
 fit_info.add_fit_param("logZ", -1, 2)
 
 #Use Nested Sampling to do the fitting
-result = retriever.run_multinest(bins, depths, errors, fit_info)
+result = retriever.run_multinest(bins, depths, errors, fit_info, plot_best=True)
 
 np.save("samples.npy", result.samples)
 np.save("weights.npy", result.weights)
@@ -112,4 +104,3 @@ np.save("logl.npy", result.logl)
 fig = corner.corner(result.samples, weights=result.weights, range=[0.99] * result.samples.shape[1], labels=fit_info.fit_param_names)
 fig.savefig("multinest_corner.png")
 
-#retriever.plot_result(bins, depths, errors, fit_info, [1.35868222866*7.1e7, 1108.28033324, np.log10(0.718669990058), np.log10(940.472706829), np.log10(2.87451662752)])

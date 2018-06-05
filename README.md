@@ -1,10 +1,10 @@
-[![Build Status](https://travis-ci.com/ideasrule/PyExoTransmit.svg?token=CWfZwAJHKDPous7mJixf&branch=master)](https://travis-ci.com/ideasrule/PyExoTransmit)
+[![Build Status](https://travis-ci.com/ideasrule/platon.svg?token=CWfZwAJHKDPous7mJixf&branch=master)](https://travis-ci.com/ideasrule/platon)
 
-# PyExoTransmit
+# PLATON
 
-PyExoTransmit calculates the transmission spectrum of a planet from 300 nm to 30 um, taking into account gas absorption, collisionally induced gas absorption, and Rayleigh scattering.  It is derived from ExoTransmit by Eliza Kempton (https://github.com/elizakempton/Exo_Transmit).
+PLATON calculates the transmission spectrum of a planet from 300 nm to 30 um, taking into account gas absorption, collisionally induced gas absorption, and Rayleigh scattering.  It is derived from ExoTransmit by Eliza Kempton (https://github.com/elizakempton/Exo_Transmit).
 
-PyExoTransmit is written entirely in Python and is fast enough to be used in the inner loop of emcee.  By default, the code calculates transit depths
+PLATON is written entirely in Python and is fast enough to be used in the inner loop of emcee.  By default, the code calculates transit depths
 on a fine wavelength grid (λ/Δλ = 1000 with 4616 wavelength points), which takes ~0.4 seconds. The user can instead specify bins which are
 directly relevant to matching observational data, in which case the code is much faster--on the order of 5 milliseconds for 30 bins.
 
@@ -14,7 +14,7 @@ directly relevant to matching observational data, in which case the code is much
 The package can be installed via pip:
 
 ```
-pip install pyexotransmit
+pip install platon
 ```
 
 Alternatively, it can be installed from source via:
@@ -23,7 +23,7 @@ Alternatively, it can be installed from source via:
 python setup.py install
 ```
 
-pyexotransmit requires numpy and scipy, but otherwise has no dependencies.
+platon requires numpy and scipy, but otherwise has no dependencies.
 
 # Usage
 

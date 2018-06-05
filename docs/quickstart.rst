@@ -70,3 +70,17 @@ Once you get the `result` object, you can make a corner plot::
 
 Additionally, result.logl stores the log likelihoods of the points in
 result.samples.
+
+If you prefer using MCMC instead of Nested Sampling in your retrieval, you can
+use the run_emcee method instead of the run_multinest method. Do note that
+Nested Sampling tends to be much faster and it does not require specification
+of a termination point::
+
+  result = retriever.run_emcee(bins, depths, errors, fit_info)
+
+For MCMC, the number of walkers and iterations/steps can also be specified. The
+`result` object returned by run_emcee is slighly different from that returned
+by run_multinest. To make a corner plot with the result of run_emcee::
+
+  fig = corner.corner(result.flatchain, range=[0.99] * result.flatchain.shape[1],
+                      labels=fit_info.fit_param_names)

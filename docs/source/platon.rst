@@ -4,8 +4,8 @@ platon package
 Submodules
 ----------
 
-platon.abundance\_getter module
--------------------------------
+platon.abundance_getter module
+------------------------------
 
 .. automodule:: platon.abundance_getter
     :members:
@@ -20,16 +20,8 @@ platon.constants module
     :undoc-members:
     :show-inheritance:
 
-platon.eos\_reader module
--------------------------
-
-.. automodule:: platon.eos_reader
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-platon.fit\_info module
------------------------
+platon.fit_info module
+----------------------
 
 .. automodule:: platon.fit_info
     :members:
@@ -44,14 +36,15 @@ platon.retriever module
     :undoc-members:
     :show-inheritance:
 
-platon.transit\_depth\_calculator module
-----------------------------------------
+platon.transit_depth_calculator module
+--------------------------------------
 
 .. automodule:: platon.transit_depth_calculator
     :members:
     :undoc-members:
     :show-inheritance:
     :special-members: __init__
+
 
 Module contents
 ---------------

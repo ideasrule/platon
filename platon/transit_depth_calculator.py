@@ -202,7 +202,7 @@ class TransitDepthCalculator:
 
         if logZ is not None or CO_ratio is not None:
             raise ValueError("Must set logZ=None and CO_ratio=None to use custom_abundances")
-        
+
         if type(custom_abundances) is str:
             # Interpret as filename
             return AbundanceGetter.from_file(custom_abundances)
@@ -322,5 +322,3 @@ class TransitDepthCalculator:
             return np.array(binned_wavelengths), np.array(binned_depths)
 
         return self.lambda_grid, transit_depths
-
-

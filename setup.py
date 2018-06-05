@@ -1,3 +1,4 @@
+
 import setuptools
 
 with open("README.md", "r") as fh:
@@ -6,7 +7,7 @@ with open("README.md", "r") as fh:
 setuptools.setup(
     name="platon",
     version="1.0.beta",
-    author="Michael Zhang, Yayaati Chachan",
+    author="Michael Zhang, Yayaati Chachan, Eliza Kempton",
     author_email="zmzhang@caltech.edu",
     description="A package to compute transmission spectra and retrieve atmospheric parameters from transmission spectra",
     long_description=long_description,
@@ -15,8 +16,9 @@ setuptools.setup(
     download_url="https://github.com/ideasrule/platon/archive/beta.tar.gz",
     packages=setuptools.find_packages(),
     classifiers=(
-        "Programming Language :: Python :: 2.7+, 3",
-        "License :: GNU GPLv3 License",
+        "Programming Language :: Python :: 2.7",
+        "Programming Language :: Python :: 3.6",
+        "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
         "Operating System :: OS Independent",
     ),
     include_package_data = True,

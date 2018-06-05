@@ -5,8 +5,8 @@ from io import open
 import time
 from pkg_resources import resource_filename
 
-from .interpolator_3D import fast_interpolate
-from .compatible_loader import load_dict_from_pickle
+from ._interpolator_3D import fast_interpolate
+from ._compatible_loader import load_dict_from_pickle
 
 class AbundanceGetter:
     def __init__(self, include_condensates=True):

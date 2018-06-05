@@ -12,14 +12,6 @@ platon.abundance\_getter module
     :undoc-members:
     :show-inheritance:
 
-platon.compatible\_loader module
---------------------------------
-
-.. automodule:: platon.compatible_loader
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 platon.constants module
 -----------------------
 
@@ -44,34 +36,10 @@ platon.fit\_info module
     :undoc-members:
     :show-inheritance:
 
-platon.interpolator\_3D module
-------------------------------
-
-.. automodule:: platon.interpolator_3D
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 platon.retriever module
 -----------------------
 
 .. automodule:: platon.retriever
-    :members:
-    :undoc-members:
-    :show-inheritance:   
-
-platon.species\_data\_reader module
------------------------------------
-
-.. automodule:: platon.species_data_reader
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-platon.tau\_calculator module
------------------------------
-
-.. automodule:: platon.tau_calculator
     :members:
     :undoc-members:
     :show-inheritance:
@@ -83,7 +51,6 @@ platon.transit\_depth\_calculator module
     :members:
     :undoc-members:
     :show-inheritance:
-    :special-members: __init__
 
 
 Module contents

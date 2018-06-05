@@ -16,6 +16,28 @@ from .constants import K_B, AMU, GM_SUN, TEFF_SUN
 
 class TransitDepthCalculator:
     def __init__(self, star_radius, g, include_condensates=True, min_P_profile=0.1, max_P_profile=1e5, num_profile_heights=400):
+        '''
+        All physical parameters are in SI.
+
+        Parameters
+        ----------
+        star_radius : float
+            Radius of the star
+        g : float
+            Acceleration due to gravity of the planet at a pressure of 
+            max_P_profile
+        include_condensates : bool
+            Whether to use equilibrium abundances that take condensation into 
+            account.
+        min_P_profile : float
+            For the radiative transfer calculation, the atmosphere is divided
+            into zones.  This is the pressure at the topmost zone.
+        max_P_profile: float
+            The pressure at the bottommost zone of the atmosphere
+        num_profile_heights : int
+            The number of zones the atmosphere is divided into                
+        '''
+        
         self.star_radius = star_radius
         self.g = g
 

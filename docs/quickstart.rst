@@ -6,7 +6,8 @@ has examples on how to compute transit depths from planetary parameters, and
 on how to retrieve planetary parameters from transit depths.  This page is
 a short summary of the more detailed examples.
 
-To compute transit depths, look at transit_depth_example.py.  In short::
+To compute transit depths, look at transit_depth_example.py, then go to
+:class:`.TransitDepthCalculator` for more info.  In short::
 
   from pyexotransmit.transit_depth_calculator import TransitDepthCalculator
 
@@ -22,7 +23,8 @@ You can adjust a variety of parameters, including the metallicity and C/O
 ratio.  You can also specify custom abundances, such as by providing the
 filename of one of the EOS files included in the package.
 
-To retrieve on atmospheric parameters, look at retrieve_example.py.  In short::
+To retrieve on atmospheric parameters, look at retrieve_example.py, then go to
+:class:`.Retriever` for more info.  In short::
 
   from pyexotransmit.fit_info import FitInfo
   from pyexotransmit.retrieve import Retriever
@@ -31,7 +33,7 @@ To retrieve on atmospheric parameters, look at retrieve_example.py.  In short::
   fit_info = retriever.get_default_fit_info(star_radius, planet_g, planet_radius, planet_temperature, logZ=0)
 
   # Decide what you want to fit for, then set the lower and upper limits for
-  those quantities
+  # those quantities
   
   fit_info.add_fit_param('R', 0.9*planet_radius, 1.1*planet_radius)
   fit_info.add_fit_param('T', 0.5*planet_temperature, 1.5*planet_temperature)

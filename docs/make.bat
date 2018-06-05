@@ -9,7 +9,7 @@ if "%SPHINXBUILD%" == "" (
 )
 set SOURCEDIR=.
 set BUILDDIR=_build
-set SPHINXPROJ=pyexotransmit
+set SPHINXPROJ=platon
 
 if "%1" == "" goto help
 

@@ -1,93 +1,85 @@
-pyexotransmit package
+platon package
 =====================
 
 Submodules
 ----------
 
-pyexotransmit.abundance\_getter module
+platon.abundance\_getter module
 --------------------------------------
 
-.. automodule:: pyexotransmit.abundance_getter
+.. automodule:: platon.abundance_getter
     :members:
     :undoc-members:
     :show-inheritance:
 
-pyexotransmit.compatible\_loader module
+platon.compatible\_loader module
 ---------------------------------------
 
-.. automodule:: pyexotransmit.compatible_loader
+.. automodule:: platon.compatible_loader
     :members:
     :undoc-members:
     :show-inheritance:
 
-pyexotransmit.constants module
+platon.constants module
 ------------------------------
 
-.. automodule:: pyexotransmit.constants
+.. automodule:: platon.constants
     :members:
     :undoc-members:
     :show-inheritance:
 
-pyexotransmit.eos\_reader module
+platon.eos\_reader module
 --------------------------------
 
-.. automodule:: pyexotransmit.eos_reader
+.. automodule:: platon.eos_reader
     :members:
     :undoc-members:
     :show-inheritance:
 
-pyexotransmit.fit\_info module
+platon.fit\_info module
 ------------------------------
 
-.. automodule:: pyexotransmit.fit_info
+.. automodule:: platon.fit_info
     :members:
     :undoc-members:
     :show-inheritance:
 
-pyexotransmit.interpolator\_3D module
+platon.interpolator\_3D module
 -------------------------------------
 
-.. automodule:: pyexotransmit.interpolator_3D
+.. automodule:: platon.interpolator_3D
     :members:
     :undoc-members:
     :show-inheritance:
 
-pyexotransmit.retrieve module
+platon.retrieve module
 -----------------------------
 
-.. automodule:: pyexotransmit.retrieve
+.. automodule:: platon.retrieve
     :members:
     :undoc-members:
     :show-inheritance:
 
-pyexotransmit.species\_data\_reader module
+platon.species\_data\_reader module
 ------------------------------------------
 
-.. automodule:: pyexotransmit.species_data_reader
+.. automodule:: platon.species_data_reader
     :members:
     :undoc-members:
     :show-inheritance:
 
-pyexotransmit.tau\_calculator module
+platon.tau\_calculator module
 ------------------------------------
 
-.. automodule:: pyexotransmit.tau_calculator
+.. automodule:: platon.tau_calculator
     :members:
     :undoc-members:
     :show-inheritance:
 
-pyexotransmit.transit\_depth\_calculator module
+platon.transit\_depth\_calculator module
 -----------------------------------------------
 
-.. automodule:: pyexotransmit.transit_depth_calculator
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-pyexotransmit.transit\_depth\_example module
---------------------------------------------
-
-.. automodule:: pyexotransmit.transit_depth_example
+.. automodule:: platon.transit_depth_calculator
     :members:
     :undoc-members:
     :show-inheritance:
@@ -96,7 +88,7 @@ pyexotransmit.transit\_depth\_example module
 Module contents
 ---------------
 
-.. automodule:: pyexotransmit
+.. automodule:: platon
     :members:
     :undoc-members:
     :show-inheritance:

@@ -9,7 +9,7 @@ a short summary of the more detailed examples.
 To compute transit depths, look at transit_depth_example.py, then go to
 :class:`.TransitDepthCalculator` for more info.  In short::
 
-  from pyexotransmit.transit_depth_calculator import TransitDepthCalculator
+  from plato.transit_depth_calculator import TransitDepthCalculator
 
   star_radius = 7e8 # all quantities in SI
   planet_g = 9.8
@@ -26,8 +26,8 @@ filename of one of the EOS files included in the package.
 To retrieve on atmospheric parameters, look at retrieve_example.py, then go to
 :class:`.Retriever` for more info.  In short::
 
-  from pyexotransmit.fit_info import FitInfo
-  from pyexotransmit.retrieve import Retriever
+  from plato.fit_info import FitInfo
+  from plato.retrieve import Retriever
 
   # Set your best guess
   fit_info = retriever.get_default_fit_info(star_radius, planet_g, planet_radius, planet_temperature, logZ=0)

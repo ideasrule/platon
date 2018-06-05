@@ -1,7 +1,7 @@
 Install
 *******
 
-Before installing PyExoTransmit, it is highly recommended to have a fast linear
+Before installing PLATON, it is highly recommended to have a fast linear
 algebra library (BLAS) and verify that numpy is linked to it.  This is because
 the heart of the radiative transfer code is a matrix multiplication operation
 conducted through numpy.dot, which in turn calls a BLAS library if it can find
@@ -21,11 +21,11 @@ To check if your numpy is linked to BLAS, do::
 If blas_opt_info mentions OpenBLAS or vecLib, that's a good sign.  If it says
 "NOT AVAILABLE", that's a bad sign.
 
-Once you have a BLAS installed and linked to numpy, download PyExoTransmit,
-install the requirements, and install PyExoTransmit itself::
+Once you have a BLAS installed and linked to numpy, download PLATON,
+install the requirements, and install PLATON itself::
 
-  git clone https://github.com/ideasrule/PyExoTransmit.git
-  cd PyExoTransmit/
+  git clone https://github.com/ideasrule/platon.git
+  cd platon/
   pip install -r requirements.txt
   python setup.py install
 

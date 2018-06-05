@@ -1,7 +1,7 @@
-pyexotransmit
+platon
 =============
 
 .. toctree::
    :maxdepth: 4
 
-   pyexotransmit
+   platon

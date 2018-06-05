@@ -1,7 +1,8 @@
 Introduction
 ************
 
-PyExoTransmit is a fast and easy to use forward modelling and retrieval tool for
+PLATON (PLanetary Atmospheric Transmission for Observer Noobs) is a
+fast and easy to use forward modelling and retrieval tool for
 exoplanet atmospheres.  It is based on ExoTransmit by Eliza Kempton.
 The two main modules are:
 

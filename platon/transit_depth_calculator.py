@@ -9,7 +9,7 @@ from scipy import integrate
 from ._compatible_loader import load_numpy_array
 from .abundance_getter import AbundanceGetter
 from ._species_data_reader import read_species_data
-from . import interpolator_3D
+from . import _interpolator_3D
 from ._tau_calculator import get_line_of_sight_tau
 from .constants import K_B, AMU, GM_SUN, TEFF_SUN
 
@@ -292,8 +292,8 @@ class TransitDepthCalculator:
         P_profile = P_profile[above_clouds]
         T_profile = T_profile[above_clouds]
 
-        T_cond = interpolator_3D.get_condition_array(T_profile, self.T_grid)
-        P_cond = interpolator_3D.get_condition_array(P_profile, self.P_grid, cloudtop_pressure)
+        T_cond = _interpolator_3D.get_condition_array(T_profile, self.T_grid)
+        P_cond = _interpolator_3D.get_condition_array(P_profile, self.P_grid, cloudtop_pressure)
 
         absorption_coeff = self._get_gas_absorption(abundances, P_cond, T_cond)
         if add_scattering:
@@ -304,7 +304,7 @@ class TransitDepthCalculator:
         if add_collisional_absorption:
             absorption_coeff += self._get_collisional_absorption(abundances, P_cond, T_cond)
 
-        absorption_coeff_atm = interpolator_3D.fast_interpolate(absorption_coeff, self.T_grid[T_cond], self.P_grid[P_cond], T_profile, P_profile)
+        absorption_coeff_atm = _interpolator_3D.fast_interpolate(absorption_coeff, self.T_grid[T_cond], self.P_grid[P_cond], T_profile, P_profile)
 
         tau_los = get_line_of_sight_tau(absorption_coeff_atm, radii)
 

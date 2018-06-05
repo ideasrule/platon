@@ -7,7 +7,6 @@ import time
 from scipy import integrate
 
 from ._compatible_loader import load_numpy_array
-from . import eos_reader
 from .abundance_getter import AbundanceGetter
 from ._species_data_reader import read_species_data
 from . import interpolator_3D
@@ -81,7 +80,7 @@ class TransitDepthCalculator:
 
         Parameters
         ----------
-        bins : array_like, shape (N, 2)
+        bins : array_like, shape (N,2)
             Wavelength bins, where bins[i][0] is the start wavelength and
             bins[i][1] is the end wavelength for bin i.
 
@@ -201,9 +200,12 @@ class TransitDepthCalculator:
         if custom_abundances is None:
             return self.abundance_getter.get(logZ, CO_ratio)
 
+        if logZ is not None or CO_ratio is not None:
+            raise ValueError("Must set logZ=None and CO_ratio=None to use custom_abundances")
+        
         if type(custom_abundances) is str:
             # Interpret as filename
-            return eos_reader.get_abundances(custom_abundances)
+            return AbundanceGetter.from_file(custom_abundances)
 
         if type(custom_abundances) is dict:
             for key, value in custom_abundances.items():
@@ -322,26 +324,3 @@ class TransitDepthCalculator:
         return self.lambda_grid, transit_depths
 
 
-'''index, P, T = np.loadtxt("T_P/t_p_800K.dat", unpack=True, skiprows=1)
-T = T*0.9
-abundances = eos_reader.get_abundances("EOS/eos_1Xsolar_cond.dat")
-
-depth_calculator = TransitDepthCalculator(7e8, 9.8)
-wfc_wavelengths = np.linspace(1.1e-6, 1.7e-6, 30)
-wavelength_bins = []
-for i in range(len(wfc_wavelengths) - 1):
-    wavelength_bins.append([wfc_wavelengths[i], wfc_wavelengths[i+1]])
-
-wavelength_bins.append([3.2e-6, 4e-6])
-wavelength_bins.append([4e-6, 5e-6])
-depth_calculator.change_wavelength_bins(wavelength_bins)
-
-wavelengths, transit_depths = depth_calculator.compute_depths(6.4e6, P, T, abundances, cloudtop_pressure=10)
-print transit_depths
-transit_depths *= 100
-
-ref_wavelengths, ref_depths = np.loadtxt("ref_spectra.dat", unpack=True, skiprows=2)
-plt.plot(ref_wavelengths, ref_depths, label="ExoTransmit")
-plt.plot(wavelengths, transit_depths, label="platon")
-plt.legend()
-plt.show()'''

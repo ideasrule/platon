@@ -13,7 +13,6 @@ setuptools.setup(
     long_description = long_description,
     long_description_content_type = "text/markdown",
     url = "https://github.com/ideasrule/platon",
-    download_url = "https://github.com/ideasrule/platon/archive/beta.tar.gz",
     packages = setuptools.find_packages(),
     classifiers = (
         "Programming Language :: Python :: 2.7",

@@ -14,19 +14,22 @@
 #
 import os
 import sys
+
+from platon import __version__
+
 sys.path.insert(0, os.path.abspath('.'))
 
 
 # -- Project information -----------------------------------------------------
 
 project = u'PLATON'
-copyright = u'2018, Michael Zhang, Yayaati Chachan, Eliza Kempton'
-author = u'Michael Zhang, Yayaati Chachan, Eliza Kempton'
+copyright = u'2018, Michael Zhang, Yayaati Chachan'
+author = u'Michael Zhang, Yayaati Chachan'
 
 # The short X.Y version
-version = u''
+version = __version__
 # The full version, including alpha/beta/rc tags
-release = u'1.1beta'
+release = __version__
 
 
 # -- General configuration ---------------------------------------------------
@@ -136,7 +139,7 @@ latex_elements = {
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
     (master_doc, 'platon.tex', u'platon Documentation',
-     u'Michael Zhang, Yayaati Chachan, Eliza Kempton', 'manual'),
+     u'Michael Zhang, Yayaati Chachan', 'manual'),
 ]
 
 

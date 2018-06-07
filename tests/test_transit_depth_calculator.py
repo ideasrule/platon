@@ -8,8 +8,14 @@ from platon.transit_depth_calculator import TransitDepthCalculator
 
 class TestTransitDepthCalculator(unittest.TestCase):
     def get_frac_dev(self, logZ, CO_ratio, custom_abundances):
-        depth_calculator = TransitDepthCalculator(7e8, 9.8, max_P_profile=1.014e5)
-        wavelengths, transit_depths = depth_calculator.compute_depths(7.14e7, 1200, logZ=logZ, CO_ratio=CO_ratio, custom_abundances=custom_abundances)
+        Rp = 7.14e7
+        Mp = 7.49e26
+        Rs = 7e8
+        T = 1200
+        depth_calculator = TransitDepthCalculator(max_P_profile=1.014e5)
+        wavelengths, transit_depths = depth_calculator.compute_depths(
+            Rs, Mp, Rp, T, logZ=logZ, CO_ratio=CO_ratio,
+            custom_abundances=custom_abundances)
 
         # This ExoTransmit run is done without SH, since it's not present in
         # GGchem

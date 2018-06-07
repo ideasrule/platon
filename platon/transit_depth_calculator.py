@@ -12,21 +12,16 @@ from .abundance_getter import AbundanceGetter
 from ._species_data_reader import read_species_data
 from . import _interpolator_3D
 from ._tau_calculator import get_line_of_sight_tau
-from .constants import K_B, AMU, GM_SUN, TEFF_SUN
+from .constants import K_B, AMU, GM_SUN, TEFF_SUN, G
 from ._get_data import get_data
 
 class TransitDepthCalculator:
-    def __init__(self, star_radius, g, include_condensates=True, min_P_profile=0.1, max_P_profile=1e5, num_profile_heights=400):
+    def __init__(self, include_condensates=True, min_P_profile=0.1, max_P_profile=1e5, num_profile_heights=400):
         '''
         All physical parameters are in SI.
 
         Parameters
         ----------
-        star_radius : float
-            Radius of the star
-        g : float
-            Acceleration due to gravity of the planet at a pressure of
-            max_P_profile
         include_condensates : bool
             Whether to use equilibrium abundances that take condensation into
             account.
@@ -38,9 +33,6 @@ class TransitDepthCalculator:
         num_profile_heights : int
             The number of zones the atmosphere is divided into
         '''
-
-        self.star_radius = star_radius
-        self.g = g
 
         if not os.path.isdir(resource_filename(__name__, "data/")):
             get_data()
@@ -154,8 +146,11 @@ class TransitDepthCalculator:
         return absorption_coeff
 
 
-    def _get_above_cloud_r_and_dr(self, P, T, abundances, planet_radius, P_cond):
+    def _get_above_cloud_r_and_dr(self, P, T, abundances, planet_mass, planet_radius, star_radius, above_cloud_cond):
+        GM = G * planet_mass
+        g = GM/planet_radius**2        
         mu = np.zeros(len(P))
+        
         for species_name in abundances:
             interpolator = RectBivariateSpline(self.P_grid, self.T_grid, abundances[species_name], kx=1, ky=1)
             atm_abundances = interpolator.ev(P, T)
@@ -163,23 +158,22 @@ class TransitDepthCalculator:
 
         atm_weight = UnivariateSpline(P,mu)
         T_profile = UnivariateSpline(P,T)
-        GM = self.g*planet_radius**2
 
-        R_hill = 0.5*self.star_radius*(TEFF_SUN/T[0])**2 * (GM/(3*GM_SUN))**(1/3)   #Hill radius for a sun like star
+        R_hill = 0.5*star_radius*(TEFF_SUN/T[0])**2 * (GM/(3*GM_SUN))**(1/3)   #Hill radius for a sun like star
 
         if np.log(P[-1]/P[0]) > GM*mu[0]*AMU/(K_B*T[0])*(1/planet_radius - 1/R_hill):   #total number of scale heights required gives a radius that's larger than the hill radius
             print('The atmosphere is likely to be unbound. The scale height of the atmosphere is too large. Reverting to the constant g assumption')
 
             dP = P[1:] - P[0:-1]
-            dr = dP/P[1:] * K_B * T[1:]/(mu[1:] * AMU * self.g)
-            dr = np.append(K_B*T[0]/(mu[0] * AMU * self.g), dr)
+            dr = dP/P[1:] * K_B * T[1:]/(mu[1:] * AMU * g)
+            dr = np.append(K_B*T[0]/(mu[0] * AMU * g), dr)
 
             #dz goes from top to bottom of atmosphere
             radius_with_atm = np.sum(dr) + planet_radius
             radii = radius_with_atm - np.cumsum(dr)
-            radii = np.append(radius_with_atm, radii[P_cond])
+            radii = np.append(radius_with_atm, radii[above_cloud_cond])
 
-            return radii, dr[P_cond]
+            return radii, dr[above_cloud_cond]
 
         def hydrostatic(y, P):
             r = y
@@ -193,12 +187,12 @@ class TransitDepthCalculator:
 
         radii_ode = np.transpose(integrate.odeint(hydrostatic,y0,P))[0]
         dr = np.diff(radii_ode)
-        dr = np.flipud(np.append(dr,K_B*T[0]/(mu[0] * AMU * self.g)))
+        dr = np.flipud(np.append(dr,K_B*T[0]/(mu[0] * AMU * g)))
         radius_with_atm = planet_radius + np.sum(dr)
         radii = radius_with_atm - np.cumsum(dr)
-        radii = np.append(radius_with_atm, radii[P_cond])
+        radii = np.append(radius_with_atm, radii[above_cloud_cond])
 
-        return radii, dr[P_cond]
+        return radii, dr[above_cloud_cond]
 
     def _get_abundances_array(self, logZ, CO_ratio, custom_abundances):
         if custom_abundances is None:
@@ -230,17 +224,23 @@ class TransitDepthCalculator:
         if cloudtop_P <= self.min_P_profile or cloudtop_P >= self.max_P_profile: return False
         return self.abundance_getter.is_in_bounds(logZ, CO_ratio, T)
 
-    def compute_depths(self, planet_radius, temperature, logZ=0, CO_ratio=0.53,
+    def compute_depths(self, star_radius, planet_mass, planet_radius,
+                       temperature, logZ=0, CO_ratio=0.53,
                        add_scattering=True, scattering_factor=1,
                        scattering_slope = 4, scattering_ref_wavelength = 1e-6,
                        add_collisional_absorption=True,
-                       cloudtop_pressure=np.inf, custom_abundances=None):
+                       cloudtop_pressure=np.inf,
+                       custom_abundances=None):
         '''
         Computes transit depths at a range of wavelengths, assuming an
         isothermal atmosphere.  To choose bins, call change_wavelength_bins().
 
         Parameters
         ----------
+        star_radius : float
+            Radius of the star
+        planet_mass : float
+            Mass of the planet, in kg
         planet_radius : float
             radius of the planet at self.max_P_profile (by default,
             100,000 Pa).  Must be in metres.
@@ -292,7 +292,11 @@ class TransitDepthCalculator:
 
         abundances = self._get_abundances_array(logZ, CO_ratio, custom_abundances)
         above_clouds = P_profile < cloudtop_pressure
-        radii, dr = self._get_above_cloud_r_and_dr(P_profile, T_profile, abundances, planet_radius, above_clouds)
+
+        radii, dr = self._get_above_cloud_r_and_dr(
+            P_profile, T_profile, abundances, planet_mass, planet_radius,
+            star_radius, above_clouds)
+        
         P_profile = P_profile[above_clouds]
         T_profile = T_profile[above_clouds]
 
@@ -314,7 +318,7 @@ class TransitDepthCalculator:
 
         absorption_fraction = 1 - np.exp(-tau_los)
 
-        transit_depths = (planet_radius/self.star_radius)**2 + 2/self.star_radius**2 * absorption_fraction.dot(radii[1:] * dr)
+        transit_depths = (planet_radius/star_radius)**2 + 2/star_radius**2 * absorption_fraction.dot(radii[1:] * dr)
 
         binned_wavelengths = []
         binned_depths = []

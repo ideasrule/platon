@@ -27,12 +27,16 @@ class Retriever:
         scatt_slope = params_dict["scatt_slope"]
         cloudtop_P = 10.0**params_dict["log_cloudtop_P"]
         error_multiple = params_dict["error_multiple"]
-
+        Rs = params_dict["star_radius"]
+        Mp = params_dict["Mp"]
+        
         if not calculator.is_in_bounds(logZ, CO_ratio, T, cloudtop_P):
+            return -np.inf
+        if Rs <= 0 or Mp <= 0:
             return -np.inf
 
         wavelengths, calculated_depths = calculator.compute_depths(
-            R, T, logZ, CO_ratio,
+            Rs, Mp, R, T, logZ, CO_ratio,
             scattering_factor=scatt_factor, scattering_slope = scatt_slope, cloudtop_pressure=cloudtop_P)
         residuals = calculated_depths - measured_depths
         scaled_errors = error_multiple * measured_errors
@@ -89,8 +93,8 @@ class Retriever:
         '''
         
         initial_positions = fit_info.generate_rand_param_arrays(nwalkers)
-        calculator = TransitDepthCalculator(fit_info.get("star_radius"), fit_info.get("g"),
-                                            include_condensates=include_condensates)
+        calculator = TransitDepthCalculator(
+            include_condensates=include_condensates)
         calculator.change_wavelength_bins(wavelength_bins)
 
         sampler = emcee.EnsembleSampler(
@@ -145,8 +149,8 @@ class Retriever:
             is the natural logarithm of the evidence.
         '''
                     
-        calculator = TransitDepthCalculator(fit_info.get("star_radius"), fit_info.get("g"),
-                                            include_condensates=include_condensates)
+        calculator = TransitDepthCalculator(
+            include_condensates=include_condensates)
         calculator.change_wavelength_bins(wavelength_bins)
 
         def transform_prior(cube):
@@ -177,17 +181,17 @@ class Retriever:
 
 
     @staticmethod
-    def get_default_fit_info(Rs, g, Rp, T, logZ=0, CO_ratio=0.53,
+    def get_default_fit_info(Rs, Mp, Rp, T, logZ=0, CO_ratio=0.53,
                              cloudtop_P=1e3, log_scatt_factor=0,
                              scatt_slope=4, error_multiple=1,
                              add_fit_params=False):
 
-        fit_info = FitInfo({'R': Rp, 'T': T, 'logZ': logZ,
+        fit_info = FitInfo({'Mp': Mp, 'R': Rp, 'T': T, 'logZ': logZ,
                             'CO_ratio': CO_ratio,
                             'log_scatt_factor': log_scatt_factor,
                             'scatt_slope': scatt_slope,
                             'log_cloudtop_P': np.log10(cloudtop_P),
-                            'star_radius': Rs, 'g': g,
+                            'star_radius': Rs,
                             'error_multiple': error_multiple})
 
         if add_fit_params:

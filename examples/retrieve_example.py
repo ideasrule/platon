@@ -84,16 +84,18 @@ cloudtop_P_guess = 1e6
 
 #Radius of star and planet's gravitational acceleration (at 1 bar by default)
 R_star = 8.08e8
-g = 9.311
+Mp_guess = 6.14952e26
 
 #create a FitInfo object and parse the default arguments
-fit_info = retriever.get_default_fit_info(R_star, g, R_guess, T_guess)
+fit_info = retriever.get_default_fit_info(R_star, Mp_guess, R_guess, T_guess)
 #Add fitting parameters - this specifies which parameters you want to fit
 #e.g. since we have not included cloudtop_P, it will be fixed at the value specified in the constructor
 fit_info.add_fit_param('R', 0.9*R_guess, 1.1*R_guess, 0, np.inf)
-fit_info.add_fit_param("log_scatt_factor", 0, 1, value=0)
-fit_info.add_fit_param("scatt_slope", 0, 10, value=4)
+#fit_info.add_fit_param("log_scatt_factor", 0, 1, value=0)
+#fit_info.add_fit_param("scatt_slope", 0, 10, value=4)
 fit_info.add_fit_param("logZ", -1, 2)
+fit_info.add_fit_param("log_cloudtop_P", -1, 5)
+fit_info.add_fit_param('Mp', 0.8*Mp_guess, 1.2*Mp_guess)
 
 #Use Nested Sampling to do the fitting
 result = retriever.run_multinest(bins, depths, errors, fit_info, plot_best=True)

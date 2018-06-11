@@ -27,7 +27,7 @@ class Retriever:
         scatt_slope = params_dict["scatt_slope"]
         cloudtop_P = 10.0**params_dict["log_cloudtop_P"]
         error_multiple = params_dict["error_multiple"]
-        Rs = params_dict["star_radius"]
+        Rs = params_dict["Rs"]
         Mp = params_dict["Mp"]
         
         if not calculator.is_in_bounds(logZ, CO_ratio, T, cloudtop_P):
@@ -40,7 +40,7 @@ class Retriever:
             scattering_factor=scatt_factor, scattering_slope = scatt_slope, cloudtop_pressure=cloudtop_P)
         residuals = calculated_depths - measured_depths
         scaled_errors = error_multiple * measured_errors
-        result = -0.5 * np.sum(residuals**2/scaled_errors**2 + np.log(2*np.pi*scaled_errors**2))
+        ln_prob = -0.5 * np.sum(residuals**2/scaled_errors**2 + np.log(2*np.pi*scaled_errors**2))
 
         if plot:
             plt.errorbar(METRES_TO_UM*wavelengths, measured_depths, yerr=measured_errors, fmt='.')
@@ -48,7 +48,7 @@ class Retriever:
             plt.xlabel("Wavelength (um)")
             plt.ylabel("Transit depth")
             plt.show()
-        return result
+        return fit_info.ln_prior(params) + ln_prob
 
     def run_emcee(self, wavelength_bins, depths, errors, fit_info, nwalkers=50,
                   nsteps=10000, include_condensates=True,
@@ -156,8 +156,7 @@ class Retriever:
         def transform_prior(cube):
             new_cube = np.zeros(len(cube))
             for i in range(len(cube)):
-                low_guess, high_guess = fit_info.get_guess_bounds(i)
-                new_cube[i] = cube[i]*(high_guess - low_guess) + low_guess
+                new_cube[i] = fit_info.from_unit_interval(i, cube[i])
             return new_cube
 
         def multinest_ln_prob(cube):
@@ -191,16 +190,16 @@ class Retriever:
                             'log_scatt_factor': log_scatt_factor,
                             'scatt_slope': scatt_slope,
                             'log_cloudtop_P': log_cloudtop_P,
-                            'star_radius': Rs,
+                            'Rs': Rs,
                             'error_multiple': error_multiple})
 
         if add_fit_params:
-            fit_info.add_fit_param('R', 0.9*Rp, 1.1*Rp, 0, np.inf)
-            fit_info.add_fit_param('T', 0.5*T, 1.5*T, 0, np.inf)
-            fit_info.add_fit_param('logZ', -1, 3, -1, 3)
-            fit_info.add_fit_param('CO_ratio', 0.2, 1.5, 0.2, 2.0)
-            fit_info.add_fit_param('log_cloudtop_P', -1, 4, -np.inf, np.inf)
-            fit_info.add_fit_param('log_scatt_factor', 0, 1, 0, 3)
-            fit_info.add_fit_param('scatt_slope', 0, 8, 0, 8)
-            fit_info.add_fit_param('error_multiple', 0.1, 10, 0, np.inf)
+            fit_info.add_uniform_fit_param('R', 0.9*Rp, 1.1*Rp, 0, np.inf)
+            fit_info.add_uniform_fit_param('T', 0.5*T, 1.5*T, 0, np.inf)
+            fit_info.add_uniform_fit_param('logZ', -1, 3, -1, 3)
+            fit_info.add_uniform_fit_param('CO_ratio', 0.2, 1.5, 0.2, 2.0)
+            fit_info.add_uniform_fit_param('log_cloudtop_P', -1, 4, -np.inf, np.inf)
+            fit_info.add_uniform_fit_param('log_scatt_factor', 0, 1, 0, 3)
+            fit_info.add_uniform_fit_param('scatt_slope', 0, 8, 0, 8)
+            fit_info.add_uniform_fit_param('error_multiple', 0.1, 10, 0, np.inf)
         return fit_info

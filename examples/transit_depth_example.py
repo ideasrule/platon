@@ -4,13 +4,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from platon.transit_depth_calculator import TransitDepthCalculator
+from platon.constants import M_jup, R_sun, R_jup
 
 # All quantities in SI
-Rs = 6.57e8     #Radius of star
-g = 21.7        #Planet's surface gravity at 1 bar (by default)
-Mp = 4.38e25    #Mass of planet
-Rp = 1.16e7     #Radius of planet
-T = 2150        #Temperature of isothermal part of the atmosphere
+Rs = 1.16 * R_sun     #Radius of star
+Mp = 0.73 * M_jup     #Mass of planet
+Rp = 1.40 * R_jup      #Radius of planet
+T = 1200              #Temperature of isothermal part of the atmosphere
 
 #create a TransitDepthCalculator object and compute wavelength dependent transit depths
 depth_calculator = TransitDepthCalculator()

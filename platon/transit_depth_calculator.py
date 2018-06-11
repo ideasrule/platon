@@ -1,11 +1,12 @@
-from pkg_resources import resource_filename
+from __future__ import print_function
 
+import os
+
+from pkg_resources import resource_filename
 from scipy.interpolate import RectBivariateSpline, UnivariateSpline
 import numpy as np
 import matplotlib.pyplot as plt
-import time
 from scipy import integrate
-import os
 
 from ._compatible_loader import load_numpy_array
 from .abundance_getter import AbundanceGetter

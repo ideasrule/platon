@@ -10,14 +10,21 @@ To compute transit depths, look at transit_depth_example.py, then go to
 :class:`.TransitDepthCalculator` for more info.  In short::
 
   from platon.transit_depth_calculator import TransitDepthCalculator
+  from platon.constants import M_jup, R_jup, R_sun
 
-  star_radius = 7e8 # all quantities in SI
-  planet_g = 9.8
-  planet_radius = 7e7
-  planet_temperature = 1200
+  # All inputs and outputs for PLATON are in SI
+  
+  Rs = 1.16 * R_sun
+  Mp = 0.73 * M_jup
+  Rp = 1.40 * R_jup
+  T = 1200
 
-  calculator = TransitDepthCalculator(star_radius, planet_g)
-  calculator.compute_depths(planet_radius, planet_temperature, logZ=0, CO_ratio=0.53)
+  # The initializer loads all data files.  Create a TransitDepthCalculator
+  # object and hold on to it
+  calculator = TransitDepthCalculator()
+
+  # compute_depths is fast once data files are loaded
+  calculator.compute_depths(Rs, Mp, Rp, T, logZ=0, CO_ratio=0.53)
 
 You can adjust a variety of parameters, including the metallicity (Z) and C/O
 ratio. By default, logZ = 0 and C/O = 0.53. Any other value for
@@ -29,8 +36,8 @@ one of the abundance files included in the package (from ExoTransmit). The
 custom abundance files specified by the user must be compatible with the
 ExoTransmit format::
 
-  calculator.compute_depths(planet_radius, planet_temperature, logZ=None,
-                            CO_ratio=None, custom_abundances = filename)
+  calculator.compute_depths(Rs, Mp, Rp, T, logZ=None, CO_ratio=None,
+                            custom_abundances=filename)
 
 To retrieve atmospheric parameters, look at retrieve_example.py, then go to
 :class:`.Retriever` for more info.  In short::
@@ -39,8 +46,7 @@ To retrieve atmospheric parameters, look at retrieve_example.py, then go to
   from platon.retriever import Retriever
 
   # Set your best guess
-  fit_info = retriever.get_default_fit_info(star_radius, planet_g, planet_radius,
-                                            planet_temperature, logZ=0)
+  fit_info = retriever.get_default_fit_info(Rs, Mp, Rp, T, logZ=0)
 
   # Decide what you want to fit for, then set the lower and upper limits for
   # those quantities
@@ -58,9 +64,12 @@ of N errors on those transit depths.
 
 The example above retrieves the planetary radius (at a base pressures
 of 100,000 Pa), the temperature of the isothermal atmosphere, and the
-metallicity.  Other parameters you can retrieve for are the C/O ratio,
+metallicity.  Other parameters you can retrieve for are the stellar radius,
+the planetary mass, C/O ratio,
 the cloudtop pressure, the scattering factor, the scattering slope,
-and the error multiple--which multiplies all errors by a constant.
+and the error multiple--which multiplies all errors by a constant.  We recommend
+either fixing the stellar radius and planetary mass to the measured values, or
+only allowing them to vary 2 standard deviations aw
 
 Once you get the `result` object, you can make a corner plot::
 

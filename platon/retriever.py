@@ -182,7 +182,7 @@ class Retriever:
 
     @staticmethod
     def get_default_fit_info(Rs, Mp, Rp, T, logZ=0, CO_ratio=0.53,
-                             log_cloudtop_P=1e3, log_scatt_factor=0,
+                             log_cloudtop_P=3, log_scatt_factor=0,
                              scatt_slope=4, error_multiple=1,
                              add_fit_params=False):
 

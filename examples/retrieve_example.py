@@ -11,18 +11,17 @@ import corner
 
 from platon.fit_info import FitInfo
 from platon.retriever import Retriever
-
+from platon.constants import R_sun, R_jup, M_jup
 
 def hd209458b_stis():
     #http://iopscience.iop.org/article/10.1086/510111/pdf
-    star_radius = 7.826625e8
-    jupiter_radius = 7.1492e7
+    star_radius = 1.125 * R_sun
     wave_bins = [[293,347], [348,402], [403,457], [458,512], [512,567], [532,629], [629,726], [727,824], [825,922], [922,1019]]
     wave_bins = 1e-9 * np.array(wave_bins)
 
     planet_radii = [1.3263, 1.3254, 1.32, 1.3179, 1.3177, 1.3246, 1.3176, 1.3158, 1.32, 1.3268]
     radii_errors = [0.0018, 0.0010, 0.0006, 0.0006, 0.0010, 0.0006, 0.0005, 0.0006, 0.0006, 0.0013]
-    transit_depths = (np.array(planet_radii)*jupiter_radius/star_radius)**2 + 60e-6
+    transit_depths = (np.array(planet_radii)*R_jup/star_radius)**2 + 60e-6
     transit_errors = np.array(radii_errors)/np.array(planet_radii) * 2 * transit_depths
     return wave_bins, transit_depths, transit_errors
 
@@ -71,31 +70,26 @@ bins = np.concatenate([stis_bins, wfc3_bins, spitzer_bins])
 depths = np.concatenate([stis_depths, wfc3_depths, spitzer_depths])
 errors = np.concatenate([stis_errors, wfc3_errors, spitzer_errors])
 
+R_guess = 1.4 * R_jup
+T_guess = 1200
+
 #create a Retriever object
 retriever = Retriever()
 
-#provide initial guesses for the parameters
-R_guess = 9.7e7
-T_guess = 1200
-metallicity_guess = 1
-scatt_factor_guess = 1
-scatt_slope_guess = 4
-cloudtop_P_guess = 1e6
+#create a FitInfo object and set best guess parameters
+fit_info = retriever.get_default_fit_info(
+    Rs=1.16 * R_sun, Mp=0.73 * M_jup, Rp=R_guess, T=T_guess,
+    logZ=0, CO_ratio=0.53, log_cloudtop_P=4,
+    log_scatt_factor=0, scatt_slope=4, error_multiple=1)
 
-#Radius of star and planet's gravitational acceleration (at 1 bar by default)
-R_star = 8.08e8
-Mp_guess = 6.14952e26
-
-#create a FitInfo object and parse the default arguments
-fit_info = retriever.get_default_fit_info(R_star, Mp_guess, R_guess, T_guess)
 #Add fitting parameters - this specifies which parameters you want to fit
 #e.g. since we have not included cloudtop_P, it will be fixed at the value specified in the constructor
-fit_info.add_fit_param('R', 0.9*R_guess, 1.1*R_guess, 0, np.inf)
-#fit_info.add_fit_param("log_scatt_factor", 0, 1, value=0)
-#fit_info.add_fit_param("scatt_slope", 0, 10, value=4)
-fit_info.add_fit_param("logZ", -1, 2)
+fit_info.add_fit_param('R', 0.9*R_guess, 1.1*R_guess)
+fit_info.add_fit_param('T', 0.5*T_guess, 1.5*T_guess)
+fit_info.add_fit_param("log_scatt_factor", 0, 1)
+fit_info.add_fit_param("logZ", -1, 3)
 fit_info.add_fit_param("log_cloudtop_P", -1, 5)
-fit_info.add_fit_param('Mp', 0.8*Mp_guess, 1.2*Mp_guess)
+fit_info.add_fit_param("error_multiple", 0.5, 5)
 
 #Use Nested Sampling to do the fitting
 result = retriever.run_multinest(bins, depths, errors, fit_info, plot_best=True)
@@ -103,6 +97,9 @@ result = retriever.run_multinest(bins, depths, errors, fit_info, plot_best=True)
 np.save("samples.npy", result.samples)
 np.save("weights.npy", result.weights)
 np.save("logl.npy", result.logl)
-fig = corner.corner(result.samples, weights=result.weights, range=[0.99] * result.samples.shape[1], labels=fit_info.fit_param_names)
+
+fig = corner.corner(result.samples, weights=result.weights,
+                    range=[0.99] * result.samples.shape[1],
+                    labels=fit_info.fit_param_names)
 fig.savefig("multinest_corner.png")
 

@@ -52,7 +52,7 @@ class Retriever:
 
     def run_emcee(self, wavelength_bins, depths, errors, fit_info, nwalkers=50,
                   nsteps=10000, include_condensates=True,
-                  plot_best=False):
+                  plot_best=False, max_P_profile=1e5):
         '''Runs affine-invariant MCMC to retrieve atmospheric parameters.
 
         Parameters
@@ -93,7 +93,7 @@ class Retriever:
         '''
         
         initial_positions = fit_info.generate_rand_param_arrays(nwalkers)
-        calculator = TransitDepthCalculator(
+        calculator = TransitDepthCalculator(max_P_profile=max_P_profile,
             include_condensates=include_condensates)
         calculator.change_wavelength_bins(wavelength_bins)
 
@@ -113,7 +113,7 @@ class Retriever:
             self._ln_prob(best_params_arr, calculator, fit_info, depths, errors, plot=True)
         return sampler
 
-    def run_multinest(self, wavelength_bins, depths, errors, fit_info, maxiter=None, include_condensates=True, plot_best=False):
+    def run_multinest(self, wavelength_bins, depths, errors, fit_info, maxiter=None, include_condensates=True, plot_best=False, max_P_profile=1e5):
         '''Runs nested sampling to retrieve atmospheric parameters.
 
         Parameters
@@ -149,7 +149,7 @@ class Retriever:
             is the natural logarithm of the evidence.
         '''
                     
-        calculator = TransitDepthCalculator(
+        calculator = TransitDepthCalculator(max_P_profile=max_P_profile,
             include_condensates=include_condensates)
         calculator.change_wavelength_bins(wavelength_bins)
 

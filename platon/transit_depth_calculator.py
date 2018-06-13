@@ -13,7 +13,7 @@ from .abundance_getter import AbundanceGetter
 from ._species_data_reader import read_species_data
 from . import _interpolator_3D
 from ._tau_calculator import get_line_of_sight_tau
-from .constants import K_B, AMU, GM_SUN, TEFF_SUN, G
+from .constants import K_B, AMU, GM_SUN, TEFF_SUN, G, h, c
 from ._get_data import get_data
 
 class TransitDepthCalculator:
@@ -54,6 +54,9 @@ class TransitDepthCalculator:
         self.N_T = len(self.T_grid)
         self.N_P = len(self.P_grid)
 
+        #self.stellar_spectrum = np.pi*2*h*c**2/self.lambda_grid**5/(np.exp(h*c/self.lambda_grid/K_B/Teff)-1)
+
+        #print("blackbody", self.stellar_spectrum)
         P_meshgrid, lambda_meshgrid, T_meshgrid = np.meshgrid(
             self.P_grid, self.lambda_grid, self.T_grid)
         self.P_meshgrid = P_meshgrid
@@ -225,13 +228,32 @@ class TransitDepthCalculator:
         if cloudtop_P <= self.min_P_profile or cloudtop_P >= self.max_P_profile: return False
         return self.abundance_getter.is_in_bounds(logZ, CO_ratio, T)
 
+    def _get_binned_depths(self, depths, star_temperature):
+        if self.wavelength_bins is None:
+            return self.lambda_grid, depths
+
+        if star_temperature is None:
+            stellar_spectrum = np.ones(len(self.lambda_grid))
+        else:
+            stellar_spectrum = 1.0/self.lambda_grid**5/(np.exp(h*c/self.lambda_grid/K_B/star_temperature)-1)
+        
+        binned_wavelengths = []
+        binned_depths = []
+        for (start, end) in self.wavelength_bins:
+            cond = np.logical_and(self.lambda_grid >= start, self.lambda_grid < end)
+            binned_wavelengths.append(np.mean(self.lambda_grid[cond]))
+            binned_depth = np.average(depths[cond], weights=stellar_spectrum[cond])
+            binned_depths.append(binned_depth)
+            
+        return np.array(binned_wavelengths), np.array(binned_depths)
+    
     def compute_depths(self, star_radius, planet_mass, planet_radius,
                        temperature, logZ=0, CO_ratio=0.53,
                        add_scattering=True, scattering_factor=1,
                        scattering_slope = 4, scattering_ref_wavelength = 1e-6,
                        add_collisional_absorption=True,
                        cloudtop_pressure=np.inf,
-                       custom_abundances=None):
+                       custom_abundances=None, star_temperature=None):
         '''
         Computes transit depths at a range of wavelengths, assuming an
         isothermal atmosphere.  To choose bins, call change_wavelength_bins().
@@ -321,13 +343,4 @@ class TransitDepthCalculator:
 
         transit_depths = (planet_radius/star_radius)**2 + 2/star_radius**2 * absorption_fraction.dot(radii[1:] * dr)
 
-        binned_wavelengths = []
-        binned_depths = []
-        if self.wavelength_bins is not None:
-            for (start, end) in self.wavelength_bins:
-                cond = np.logical_and(self.lambda_grid >= start, self.lambda_grid < end)
-                binned_wavelengths.append(np.mean(self.lambda_grid[cond]))
-                binned_depths.append(np.mean(transit_depths[cond]))
-            return np.array(binned_wavelengths), np.array(binned_depths)
-
-        return self.lambda_grid, transit_depths
+        return self._get_binned_depths(transit_depths, star_temperature)

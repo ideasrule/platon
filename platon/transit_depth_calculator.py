@@ -44,7 +44,7 @@ class TransitDepthCalculator:
         self.absorption_data, self.mass_data, self.polarizability_data = read_species_data(
             resource_filename(__name__, "data/Absorption"),
             resource_filename(__name__, "data/species_info"))
-        self.collisional_absorption_data = load_numpy_array(
+        self.collisional_absorption_data = load_dict_from_pickle(
             resource_filename(__name__, "data/collisional_absorption.pkl"))
         self.lambda_grid = load_numpy_array(
             resource_filename(__name__, "data/wavelengths.npy"))
@@ -57,9 +57,6 @@ class TransitDepthCalculator:
         self.N_T = len(self.T_grid)
         self.N_P = len(self.P_grid)
 
-        #self.stellar_spectrum = np.pi*2*h*c**2/self.lambda_grid**5/(np.exp(h*c/self.lambda_grid/K_B/Teff)-1)
-
-        #print("blackbody", self.stellar_spectrum)
         P_meshgrid, lambda_meshgrid, T_meshgrid = np.meshgrid(
             self.P_grid, self.lambda_grid, self.T_grid)
         self.P_meshgrid = P_meshgrid

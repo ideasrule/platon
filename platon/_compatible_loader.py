@@ -14,8 +14,9 @@ def load_dict_from_pickle(filename):
             original_keys = list(dictionary.keys())
             
             for key in original_keys:
-                dictionary[key.decode('utf-8')] = dictionary[key]
-                del dictionary[key]
+                if isinstance(key, str):
+                    dictionary[key.decode('utf-8')] = dictionary[key]
+                    del dictionary[key]
 
             return dictionary
 

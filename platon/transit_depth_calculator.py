@@ -235,12 +235,12 @@ class TransitDepthCalculator:
         if self.wavelength_bins is None:
             return self.lambda_grid, depths
 
+        temperatures = list(self.stellar_spectra.keys())
         if T_star is None:
             stellar_spectrum = np.ones(len(self.lambda_grid))
-        elif T_star >= np.min(self.stellar_spectra.keys()) \
-             and T_star <= np.max(self.stellar_spectra.keys()):
+        elif T_star >= np.min(temperatures) and T_star <= np.max(temperatures):
             interpolator = scipy.interpolate.interp1d(
-                self.stellar_spectra.keys(), self.stellar_spectra.values(),
+                temperatures, list(self.stellar_spectra.values()),
                 axis=0)
             stellar_spectrum = interpolator(T_star)
         else:

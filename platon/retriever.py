@@ -29,6 +29,7 @@ class Retriever:
         error_multiple = params_dict["error_multiple"]
         Rs = params_dict["Rs"]
         Mp = params_dict["Mp"]
+        T_star = params_dict["T_star"]
         
         if not calculator.is_in_bounds(logZ, CO_ratio, T, cloudtop_P):
             return -np.inf
@@ -37,7 +38,8 @@ class Retriever:
 
         wavelengths, calculated_depths = calculator.compute_depths(
             Rs, Mp, R, T, logZ, CO_ratio,
-            scattering_factor=scatt_factor, scattering_slope = scatt_slope, cloudtop_pressure=cloudtop_P)
+            scattering_factor=scatt_factor, scattering_slope = scatt_slope,
+            cloudtop_pressure=cloudtop_P, T_star=T_star)
         residuals = calculated_depths - measured_depths
         scaled_errors = error_multiple * measured_errors
         ln_prob = -0.5 * np.sum(residuals**2/scaled_errors**2 + np.log(2*np.pi*scaled_errors**2))
@@ -183,7 +185,7 @@ class Retriever:
     def get_default_fit_info(Rs, Mp, Rp, T, logZ=0, CO_ratio=0.53,
                              log_cloudtop_P=3, log_scatt_factor=0,
                              scatt_slope=4, error_multiple=1,
-                             add_fit_params=False):
+                             T_star=None, add_fit_params=False):
 
         fit_info = FitInfo({'Mp': Mp, 'R': Rp, 'T': T, 'logZ': logZ,
                             'CO_ratio': CO_ratio,
@@ -191,7 +193,7 @@ class Retriever:
                             'scatt_slope': scatt_slope,
                             'log_cloudtop_P': log_cloudtop_P,
                             'Rs': Rs,
-                            'error_multiple': error_multiple})
+                            'error_multiple': error_multiple, 'T_star': T_star})
 
         if add_fit_params:
             fit_info.add_uniform_fit_param('R', 0.9*Rp, 1.1*Rp, 0, np.inf)

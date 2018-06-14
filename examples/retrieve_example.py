@@ -80,7 +80,7 @@ retriever = Retriever()
 fit_info = retriever.get_default_fit_info(
     Rs=1.19 * R_sun, Mp=0.73 * M_jup, Rp=R_guess, T=T_guess,
     logZ=0, CO_ratio=0.53, log_cloudtop_P=4,
-    log_scatt_factor=0, scatt_slope=4, error_multiple=1)
+    log_scatt_factor=0, scatt_slope=4, error_multiple=1, T_star=6091)
 
 #Add fitting parameters - this specifies which parameters you want to fit
 #e.g. since we have not included cloudtop_P, it will be fixed at the value specified in the constructor

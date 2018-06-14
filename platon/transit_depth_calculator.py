@@ -7,8 +7,9 @@ from scipy.interpolate import RectBivariateSpline, UnivariateSpline
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import integrate
+import scipy.interpolate
 
-from ._compatible_loader import load_numpy_array
+from ._compatible_loader import load_numpy_array, load_dict_from_pickle
 from .abundance_getter import AbundanceGetter
 from ._species_data_reader import read_species_data
 from . import _interpolator_3D
@@ -37,10 +38,12 @@ class TransitDepthCalculator:
 
         if not os.path.isdir(resource_filename(__name__, "data/")):
             get_data()
+            
+        self.stellar_spectra = load_dict_from_pickle(
+            resource_filename(__name__, "data/stellar_spectra.pkl"))
         self.absorption_data, self.mass_data, self.polarizability_data = read_species_data(
             resource_filename(__name__, "data/Absorption"),
             resource_filename(__name__, "data/species_info"))
-
         self.collisional_absorption_data = load_numpy_array(
             resource_filename(__name__, "data/collisional_absorption.pkl"))
         self.lambda_grid = load_numpy_array(
@@ -110,6 +113,9 @@ class TransitDepthCalculator:
         P_meshgrid, lambda_meshgrid, T_meshgrid = np.meshgrid(self.P_grid, self.lambda_grid, self.T_grid)
         self.P_meshgrid = P_meshgrid
         self.T_meshgrid = T_meshgrid
+        
+        for temp in self.stellar_spectra:
+            self.stellar_spectra[temp] = self.stellar_spectra[temp][cond]
 
 
     def _get_gas_absorption(self, abundances, P_cond, T_cond):
@@ -228,14 +234,20 @@ class TransitDepthCalculator:
         if cloudtop_P <= self.min_P_profile or cloudtop_P >= self.max_P_profile: return False
         return self.abundance_getter.is_in_bounds(logZ, CO_ratio, T)
 
-    def _get_binned_depths(self, depths, star_temperature):
+    def _get_binned_depths(self, depths, T_star):
         if self.wavelength_bins is None:
             return self.lambda_grid, depths
 
-        if star_temperature is None:
+        if T_star is None:
             stellar_spectrum = np.ones(len(self.lambda_grid))
+        elif T_star >= np.min(self.stellar_spectra.keys()) \
+             and T_star <= np.max(self.stellar_spectra.keys()):
+            interpolator = scipy.interpolate.interp1d(
+                self.stellar_spectra.keys(), self.stellar_spectra.values(),
+                axis=0)
+            stellar_spectrum = interpolator(T_star)
         else:
-            stellar_spectrum = 1.0/self.lambda_grid**5/(np.exp(h*c/self.lambda_grid/K_B/star_temperature)-1)
+            stellar_spectrum = 1.0/self.lambda_grid**5/(np.exp(h*c/self.lambda_grid/K_B/T_star)-1)
         
         binned_wavelengths = []
         binned_depths = []
@@ -253,7 +265,7 @@ class TransitDepthCalculator:
                        scattering_slope = 4, scattering_ref_wavelength = 1e-6,
                        add_collisional_absorption=True,
                        cloudtop_pressure=np.inf,
-                       custom_abundances=None, star_temperature=None):
+                       custom_abundances=None, T_star=None):
         '''
         Computes transit depths at a range of wavelengths, assuming an
         isothermal atmosphere.  To choose bins, call change_wavelength_bins().
@@ -343,4 +355,4 @@ class TransitDepthCalculator:
 
         transit_depths = (planet_radius/star_radius)**2 + 2/star_radius**2 * absorption_fraction.dot(radii[1:] * dr)
 
-        return self._get_binned_depths(transit_depths, star_temperature)
+        return self._get_binned_depths(transit_depths, T_star)

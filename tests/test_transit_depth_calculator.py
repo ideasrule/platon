@@ -15,7 +15,7 @@ class TestTransitDepthCalculator(unittest.TestCase):
         depth_calculator = TransitDepthCalculator(max_P_profile=1.014e5)
         wavelengths, transit_depths = depth_calculator.compute_depths(
             Rs, Mp, Rp, T, logZ=logZ, CO_ratio=CO_ratio,
-            custom_abundances=custom_abundances, star_temperature=6100)
+            custom_abundances=custom_abundances)
 
         # This ExoTransmit run is done without SH, since it's not present in
         # GGchem
@@ -57,9 +57,16 @@ class TestTransitDepthCalculator(unittest.TestCase):
         bins = np.array([[0.4,0.6], [1,1.1], [1.2,1.4], [3.2,4], [5,6]])
         bins *= 1e-6
         depth_calculator.change_wavelength_bins(bins)
+
         wavelengths, transit_depths = depth_calculator.compute_depths(
             Rs, Mp, Rp, T, logZ=0.2, CO_ratio=1.1,
-            star_temperature=6100)
+            T_star=6100)
+        self.assertEqual(len(wavelengths), len(bins))
+        self.assertEqual(len(transit_depths), len(bins))
+
+        wavelengths, transit_depths = depth_calculator.compute_depths(
+            Rs, Mp, Rp, T, logZ=0.2, CO_ratio=1.1,
+            T_star=12000)
         self.assertEqual(len(wavelengths), len(bins))
         self.assertEqual(len(transit_depths), len(bins))
 

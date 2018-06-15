@@ -1,6 +1,7 @@
 from __future__ import print_function
 
 import os
+import sys
 
 from pkg_resources import resource_filename
 from scipy.interpolate import RectBivariateSpline, UnivariateSpline
@@ -169,7 +170,7 @@ class TransitDepthCalculator:
         R_hill = 0.5*star_radius*(TEFF_SUN/T[0])**2 * (GM/(3*GM_SUN))**(1/3)   #Hill radius for a sun like star
 
         if np.log(P[-1]/P[0]) > GM*mu[0]*AMU/(K_B*T[0])*(1/planet_radius - 1/R_hill):   #total number of scale heights required gives a radius that's larger than the hill radius
-            print('The atmosphere is likely to be unbound. The scale height of the atmosphere is too large. Reverting to the constant g assumption')
+            print('The atmosphere is likely to be unbound. The scale height of the atmosphere is too large. Reverting to the constant g assumption', file=sys.stderr)
 
             dP = P[1:] - P[0:-1]
             dr = dP/P[1:] * K_B * T[1:]/(mu[1:] * AMU * g)
@@ -183,16 +184,16 @@ class TransitDepthCalculator:
             return radii, dr[above_cloud_cond]
 
         def hydrostatic(y, P):
-            r = y
+            r = y + planet_radius
             T_local = T_profile(P)
             local_mu = atm_weight(P)
             rho = local_mu*P*AMU / (K_B * T_local)
-            dydP = r**2/(GM * rho)
+            dydP = -r**2/(GM * rho)
             return dydP
 
         y0 = planet_radius
 
-        radii_ode = np.transpose(integrate.odeint(hydrostatic,y0,P))[0]
+        radii_ode = planet_radius + np.transpose(integrate.odeint(hydrostatic, 0, P[::-1]))[0]
         dr = np.diff(radii_ode)
         dr = np.flipud(np.append(dr,K_B*T[0]/(mu[0] * AMU * g)))
         radius_with_atm = planet_radius + np.sum(dr)

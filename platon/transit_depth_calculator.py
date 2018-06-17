@@ -237,14 +237,6 @@ class TransitDepthCalculator:
 
         raise ValueError("Unrecognized format for custom_abundances")
 
-    def is_in_bounds(self, logZ, CO_ratio, T, cloudtop_P):
-        '''Tests whether a certain combination of parameters is within the
-        bounds of the data files. The arguments are the same as those in
-        `compute_depths.`'''
-
-        if T <= np.min(self.T_grid) or T >= np.max(self.T_grid): return False
-        if cloudtop_P <= self.min_P_profile or cloudtop_P >= self.max_P_profile: return False
-        return self.abundance_getter.is_in_bounds(logZ, CO_ratio, T)
 
     def _get_binned_depths(self, depths, T_star):
         if self.wavelength_bins is None:

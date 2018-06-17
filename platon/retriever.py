@@ -44,9 +44,10 @@ class Retriever:
     
     def _ln_prob(self, params, calculator, fit_info, measured_depths,
                 measured_errors, plot=False):
+        
         if not fit_info.within_limits(params):
             return -np.inf
-
+        
         params_dict = fit_info.interpret_param_array(params)
         R = params_dict["R"]
         T = params_dict["T"]
@@ -60,8 +61,6 @@ class Retriever:
         Mp = params_dict["Mp"]
         T_star = params_dict["T_star"]
         
-        if not calculator.is_in_bounds(logZ, CO_ratio, T, cloudtop_P):
-            return -np.inf
         if Rs <= 0 or Mp <= 0:
             return -np.inf
 
@@ -69,6 +68,7 @@ class Retriever:
             Rs, Mp, R, T, logZ, CO_ratio,
             scattering_factor=scatt_factor, scattering_slope = scatt_slope,
             cloudtop_pressure=cloudtop_P, T_star=T_star)
+        
         residuals = calculated_depths - measured_depths
         scaled_errors = error_multiple * measured_errors
         ln_prob = -0.5 * np.sum(residuals**2/scaled_errors**2 + np.log(2*np.pi*scaled_errors**2))
@@ -78,7 +78,7 @@ class Retriever:
             plt.plot(METRES_TO_UM*wavelengths, calculated_depths)
             plt.xlabel("Wavelength (um)")
             plt.ylabel("Transit depth")
-            plt.show()
+
         return fit_info.ln_prior(params) + ln_prob
 
     def run_emcee(self, wavelength_bins, depths, errors, fit_info, nwalkers=50,
@@ -216,7 +216,7 @@ class Retriever:
     def get_default_fit_info(Rs, Mp, Rp, T, logZ=0, CO_ratio=0.53,
                              log_cloudtop_P=3, log_scatt_factor=0,
                              scatt_slope=4, error_multiple=1,
-                             T_star=None, add_fit_params=False):
+                             T_star=None):
 
         fit_info = FitInfo({'Mp': Mp, 'R': Rp, 'T': T, 'logZ': logZ,
                             'CO_ratio': CO_ratio,
@@ -226,13 +226,4 @@ class Retriever:
                             'Rs': Rs,
                             'error_multiple': error_multiple, 'T_star': T_star})
 
-        if add_fit_params:
-            fit_info.add_uniform_fit_param('R', 0.9*Rp, 1.1*Rp, 0, np.inf)
-            fit_info.add_uniform_fit_param('T', 0.5*T, 1.5*T, 0, np.inf)
-            fit_info.add_uniform_fit_param('logZ', -1, 3, -1, 3)
-            fit_info.add_uniform_fit_param('CO_ratio', 0.2, 1.5, 0.2, 2.0)
-            fit_info.add_uniform_fit_param('log_cloudtop_P', -1, 4, -np.inf, np.inf)
-            fit_info.add_uniform_fit_param('log_scatt_factor', 0, 1, 0, 3)
-            fit_info.add_uniform_fit_param('scatt_slope', 0, 8, 0, 8)
-            fit_info.add_uniform_fit_param('error_multiple', 0.1, 10, 0, np.inf)
         return fit_info

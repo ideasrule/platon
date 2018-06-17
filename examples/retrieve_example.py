@@ -92,11 +92,12 @@ fit_info.add_uniform_fit_param('R', 0.9*R_guess, 1.1*R_guess)
 fit_info.add_uniform_fit_param('T', 0.5*T_guess, 1.5*T_guess)
 fit_info.add_uniform_fit_param("log_scatt_factor", 0, 1)
 fit_info.add_uniform_fit_param("logZ", -1, 3)
-fit_info.add_uniform_fit_param("log_cloudtop_P", -1, 5)
+fit_info.add_uniform_fit_param("log_cloudtop_P", -0.99, 5)
 fit_info.add_uniform_fit_param("error_multiple", 0.5, 5)
 
 #Use Nested Sampling to do the fitting
 result = retriever.run_multinest(bins, depths, errors, fit_info, plot_best=True)
+plt.savefig("best_fit.png")
 
 np.save("samples.npy", result.samples)
 np.save("weights.npy", result.weights)

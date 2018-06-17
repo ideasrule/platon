@@ -1,6 +1,8 @@
 import unittest
 import numpy as np
 import copy
+import matplotlib
+matplotlib.use('Agg')
 
 from platon.retriever import Retriever
 from platon.fit_info import FitInfo

@@ -1,7 +1,4 @@
 language: python
-env:
-  - MPLBACKEND=Agg
-  
 matrix:
     include:
         - os: linux

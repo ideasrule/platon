@@ -8,7 +8,7 @@ import zipfile
 import os
 import shutil
 
-def get_data():
+def get_data(target_dir):
     MB_TO_BYTES = 2**20
     filename = "data.zip"
     url = "https://github.com/ideasrule/platon/releases/download/beta/" \
@@ -42,7 +42,7 @@ def get_data():
     f.close()
 
     zip_ref = zipfile.ZipFile(filename, 'r')
-    zip_ref.extractall(resource_filename(__name__, "./"))
+    zip_ref.extractall(target_dir)
     zip_ref.close()
 
     os.remove(filename)

@@ -65,11 +65,57 @@ class TestTransitDepthCalculator(unittest.TestCase):
         self.assertEqual(len(transit_depths), len(bins))
 
         wavelengths, transit_depths = depth_calculator.compute_depths(
-            Rs, Mp, Rp, T, logZ=0.2, CO_ratio=1.1,
-            T_star=12000)
+            Rs, Mp, Rp, T, logZ=0.2, CO_ratio=1.1, T_star=12000)
         self.assertEqual(len(wavelengths), len(bins))
         self.assertEqual(len(transit_depths), len(bins))
 
+    def test_bounds_checking(self):
+        Rp = 7.14e7
+        Mp = 7.49e26
+        Rs = 7e8
+        T = 1200
+        logZ = 0
+        CO_ratio = 1.1
+        calculator = TransitDepthCalculator()
+        
+        with self.assertRaises(ValueError):
+            calculator.compute_depths(Rs, Mp, Rp, 299, logZ=logZ, CO_ratio=CO_ratio)
+        with self.assertRaises(ValueError):
+            calculator.compute_depths(Rs, Mp, Rp, 3001, logZ=logZ, CO_ratio=CO_ratio)
+        with self.assertRaises(ValueError):
+            calculator.compute_depths(Rs, Mp, Rp, T, logZ=-1.1, CO_ratio=CO_ratio)
+        with self.assertRaises(ValueError):
+            calculator.compute_depths(Rs, Mp, Rp, T, logZ=3.1, CO_ratio=CO_ratio)
+        with self.assertRaises(ValueError):
+            calculator.compute_depths(Rs, Mp, Rp, T, logZ=logZ, CO_ratio=0.19)
+            
+        with self.assertRaises(ValueError):
+            calculator.compute_depths(Rs, Mp, Rp, T, logZ=logZ, CO_ratio=11)
 
+        with self.assertRaises(ValueError):
+            calculator.compute_depths(Rs, Mp, Rp, T, logZ=logZ, CO_ratio=CO_ratio, cloudtop_pressure=0.1)
+        
+        with self.assertRaises(ValueError):
+            calculator.compute_depths(Rs, Mp, Rp, T, logZ=logZ, CO_ratio=CO_ratio, cloudtop_pressure=1.1e5)
+
+        # Infinity should be fine
+        calculator.compute_depths(Rs, Mp, Rp, T, logZ=logZ, CO_ratio=CO_ratio, cloudtop_pressure=np.inf)
+
+        # If min_P_profile or max_P_profile are different, so should the
+        # appropriate bounds for cloudtop_pressure
+        calculator = TransitDepthCalculator(min_P_profile=1e-2, max_P_profile=1e6)
+        calculator.compute_depths(Rs, Mp, Rp, T, logZ=logZ, CO_ratio=CO_ratio, cloudtop_pressure=1.1e-2)
+        calculator.compute_depths(Rs, Mp, Rp, T, logZ=logZ, CO_ratio=CO_ratio, cloudtop_pressure=1e6)
+
+        with self.assertRaises(ValueError):
+            calculator.compute_depths(Rs, Mp, Rp, T, logZ=logZ, CO_ratio=CO_ratio, cloudtop_pressure=0.99e-2)
+        
+        with self.assertRaises(ValueError):
+            calculator.compute_depths(Rs, Mp, Rp, T, logZ=logZ, CO_ratio=CO_ratio, cloudtop_pressure=1.1e6)
+
+            
+        
+            
+        
 if __name__ == '__main__':
     unittest.main()

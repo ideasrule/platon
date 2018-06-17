@@ -11,8 +11,37 @@ import nestle
 from .transit_depth_calculator import TransitDepthCalculator
 from .fit_info import FitInfo
 from .constants import METRES_TO_UM
+from ._params import _UniformParam
 
 class Retriever:
+    def _validate_params(self, fit_info, calculator):
+        # This assumes that the valid parameter space is rectangular, so that
+        # the bounds for each parameter can be treated separately. Unfortunately
+        # there is no good way to validate Gaussian parameters, which have
+        # infinite range.
+        for name in fit_info.fit_param_names:
+            this_param = fit_info.all_params[name]
+            if not isinstance(this_param, _UniformParam):
+                continue
+
+            if this_param.best_guess < this_param.low_lim \
+               or this_param.best_guess > this_param.high_lim:
+                raise ValueError(
+                    "Value {} for {} not between low and high limits".format(
+                        this_param.best_guess, name))
+            if this_param.low_lim >= this_param.high_lim:
+                raise ValueError(
+                    "low_lim for {} is higher than high_lim".format(name))
+            
+            for lim in [this_param.low_lim, this_param.high_lim]:
+                this_param.best_guess = lim
+                calculator._validate_params(
+                    fit_info.get("T"),
+                    fit_info.get("logZ"),
+                    fit_info.get("CO_ratio"),
+                    10**fit_info.get("log_cloudtop_P"))
+
+    
     def _ln_prob(self, params, calculator, fit_info, measured_depths,
                 measured_errors, plot=False):
         if not fit_info.within_limits(params):
@@ -98,7 +127,8 @@ class Retriever:
         calculator = TransitDepthCalculator(max_P_profile=max_P_profile,
             include_condensates=include_condensates)
         calculator.change_wavelength_bins(wavelength_bins)
-
+        self._validate_params(fit_info, calculator)
+        
         sampler = emcee.EnsembleSampler(
             nwalkers, fit_info.get_num_fit_params(), self._ln_prob,
             args=(calculator, fit_info, depths, errors))
@@ -154,7 +184,8 @@ class Retriever:
         calculator = TransitDepthCalculator(max_P_profile=max_P_profile,
             include_condensates=include_condensates)
         calculator.change_wavelength_bins(wavelength_bins)
-
+        self._validate_params(fit_info, calculator)
+        
         def transform_prior(cube):
             new_cube = np.zeros(len(cube))
             for i in range(len(cube)):

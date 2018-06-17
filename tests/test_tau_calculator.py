@@ -5,7 +5,6 @@ import scipy.integrate
 from platon import _tau_calculator
 
 class TestTauLOS(unittest.TestCase):
-
     def test_realistic(self):
         absorption_coeffs = np.loadtxt("tests/testing_data/exotransmit_kappa")
         heights = np.loadtxt("tests/testing_data/exotransmit_heights")
@@ -55,9 +54,6 @@ class TestTauLOS(unittest.TestCase):
         analytic_tau = np.array(analytic_tau)
         rel_diff = (tau - analytic_tau)/analytic_tau
         self.assertTrue(np.all(rel_diff < 0.01))
-
-        #print tau[0,0:100], analytic_tau[0:100]
-
 
 
 

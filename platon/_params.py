@@ -35,6 +35,7 @@ class _UniformParam(_Param):
         return 0
 
     def from_unit_interval(self, u):
+        assert(u >= 0 and u <= 1)
         if np.isinf(self.low_lim) or np.isinf(self.high_lim):
             raise ValueError("Limit cannot be infinity")       
         return self.low_lim + (self.high_lim - self.low_lim)*u

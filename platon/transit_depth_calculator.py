@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from scipy import integrate
 import scipy.interpolate
 
-from ._compatible_loader import load_numpy_array, load_dict_from_pickle
+from ._compatible_loader import load_dict_from_pickle
 from .abundance_getter import AbundanceGetter
 from ._species_data_reader import read_species_data
 from . import _interpolator_3D
@@ -47,11 +47,11 @@ class TransitDepthCalculator:
             resource_filename(__name__, "data/species_info"))
         self.collisional_absorption_data = load_dict_from_pickle(
             resource_filename(__name__, "data/collisional_absorption.pkl"))
-        self.lambda_grid = load_numpy_array(
+        self.lambda_grid = np.load(
             resource_filename(__name__, "data/wavelengths.npy"))
-        self.P_grid = load_numpy_array(
+        self.P_grid = np.load(
             resource_filename(__name__, "data/pressures.npy"))
-        self.T_grid = load_numpy_array(
+        self.T_grid = np.load(
             resource_filename(__name__, "data/temperatures.npy"))
 
         self.N_lambda = len(self.lambda_grid)

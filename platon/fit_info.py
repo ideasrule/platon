@@ -30,13 +30,6 @@ class FitInfo:
         self.all_params[name] = _GaussianParam(mean, std)
 
         
-    def freeze_fit_param(self, name):
-        if name not in self.fit_param_names:
-            raise ValueError("{0} not being fit".format(name))
-        
-        self.fit_param_names.remove(name)
-
-        
     def interpret_param_array(self, array):
         if len(array) != len(self.fit_param_names):
             raise ValueException("Fit array invalid")

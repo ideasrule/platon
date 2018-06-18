@@ -13,6 +13,7 @@ METRES_TO_UM = 1e6
 # derived by dividing the recommended GM values by the 2014 CODATA value for G
 # (listed above).
 
+M_SUN = 1.98848e30
 GM_SUN = 1.3271244e20
 TEFF_SUN = 5772.0
 

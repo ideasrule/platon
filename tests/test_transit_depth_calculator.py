@@ -48,6 +48,16 @@ class TestTransitDepthCalculator(unittest.TestCase):
 
         self.assertLess(np.max(frac_dev), 0.03)
 
+    def test_unbound_atmosphere(self):
+        Rp = 6.378e6
+        Mp = 5.97e20 # Note how low this is--10^-4 Earth masses!
+        Rs = 6.97e8
+        T = 300
+        depth_calculator = TransitDepthCalculator()
+        with self.assertRaises(ValueError):
+            wavelengths, transit_depths = depth_calculator.compute_depths(
+                Rs, Mp, Rp, T, logZ=0.2, CO_ratio=1.1, T_star=6100)
+
     def test_bin_wavelengths(self):
         Rp = 7.14e7
         Mp = 7.49e26
@@ -59,8 +69,7 @@ class TestTransitDepthCalculator(unittest.TestCase):
         depth_calculator.change_wavelength_bins(bins)
 
         wavelengths, transit_depths = depth_calculator.compute_depths(
-            Rs, Mp, Rp, T, logZ=0.2, CO_ratio=1.1,
-            T_star=6100)
+            Rs, Mp, Rp, T, logZ=0.2, CO_ratio=1.1, T_star=6100)
         self.assertEqual(len(wavelengths), len(bins))
         self.assertEqual(len(transit_depths), len(bins))
 

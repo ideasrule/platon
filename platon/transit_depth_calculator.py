@@ -15,7 +15,7 @@ from .abundance_getter import AbundanceGetter
 from ._species_data_reader import read_species_data
 from . import _interpolator_3D
 from ._tau_calculator import get_line_of_sight_tau
-from .constants import K_B, AMU, GM_SUN, TEFF_SUN, G, h, c
+from .constants import K_B, AMU, M_SUN, TEFF_SUN, G, h, c
 from ._get_data import get_data
 
 class TransitDepthCalculator:
@@ -170,8 +170,7 @@ class TransitDepthCalculator:
 
     def _get_above_cloud_r_and_dr(self, P_profile, T_profile, abundances, planet_mass, planet_radius, star_radius, above_cloud_cond):
         assert(len(P_profile) == len(T_profile))
-        GM = G * planet_mass
-        g = GM/planet_radius**2        
+        g = G * planet_mass/planet_radius**2        
         mu = np.zeros(len(P_profile))
         
         for species_name in abundances:
@@ -182,38 +181,26 @@ class TransitDepthCalculator:
         mu_interpolator = UnivariateSpline(P_profile, mu)
         T_interpolator = UnivariateSpline(P_profile, T_profile)
 
-        R_hill = 0.5*star_radius*(TEFF_SUN/T_profile[0])**2 * (GM/(3*GM_SUN))**(1/3)   #Hill radius for a sun like star
-
-        if np.log(P_profile[-1]/P_profile[0]) > GM*mu[0]*AMU/(K_B*T_profile[0])*(1/planet_radius - 1/R_hill):   #total number of scale heights required gives a radius that's larger than the hill radius
-            print('The atmosphere is likely to be unbound. The scale height of the atmosphere is too large. Reverting to the constant g assumption', file=sys.stderr)
-            dP = P_profile[1:] - P_profile[0:-1]
-            dr = dP/P_profile[1:] * K_B * T_profile[1:]/(mu[1:] * AMU * g)
-            dr = np.append(K_B*T_profile[0]/(mu[0] * AMU * g), dr)
-
-            #dz goes from top to bottom of atmosphere
-            radius_with_atm = np.sum(dr) + planet_radius
-            radii = radius_with_atm - np.cumsum(dr)
-            radii = np.append(radius_with_atm, radii[above_cloud_cond])
-
-            return radii, dr[above_cloud_cond]
-
         def hydrostatic(y, P):
             r = y + planet_radius
             T_local = T_interpolator(P)
             local_mu = mu_interpolator(P)
             rho = local_mu*P*AMU / (K_B * T_local)
-            dydP = -r**2/(GM * rho)
+            dydP = -r**2/(G * planet_mass * rho)
             return dydP
 
         y0 = planet_radius
-
-        radii_ode = planet_radius + np.transpose(integrate.odeint(hydrostatic, 0, P_profile[::-1]))[0]
+        radii_ode = planet_radius + integrate.odeint(hydrostatic, 0, P_profile[::-1])[:,0]
         dr = np.diff(radii_ode)
         dr = np.flipud(np.append(dr,K_B*T_profile[0]/(mu[0] * AMU * g)))
         radius_with_atm = planet_radius + np.sum(dr)
+
+        R_hill = 0.5*star_radius*(TEFF_SUN/T_profile[0])**2 * (planet_mass/(3*M_SUN))**(1.0/3)   
+        if radius_with_atm - planet_radius > R_hill:
+            raise ValueError("Atmosphere unbound: height > hill radius")
+        
         radii = radius_with_atm - np.cumsum(dr)
         radii = np.append(radius_with_atm, radii[above_cloud_cond])
-
         return radii, dr[above_cloud_cond]
 
     def _get_abundances_array(self, logZ, CO_ratio, custom_abundances):

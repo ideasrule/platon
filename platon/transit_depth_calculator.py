@@ -168,8 +168,9 @@ class TransitDepthCalculator:
         return absorption_coeff
 
 
-    def _get_above_cloud_r_and_dr(self, P_profile, T_profile, abundances, planet_mass, planet_radius, star_radius, above_cloud_cond):
+    def _get_above_cloud_r_and_dr(self, P_profile, T_profile, abundances, planet_mass, planet_radius, star_radius, above_cloud_cond, T_star=None):
         assert(len(P_profile) == len(T_profile))
+        # First, get atmospheric weight profile
         g = G * planet_mass/planet_radius**2        
         mu = np.zeros(len(P_profile))
         
@@ -180,7 +181,18 @@ class TransitDepthCalculator:
 
         mu_interpolator = UnivariateSpline(P_profile, mu)
         T_interpolator = UnivariateSpline(P_profile, T_profile)
+        
+        # Ensure that the atmosphere is bound by making rough estimates of the
+        # Hill radius and atmospheric height
+        if T_star is None:
+            T_star = TEFF_SUN
+        R_hill = 0.5*star_radius*(T_star/T_profile[0])**2 * (planet_mass/(3*M_SUN))**(1.0/3)
+        scale_height = K_B*np.mean(T_profile)*planet_radius**2/(np.mean(mu) * AMU * G * planet_mass)
+        atm_height_estimate = np.log(P_profile[-1]/P_profile[0]) * scale_height
+        if atm_height_estimate > R_hill:
+            raise ValueError("Atmosphere unbound: height > hill radius")
 
+        # Solve the hydrostatic equation
         def hydrostatic(y, P):
             r = y + planet_radius
             T_local = T_interpolator(P)
@@ -188,17 +200,13 @@ class TransitDepthCalculator:
             rho = local_mu*P*AMU / (K_B * T_local)
             dydP = -r**2/(G * planet_mass * rho)
             return dydP
-
+        
         y0 = planet_radius
         radii_ode = planet_radius + integrate.odeint(hydrostatic, 0, P_profile[::-1])[:,0]
         dr = np.diff(radii_ode)
         dr = np.flipud(np.append(dr,K_B*T_profile[0]/(mu[0] * AMU * g)))
         radius_with_atm = planet_radius + np.sum(dr)
 
-        R_hill = 0.5*star_radius*(TEFF_SUN/T_profile[0])**2 * (planet_mass/(3*M_SUN))**(1.0/3)   
-        if radius_with_atm - planet_radius > R_hill:
-            raise ValueError("Atmosphere unbound: height > hill radius")
-        
         radii = radius_with_atm - np.cumsum(dr)
         radii = np.append(radius_with_atm, radii[above_cloud_cond])
         return radii, dr[above_cloud_cond]
@@ -362,7 +370,7 @@ class TransitDepthCalculator:
 
         radii, dr = self._get_above_cloud_r_and_dr(
             P_profile, T_profile, abundances, planet_mass, planet_radius,
-            star_radius, above_clouds)
+            star_radius, above_clouds, T_star)
         
         P_profile = P_profile[above_clouds]
         T_profile = T_profile[above_clouds]

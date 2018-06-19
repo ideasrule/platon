@@ -4,6 +4,9 @@ from platon import __version__, name
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
+with open("requirements.txt") as f:
+    requirements = f.read().splitlines()
+    
 setuptools.setup(
     name = name,
     version = __version__,
@@ -21,5 +24,6 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ),
     include_package_data = True,
-    zip_safe = False
+    zip_safe = False,
+    install_requires = requirements
 )

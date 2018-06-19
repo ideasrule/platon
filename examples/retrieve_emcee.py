@@ -99,7 +99,7 @@ fit_info.add_uniform_fit_param("log_cloudtop_P", -0.99, 5)
 fit_info.add_uniform_fit_param("error_multiple", 0, np.inf, 0.5, 5)
 
 #Use Nested Sampling to do the fitting
-result = retriever.run_emcee(bins, depths, errors, fit_info, plot_best=True, nsteps=20)
+result = retriever.run_emcee(bins, depths, errors, fit_info, plot_best=True)
 plt.savefig("best_fit.png")
 
 np.save("chain.npy", result.chain)

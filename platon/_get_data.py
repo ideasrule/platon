@@ -38,10 +38,12 @@ def get_data(target_dir):
 
     f.close()
 
+    print("Extracting...")
     zip_ref = zipfile.ZipFile(filename, 'r')
     zip_ref.extractall(target_dir)
     zip_ref.close()
 
+    print("Extraction finished!")
     os.remove(filename)
 
 

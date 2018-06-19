@@ -40,7 +40,7 @@ T_guess = 1200
 
 depth_calculator = TransitDepthCalculator()
 depth_calculator.change_wavelength_bins(bins)
-wavelengths, depths = depth_calculator.compute_depths(1.19*R_sun, 0.73*M_jup, R_guess, T_guess, star_Teff=6091)
+wavelengths, depths = depth_calculator.compute_depths(1.19*R_sun, 0.73*M_jup, R_guess, T_guess, T_star=6091)
 plt.plot(1e6*wavelengths, depths)
 plt.xlabel("Wavelength (um)")
 plt.ylabel("Transit depth")

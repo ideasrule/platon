@@ -12,7 +12,7 @@ class TestGetData(unittest.TestCase):
         self.assertFalse(os.path.isfile(os.path.join(target_dir, "data.zip")))
         self.assertTrue(os.path.isdir(os.path.join(target_dir, "data")))
 
-        expectedFiles = ["collisional_absorption.pkl", "pressures.npy", "species_info", "temperatures.npy", "wavelengths.npy"]
+        expectedFiles = ["collisional_absorption.pkl", "pressures.npy", "species_info", "temperatures.npy", "wavelengths.npy", "stellar_spectra.pkl"]
         expectedDirs = ["Absorption", "abundances"]
 
         for f in expectedFiles:

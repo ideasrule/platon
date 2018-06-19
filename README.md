@@ -14,3 +14,8 @@ to Michael Zhang: zmzhang "at" caltech.edu
 
 To find installation instructions and quickstart examples, read the
 documentation at: https://platon.readthedocs.io
+
+*Now, these points of data
+make a beautiful line.
+And we're out of beta.
+We're releasing on time!*

@@ -38,7 +38,7 @@ def get_data(target_dir):
 
     f.close()
 
-    print("Extracting...")
+    print("\nExtracting...")
     zip_ref = zipfile.ZipFile(filename, 'r')
     zip_ref.extractall(target_dir)
     zip_ref.close()

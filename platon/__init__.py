@@ -1,3 +1,3 @@
 name = "platon"
 __version__ = "1.0"
-__data_url__ = "https://github.com/ideasrule/platon/releases/download/1.0/beta.zip"
+__data_url__ = "https://github.com/ideasrule/platon/releases/download/beta/data.zip"

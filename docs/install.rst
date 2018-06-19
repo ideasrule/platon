@@ -22,14 +22,23 @@ If blas_opt_info mentions OpenBLAS or vecLib, that's a good sign.  If it says
 "NOT AVAILABLE", that's a bad sign.
 
 Once you have a BLAS installed and linked to numpy, download PLATON,
-install the requirements, and install PLATON itself::
+install the requirements, and install PLATON itself.  The easiest way is to
+use pip::
+
+  pip install platon
+
+That's it!  Because PyPI has a size limit on packages, this will not install
+the data files.  The data files will be automatically downloaded when PLATON is
+first run.
+
+Another option is to install from source::
 
   git clone https://github.com/ideasrule/platon.git
   cd platon/
   pip install -r requirements.txt
   python setup.py install
 
-That's it!  To run unit tests to make sure everything runs::
+In this case, you can run unit tests to make sure everything works::
   
   python setup.py test
 

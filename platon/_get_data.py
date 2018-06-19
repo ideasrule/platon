@@ -2,6 +2,7 @@ from __future__ import print_function
 from future.moves.urllib.request import urlopen
 
 from pkg_resources import resource_filename
+from platon import __data_url__
 
 import sys
 import zipfile
@@ -11,12 +12,8 @@ import shutil
 def get_data(target_dir):
     MB_TO_BYTES = 2**20
     filename = "data.zip"
-    url = "https://github.com/ideasrule/platon/releases/download/beta/" \
-          + filename
-
-    file_name = url.split('/')[-1]
-    u = urlopen(url)
-    f = open(file_name, 'wb')
+    u = urlopen(__data_url__)
+    f = open(filename, 'wb')
     try:
         # Python 3
         file_size = int(u.getheader("Content-Length"))
@@ -24,7 +21,7 @@ def get_data(target_dir):
         # Python 2
         file_size = int(u.info().getheaders("Content-Length")[0])
 
-    print("Downloading {}: {:.0f} MB".format(file_name, file_size/MB_TO_BYTES))
+    print("Downloading {}: {:.0f} MB".format(filename, file_size/MB_TO_BYTES))
 
     bytes_downloaded = 0
     block_sz = 8192
@@ -47,4 +44,4 @@ def get_data(target_dir):
 
     os.remove(filename)
 
-#get_data()
+

@@ -15,17 +15,17 @@ from .abundance_getter import AbundanceGetter
 from ._species_data_reader import read_species_data
 from . import _interpolator_3D
 from ._tau_calculator import get_line_of_sight_tau
-from .constants import K_B, AMU, M_SUN, TEFF_SUN, G, h, c
+from .constants import k_B, AMU, M_sun, Teff_sun, G, h, c
 from ._get_data import get_data
 
 class TransitDepthCalculator:
-    def __init__(self, include_condensates=True, min_P_profile=0.1, max_P_profile=1e5, num_profile_heights=400):
+    def __init__(self, include_condensation=True, min_P_profile=0.1, max_P_profile=1e5, num_profile_heights=400):
         '''
         All physical parameters are in SI.
 
         Parameters
         ----------
-        include_condensates : bool
+        include_condensation : bool
             Whether to use equilibrium abundances that take condensation into
             account.
         min_P_profile : float
@@ -66,7 +66,7 @@ class TransitDepthCalculator:
         self.wavelength_rebinned = False
         self.wavelength_bins = None
 
-        self.abundance_getter = AbundanceGetter(include_condensates)
+        self.abundance_getter = AbundanceGetter(include_condensation)
 
         self.min_P_profile = min_P_profile
         self.max_P_profile = max_P_profile
@@ -85,7 +85,6 @@ class TransitDepthCalculator:
         if min_P_profile >= max_P_profile:
             raise ValueError("min_P_profile must be less than max_P_profile")
                             
-
 
     def change_wavelength_bins(self, bins):
         """Specify wavelength bins, instead of using the full wavelength grid
@@ -148,7 +147,7 @@ class TransitDepthCalculator:
             if species_name in self.polarizability_data:
                 sum_polarizability_sqr += abundances[species_name][P_cond,:][:,T_cond] * self.polarizability_data[species_name]**2
 
-        n = self.P_meshgrid[:,P_cond,:][:,:,T_cond]/(K_B*self.T_meshgrid[:,P_cond,:][:,:,T_cond])
+        n = self.P_meshgrid[:,P_cond,:][:,:,T_cond]/(k_B*self.T_meshgrid[:,P_cond,:][:,:,T_cond])
         reshaped_lambda = self.lambda_grid.reshape((self.N_lambda, 1, 1))
 
         return multiple * (128.0/3 * np.pi**5) * n * sum_polarizability_sqr * ref_wavelength**(slope-4) / reshaped_lambda**slope
@@ -156,7 +155,7 @@ class TransitDepthCalculator:
 
     def _get_collisional_absorption(self, abundances, P_cond, T_cond):
         absorption_coeff = np.zeros((self.N_lambda, np.sum(P_cond), np.sum(T_cond)))
-        n = self.P_meshgrid[:,P_cond,:][:,:,T_cond]/(K_B * self.T_meshgrid[:,P_cond,:][:,:,T_cond])
+        n = self.P_meshgrid[:,P_cond,:][:,:,T_cond]/(k_B * self.T_meshgrid[:,P_cond,:][:,:,T_cond])
 
         for s1, s2 in self.collisional_absorption_data:
             if s1 in abundances and s2 in abundances:
@@ -168,7 +167,9 @@ class TransitDepthCalculator:
         return absorption_coeff
 
 
-    def _get_above_cloud_r_and_dr(self, P_profile, T_profile, abundances, planet_mass, planet_radius, star_radius, above_cloud_cond, T_star=None):
+    def _get_above_cloud_r_and_dr(self, P_profile, T_profile, abundances,
+                                  planet_mass, planet_radius, star_radius,
+                                  above_cloud_cond, T_star=None):
         assert(len(P_profile) == len(T_profile))
         # First, get atmospheric weight profile
         g = G * planet_mass/planet_radius**2        
@@ -185,9 +186,9 @@ class TransitDepthCalculator:
         # Ensure that the atmosphere is bound by making rough estimates of the
         # Hill radius and atmospheric height
         if T_star is None:
-            T_star = TEFF_SUN
-        R_hill = 0.5*star_radius*(T_star/T_profile[0])**2 * (planet_mass/(3*M_SUN))**(1.0/3)
-        scale_height = K_B*np.mean(T_profile)*planet_radius**2/(np.mean(mu) * AMU * G * planet_mass)
+            T_star = Teff_sun
+        R_hill = 0.5*star_radius*(T_star/T_profile[0])**2 * (planet_mass/(3*M_sun))**(1.0/3)
+        scale_height = k_B*np.mean(T_profile)*planet_radius**2/(np.mean(mu) * AMU * G * planet_mass)
         atm_height_estimate = np.log(P_profile[-1]/P_profile[0]) * scale_height
         if atm_height_estimate > R_hill:
             raise ValueError("Atmosphere unbound: height > hill radius")
@@ -197,14 +198,14 @@ class TransitDepthCalculator:
             r = y + planet_radius
             T_local = T_interpolator(P)
             local_mu = mu_interpolator(P)
-            rho = local_mu*P*AMU / (K_B * T_local)
+            rho = local_mu*P*AMU / (k_B * T_local)
             dydP = -r**2/(G * planet_mass * rho)
             return dydP
         
         y0 = planet_radius
         radii_ode = planet_radius + integrate.odeint(hydrostatic, 0, P_profile[::-1])[:,0]
         dr = np.diff(radii_ode)
-        dr = np.flipud(np.append(dr,K_B*T_profile[0]/(mu[0] * AMU * g)))
+        dr = np.flipud(np.append(dr,k_B*T_profile[0]/(mu[0] * AMU * g)))
         radius_with_atm = planet_radius + np.sum(dr)
 
         radii = radius_with_atm - np.cumsum(dr)
@@ -246,7 +247,7 @@ class TransitDepthCalculator:
                 axis=0)
             stellar_spectrum = interpolator(T_star)
         else:
-            stellar_spectrum = 1.0/self.lambda_grid**5/(np.exp(h*c/self.lambda_grid/K_B/T_star)-1)
+            stellar_spectrum = 1.0/self.lambda_grid**5/(np.exp(h*c/self.lambda_grid/k_B/T_star)-1)
         
         binned_wavelengths = []
         binned_depths = []
@@ -341,6 +342,23 @@ class TransitDepthCalculator:
             custom_abundances['Na'][3,4] would mean the fractional number
             abundance of Na at a pressure of self.P_grid[3] and temperature of
             self.T_grid[4].
+        custom_T_profile : array-like, optional
+            If specified and custom_P_profile is also specified, divides the
+            atmosphere into user-specified P/T points, instead of assuming an
+            isothermal atmosphere with T = `temperature`.
+        custom_P_profile : array-like, optional
+            Must be specified along with `custom_T_profile` to use a custom
+            P/T profile.  Pressures must be in Pa.
+        T_star : float, optional
+            Effective temperature of the star.  If you specify this and
+            use wavelength binning, the wavelength binning becomes
+            more accurate.
+
+        Raises
+        ------
+        ValueError
+            Raised when invalid parameters are passed to the method
+
         Returns
         -------
         wavelengths : array of float
@@ -355,7 +373,8 @@ class TransitDepthCalculator:
                 raise ValueError("Must specify both custom_T_profile and "\
                                  "custom_P_profile, and the two must have the"\
                                  " same length")
-            
+            if temperature is not None:
+                raise ValueError("Cannot specify both temperature and custom T profile")
             P_profile = custom_P_profile
             T_profile = custom_T_profile
         else:    

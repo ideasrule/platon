@@ -45,22 +45,33 @@ To retrieve atmospheric parameters, look at retrieve_example.py, then go to
   from platon.fit_info import FitInfo
   from platon.retriever import Retriever
 
-  # Set your best guess
-  fit_info = retriever.get_default_fit_info(Rs, Mp, Rp, T, logZ=0)
+  # Set your best guess.  T_star is used only to improve binning of transit
+  # depths.
+  fit_info = retriever.get_default_fit_info(Rs, Mp, Rp, T, logZ=0, T_star=6100)
 
-  # Decide what you want to fit for, then set the lower and upper limits for
-  # those quantities
+  # Decide what you want to fit for, and add those parameters to fit_info
 
-  fit_info.add_fit_param('R', 0.9*planet_radius, 1.1*planet_radius)
-  fit_info.add_fit_param('T', 0.5*planet_temperature, 1.5*planet_temperature)
-  fit_info.add_fit_param("logZ", -1, 2)
+  # Fit for the stellar radius and planetary mass using Gaussian priors.  This
+  # is a way to account for the uncertainties in the published values
+  fit_info.add_gaussian_fit_param('Rs', 0.02*R_sun)
+  fit_info.add_gaussian_fit_param('Mp', 0.04*M_jup)
 
-  #Fit using Nested Sampling
-  result = retriever.run_multinest(bins, depths, errors, fit_info)
+  # Fit for other parameters using uniform priors
+  fit_info.add_uniform_fit_param('R', 0.9*R_guess, 1.1*R_guess)
+  fit_info.add_uniform_fit_param('T', 0.5*T_guess, 1.5*T_guess)
+  fit_info.add_uniform_fit_param("log_scatt_factor", 0, 1)
+  fit_info.add_uniform_fit_param("logZ", -1, 3)
+  fit_info.add_uniform_fit_param("log_cloudtop_P", -0.99, 5)
+  fit_info.add_uniform_fit_param("error_multiple", 0.5, 5)
+  
+  # Run nested sampling
+  result = retriever.run_multinest(bins, depths, errors, fit_info, plot_best=True)
 
 Here, `bins` is a N x 2 array representing the start and end wavelengths of the
 bins, in metres; `depths` is a list of N transit depths; and `errors` is a list
-of N errors on those transit depths.
+of N errors on those transit depths.  `plot_best=True` indicates that the best
+fit solution should be plotted, along with the measured transit depths and
+their errors.
 
 The example above retrieves the planetary radius (at a base pressures
 of 100,000 Pa), the temperature of the isothermal atmosphere, and the

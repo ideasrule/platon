@@ -9,7 +9,7 @@ from platon.fit_info import FitInfo
 from platon.constants import R_sun, R_jup, M_jup
 
 class TestRetriever(unittest.TestCase):
-    def setUp(self):
+    def initialize(self, use_guesses=False):
         min_wavelength, max_wavelength, self.depths, self.errors = np.loadtxt(
             "tests/testing_data/hd209458b_transit_depths", unpack=True)
         wavelength_bins = np.array([min_wavelength, max_wavelength]).T
@@ -24,35 +24,49 @@ class TestRetriever(unittest.TestCase):
             log_scatt_factor = 0,
             scatt_slope = 4, error_multiple = 1)
 
+        
         self.fit_info.add_gaussian_fit_param('Rs', 0.02*R_sun)
         self.fit_info.add_gaussian_fit_param('Mp', 0.04*M_jup)
-        
-        self.fit_info.add_uniform_fit_param('R', 9e7, 12e7, 0, np.inf)
-        self.fit_info.add_uniform_fit_param('T', 800, 1800, 0, np.inf)
-        self.fit_info.add_uniform_fit_param('logZ', -1, 3, -1, 3)
-        self.fit_info.add_uniform_fit_param('CO_ratio', 0.2, 1.5, 0.2, 2.0)
-        self.fit_info.add_uniform_fit_param('log_cloudtop_P', -0.99, 4, -np.inf, np.inf)
-        self.fit_info.add_uniform_fit_param('log_scatt_factor', 0, 1, 0, 3)
-        self.fit_info.add_uniform_fit_param('scatt_slope', 1, 5, 0, 10)
-        self.fit_info.add_uniform_fit_param('error_multiple', 0.1, 10, 0, np.inf)
+
+        if use_guesses:
+            self.fit_info.add_uniform_fit_param('R', 0, np.inf, 9e7, 12e7)
+            self.fit_info.add_uniform_fit_param('T', 300, 3000, 800, 1800)
+            self.fit_info.add_uniform_fit_param('logZ', -1, 3, -1, 3)
+            self.fit_info.add_uniform_fit_param('CO_ratio', 0.2, 2.0, 0.2, 1.5)
+            self.fit_info.add_uniform_fit_param('log_cloudtop_P', -0.9, 4, 0, 3)
+            self.fit_info.add_uniform_fit_param('log_scatt_factor', 0, 3, 0, 1)
+            self.fit_info.add_uniform_fit_param('scatt_slope', 0, 10, 1, 5)
+            self.fit_info.add_uniform_fit_param('error_multiple', 0, np.inf, 0.1, 10)
+        else:
+            self.fit_info.add_uniform_fit_param('R', 9e7, 12e7)
+            self.fit_info.add_uniform_fit_param('T', 800, 1800)
+            self.fit_info.add_uniform_fit_param('logZ', -1, 3)
+            self.fit_info.add_uniform_fit_param('CO_ratio', 0.2, 1.5)
+            self.fit_info.add_uniform_fit_param('log_cloudtop_P', -0.99, 4)
+            self.fit_info.add_uniform_fit_param('log_scatt_factor', 0, 1)
+            self.fit_info.add_uniform_fit_param('scatt_slope', 1, 5)
+            self.fit_info.add_uniform_fit_param('error_multiple', 0.1, 10)
 
 
     def test_emcee(self):
+        self.initialize(True)
         retriever = Retriever()
-        retriever.run_emcee(self.wavelength_bins, self.depths, self.errors, self.fit_info, nsteps=30, nwalkers=20, include_condensates=False)
+        retriever.run_emcee(self.wavelength_bins, self.depths, self.errors, self.fit_info, nsteps=30, nwalkers=20, include_condensation=False)
 
         retriever = Retriever()
-        retriever.run_emcee(self.wavelength_bins, self.depths, self.errors, self.fit_info, nsteps=30, nwalkers=20, include_condensates=True, plot_best=True)
+        retriever.run_emcee(self.wavelength_bins, self.depths, self.errors, self.fit_info, nsteps=30, nwalkers=20, include_condensation=True, plot_best=True)
 
 
     def test_multinest(self):
+        self.initialize(False)
         retriever = Retriever()
-        retriever.run_multinest(self.wavelength_bins, self.depths, self.errors, self.fit_info, maxiter=100, include_condensates=False, plot_best=True)
+        retriever.run_multinest(self.wavelength_bins, self.depths, self.errors, self.fit_info, maxiter=100, include_condensation=False, plot_best=True)
 
         retriever = Retriever()
-        retriever.run_multinest(self.wavelength_bins, self.depths, self.errors, self.fit_info, maxiter=100, include_condensates=True)
+        retriever.run_multinest(self.wavelength_bins, self.depths, self.errors, self.fit_info, maxiter=100, include_condensation=True)
 
     def test_bounds_check(self):
+        self.initialize(False)
         retriever = Retriever()
 
         def run_both(name, low_lim, best_guess, high_lim):

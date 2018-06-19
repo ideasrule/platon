@@ -9,12 +9,12 @@ from ._interpolator_3D import fast_interpolate
 from ._compatible_loader import load_dict_from_pickle
 
 class AbundanceGetter:
-    def __init__(self, include_condensates=True):
+    def __init__(self, include_condensation=True):
         self.min_temperature = 300
         self.logZs = np.linspace(-1, 3, 81)
         self.CO_ratios = np.arange(0.2, 2.2, 0.2)
         
-        if include_condensates:
+        if include_condensation:
             sub_dir = "cond"
         else:
             sub_dir = "gas_only"
@@ -28,6 +28,18 @@ class AbundanceGetter:
 
         
     def get(self, logZ, CO_ratio=0.53):
+        '''Get an abundance grid at the specified logZ and C/O ratio.  This
+        abundance grid can be passed to TransitDepthCalculator, with or without
+        modifications.  The end user should not need to call this except in
+        rare cases.
+
+        Returns
+        -------
+        abundances : dict of np.ndarray
+            A dictionary mapping species name to a 2D abundance array, specifying
+            the number fraction of the species at a certain temperature and
+            pressure.'''
+        
         N_P, N_T, N_species, N_CO, N_Z = self.log_abundances.shape
         
         reshaped_log_abund = self.log_abundances.reshape((-1, N_CO, N_Z))
@@ -44,6 +56,8 @@ class AbundanceGetter:
 
     
     def is_in_bounds(self, logZ, CO_ratio, T):
+        '''Check to see if a certain metallicity, C/O ratio, and temperature
+        combination is within the supported bounds'''
         if T <= self.min_temperature: return False
         if logZ <= np.min(self.logZs) or logZ >= np.max(self.logZs): return False
         if CO_ratio <= np.min(self.CO_ratios) or CO_ratio >= np.max(self.CO_ratios): return False

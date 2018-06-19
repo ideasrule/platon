@@ -20,7 +20,7 @@ class TestParams(unittest.TestCase):
         mu = 10.0
         std = 2.0
         
-        p = _GaussianParam(mu, std)
+        p = _GaussianParam(mu, std, None, None)
         self.assertTrue(p.within_limits(-100))
         self.assertTrue(p.within_limits(100))
 

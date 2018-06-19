@@ -15,7 +15,7 @@ T = 1200              #Temperature of isothermal part of the atmosphere
 #create a TransitDepthCalculator object and compute wavelength dependent transit depths
 depth_calculator = TransitDepthCalculator()
 wavelengths, transit_depths = depth_calculator.compute_depths(
-    Rs, Mp, Rp, 300, T_star=6091, CO_ratio=0.2, cloudtop_pressure=1.0001e-1)
+    Rs, Mp, Rp, 300, T_star=6091, CO_ratio=0.2, cloudtop_pressure=1e4)
 
 print("#Wavelength(m)       Depth")
 for i in range(len(wavelengths)):

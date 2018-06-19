@@ -1,10 +1,14 @@
 import unittest
+import os
+import shutil
 
 import numpy as np
 import matplotlib.pyplot as plt
 
+import platon
 from platon.abundance_getter import AbundanceGetter
 from platon.transit_depth_calculator import TransitDepthCalculator
+from platon import  __path__
 
 class TestTransitDepthCalculator(unittest.TestCase):
     def get_frac_dev(self, logZ, CO_ratio, custom_abundances):
@@ -122,8 +126,6 @@ class TestTransitDepthCalculator(unittest.TestCase):
         with self.assertRaises(ValueError):
             calculator.compute_depths(Rs, Mp, Rp, T, logZ=logZ, CO_ratio=CO_ratio, cloudtop_pressure=1.1e6)
 
-            
-        
             
         
 if __name__ == '__main__':

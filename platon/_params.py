@@ -18,7 +18,7 @@ class _Param:
         raise NotImplementedError
     
     def get_random_value(self):
-        return self.from_unit_interval(np.random.uniform())
+        return np.random.uniform(self.low_guess, self.high_guess)
 
     
 class _UniformParam(_Param):
@@ -42,9 +42,8 @@ class _UniformParam(_Param):
 
 
 class _GaussianParam(_Param):
-    def __init__(self, best_guess, std):
-        _Param.__init__(self, best_guess,
-                       best_guess - 2*std, best_guess + 2*std)        
+    def __init__(self, best_guess, std, low_guess, high_guess):
+        _Param.__init__(self, best_guess, low_guess, high_guess)        
 
         self.std = std
 

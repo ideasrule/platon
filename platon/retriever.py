@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import scipy.interpolate
 import emcee
 import nestle
+import copy
 
 from .transit_depth_calculator import TransitDepthCalculator
 from .fit_info import FitInfo
@@ -19,6 +20,8 @@ class Retriever:
         # the bounds for each parameter can be treated separately. Unfortunately
         # there is no good way to validate Gaussian parameters, which have
         # infinite range.
+        fit_info = copy.deepcopy(fit_info)
+        
         for name in fit_info.fit_param_names:
             this_param = fit_info.all_params[name]
             if not isinstance(this_param, _UniformParam):
@@ -36,19 +39,19 @@ class Retriever:
             for lim in [this_param.low_lim, this_param.high_lim]:
                 this_param.best_guess = lim
                 calculator._validate_params(
-                    fit_info.get("T"),
-                    fit_info.get("logZ"),
-                    fit_info.get("CO_ratio"),
-                    10**fit_info.get("log_cloudtop_P"))
+                    fit_info._get("T"),
+                    fit_info._get("logZ"),
+                    fit_info._get("CO_ratio"),
+                    10**fit_info._get("log_cloudtop_P"))
 
     
     def _ln_prob(self, params, calculator, fit_info, measured_depths,
                 measured_errors, plot=False):
         
-        if not fit_info.within_limits(params):
+        if not fit_info._within_limits(params):
             return -np.inf
         
-        params_dict = fit_info.interpret_param_array(params)
+        params_dict = fit_info._interpret_param_array(params)
         R = params_dict["R"]
         T = params_dict["T"]
         logZ = params_dict["logZ"]
@@ -79,10 +82,10 @@ class Retriever:
             plt.xlabel("Wavelength (um)")
             plt.ylabel("Transit depth")
 
-        return fit_info.ln_prior(params) + ln_prob
+        return fit_info._ln_prior(params) + ln_prob
 
     def run_emcee(self, wavelength_bins, depths, errors, fit_info, nwalkers=50,
-                  nsteps=10000, include_condensates=True,
+                  nsteps=10000, include_condensation=True,
                   plot_best=False, max_P_profile=1e5):
         '''Runs affine-invariant MCMC to retrieve atmospheric parameters.
 
@@ -104,12 +107,16 @@ class Retriever:
             Number of walkers to use
         nsteps : int, optional
             Number of steps that the walkers should walk for
-        include_condensates : bool, optional
+        include_condensation : bool, optional
             When determining atmospheric abundances, whether to include
             condensation.
         plot_best : bool, optional
             If True, plots the best fit model with the data
-            
+        max_P_profile : float, optional
+            Maximum pressure at which to calculate radiative transfer. 
+            If you change this, the planetary radius will be interpreted
+            as the radius at this max_P_profile
+
         Returns
         -------
         result : EnsembleSampler object
@@ -123,14 +130,14 @@ class Retriever:
             result.flatlnprobability, an array of length WS      
         '''
         
-        initial_positions = fit_info.generate_rand_param_arrays(nwalkers)
+        initial_positions = fit_info._generate_rand_param_arrays(nwalkers)
         calculator = TransitDepthCalculator(max_P_profile=max_P_profile,
-            include_condensates=include_condensates)
+            include_condensation=include_condensation)
         calculator.change_wavelength_bins(wavelength_bins)
         self._validate_params(fit_info, calculator)
         
         sampler = emcee.EnsembleSampler(
-            nwalkers, fit_info.get_num_fit_params(), self._ln_prob,
+            nwalkers, fit_info._get_num_fit_params(), self._ln_prob,
             args=(calculator, fit_info, depths, errors))
 
         for i, result in enumerate(sampler.sample(initial_positions, iterations=nsteps)):
@@ -138,14 +145,14 @@ class Retriever:
                 print(str(i+1) + "/" + str(nsteps), sampler.lnprobability[0,i], sampler.chain[0,i])
                 
         best_params_arr = sampler.flatchain[np.argmax(sampler.flatlnprobability)]
-        best_params_dict = fit_info.interpret_param_array(best_params_arr)
+        best_params_dict = fit_info._interpret_param_array(best_params_arr)
         print("Best params", best_params_dict)
 
         if plot_best:
             self._ln_prob(best_params_arr, calculator, fit_info, depths, errors, plot=True)
         return sampler
 
-    def run_multinest(self, wavelength_bins, depths, errors, fit_info, maxiter=None, include_condensates=True, plot_best=False, max_P_profile=1e5):
+    def run_multinest(self, wavelength_bins, depths, errors, fit_info, maxiter=None, include_condensation=True, plot_best=False, max_P_profile=1e5):
         '''Runs nested sampling to retrieve atmospheric parameters.
 
         Parameters
@@ -164,11 +171,15 @@ class Retriever:
             sets default values for the fixed parameters.
         maxiter : bool, optional
             If not None, run at most this many iterations of nestled sampling
-        include_condensates : bool, optional
+        include_condensation : bool, optional
             When determining atmospheric abundances, whether to include
             condensation.
         plot_best : bool, optional
             If True, plots the best fit model with the data
+        max_P_profile : float, optional
+            Maximum pressure at which to calculate radiative transfer. 
+            If you change this, the planetary radius will be interpreted
+            as the radius at this max_P_profile.
 
         Returns
         -------
@@ -182,14 +193,14 @@ class Retriever:
         '''
                     
         calculator = TransitDepthCalculator(max_P_profile=max_P_profile,
-            include_condensates=include_condensates)
+            include_condensation=include_condensation)
         calculator.change_wavelength_bins(wavelength_bins)
         self._validate_params(fit_info, calculator)
         
         def transform_prior(cube):
             new_cube = np.zeros(len(cube))
             for i in range(len(cube)):
-                new_cube[i] = fit_info.from_unit_interval(i, cube[i])
+                new_cube[i] = fit_info._from_unit_interval(i, cube[i])
             return new_cube
 
         def multinest_ln_prob(cube):
@@ -200,11 +211,11 @@ class Retriever:
                   transform_prior(callback_info["active_u"][0]))
 
         result = nestle.sample(
-            multinest_ln_prob, transform_prior, fit_info.get_num_fit_params(),
+            multinest_ln_prob, transform_prior, fit_info._get_num_fit_params(),
             callback=callback, method='multi', maxiter=maxiter)
 
         best_params_arr = result.samples[np.argmax(result.logl)]
-        best_params_dict = fit_info.interpret_param_array(best_params_arr)
+        best_params_dict = fit_info._interpret_param_array(best_params_arr)
         print("Best params", best_params_dict)
         
         if plot_best:
@@ -214,10 +225,51 @@ class Retriever:
 
     @staticmethod
     def get_default_fit_info(Rs, Mp, Rp, T, logZ=0, CO_ratio=0.53,
-                             log_cloudtop_P=3, log_scatt_factor=0,
-                             scatt_slope=4, error_multiple=1,
-                             T_star=None):
+                             log_cloudtop_P=np.inf, log_scatt_factor=0,
+                             scatt_slope=4, error_multiple=1, T_star=None):
+        '''Get a :class:`.FitInfo` object filled with best guess values.  A few 
+        parameters are required, but others can be set to default values if you 
+        do not want to specify them.  All parameters are in SI.
 
+        Parameters
+        ----------
+        Rs : float
+            Stellar radius
+        Mp : float
+            Planetary mass
+        Rp : float
+            Planetary radius
+        T : float
+            Temperature of the isothermal planetary atmosphere
+        logZ : float
+            Base-10 logarithm of the metallicity, in solar units
+        CO_ratio : float, optional
+            C/O atomic ratio in the atmosphere.  The solar value is 0.53.
+        log_cloudtop_P : float, optional
+            Base-10 log of the pressure level (in Pa) below which light cannot 
+            penetrate.  Use np.inf for a cloudless atmosphere.
+        log_scatt_factor : float, optional
+            Base-10 logarithm of scattering factoring, which make scattering 
+            that many times as strong. If `scatt_slope` is 4, corresponding to
+            Rayleigh scattering, the absorption coefficients are simply
+            multiplied by `scattering_factor`. If slope is not 4,
+            `scattering_factor` is defined such that the absorption coefficient
+            is that many times as strong as Rayleigh scattering at
+            the reference wavelength of 1 um.
+        scatt_slope : float, optional
+            Wavelength dependence of scattering, with 4 being Rayleigh.
+        error_multiple : float, optional
+            All error bars are multiplied by this factor.
+        T_star : float, optional
+            Effective temperature of the star.  This is used to make wavelength
+            binning of transit depths more accurate.
+
+        Returns
+        -------
+        fit_info : :class:`.FitInfo` object
+            This object is used to indicate which parameters to fit for, which
+            to fix, and what values all parameters should take.'''
+        
         fit_info = FitInfo({'Mp': Mp, 'R': Rp, 'T': T, 'logZ': logZ,
                             'CO_ratio': CO_ratio,
                             'log_scatt_factor': log_scatt_factor,

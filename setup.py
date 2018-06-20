@@ -4,9 +4,6 @@ from platon import __version__, name
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
-with open("requirements.txt") as f:
-    requirements = f.read().splitlines()
-    
 setuptools.setup(
     name = name,
     version = __version__,
@@ -25,5 +22,7 @@ setuptools.setup(
     ),
     include_package_data = True,
     zip_safe = False,
-    install_requires = requirements
+    install_requires = [
+        "numpy >= 1.12", "scipy", "matplotlib", "emcee", "nestle",
+        "future", "nose", "setuptools"]
 )

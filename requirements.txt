@@ -1,9 +1,0 @@
-numpy >= 1.12
-scipy
-matplotlib
-emcee
-nestle
-future
-nose
-setuptools
-

@@ -4,13 +4,13 @@ import sys
 import matplotlib.pyplot as plt
 import os
 import pickle
+import astropy.units as u
+from astropy.constants import h, c
 
-binned_wavelengths = np.load("../platon/data/wavelengths.npy") * 1e10
-log_wavelengths = np.log10(binned_wavelengths)
+binned_wavelengths = np.load("../platon/data/wavelengths.npy") * u.meter
 
 output_spectra = {}
 
-#wavelengths, spectrum = np.loadtxt(sys.argv[1], unpack=True)
 for temperature in np.arange(2000, 12000, 100):
     filename = "bt-nextgen-agss2009/lte{0:03d}-4.5-0.0a+0.0.BT-NextGen.7.dat.txt".format(temperature/100)
     alt_filename = "bt-nextgen-agss2009/lte0{0}-4.5-0.0.BT-NextGen.7.dat.txt".format(temperature/100)
@@ -21,19 +21,30 @@ for temperature in np.arange(2000, 12000, 100):
         wavelengths, spectrum = np.loadtxt(alt_filename, unpack=True)
     else:
         continue
+    wavelengths *= u.Angstrom
+    spectrum *= (u.erg/u.cm**2/u.s/u.Angstrom)
     
     binned_spectrum = []
 
-    avg_log_interval = np.median(log_wavelengths[1:] - log_wavelengths[0:-1])
-    for i, log_w in enumerate(log_wavelengths):
-        start = 10**(log_w - avg_log_interval/2.0)
-        end = 10**(log_w + avg_log_interval/2.0)
+    avg_log_interval = np.median(np.diff(np.log10(binned_wavelengths.value)))
+    conversion_factor = None
+    
+    for i, wavelength in enumerate(binned_wavelengths):
+        start = wavelength * 10**(-avg_log_interval/2.0)
+        end = wavelength * 10**(avg_log_interval/2.0)
 
         cond = np.logical_and(wavelengths >= start, wavelengths < end)
-        binned_spectrum.append(np.mean(spectrum[cond]))
-        
-    output_spectra[temperature] = np.array(binned_spectrum)
-    print temperature
+        photon_energy = h*c/wavelength
+        photon_flux = np.mean(spectrum[cond])/photon_energy * (end - start)
+
+        if conversion_factor is None:
+            conversion_factor = photon_flux.si.value / photon_flux.value
+
+        binned_spectrum.append(photon_flux.value)
+
+    binned_spectrum = np.array(binned_spectrum) * conversion_factor
+    output_spectra[temperature] = np.array(binned_spectrum) * conversion_factor
+    print temperature, np.min(binned_spectrum), np.max(binned_spectrum)
 
 pickle.dump(output_spectra, open("stellar_spectra.pkl", "wb"), protocol=pickle.HIGHEST_PROTOCOL)
 

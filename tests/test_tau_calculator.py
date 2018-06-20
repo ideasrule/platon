@@ -26,8 +26,8 @@ class TestTauLOS(unittest.TestCase):
                 r = radii[j+1]
                 dist_higher = 2*np.sqrt(r_prime_higher**2 - r**2)
                 dist_lower = 2*np.sqrt(r_prime**2 - r**2)
-                if r > r_prime: self.assertEquals(dl[i][j], 0)
-                else: self.assertEquals(dl[i][j], dist_higher - dist_lower)
+                if r > r_prime: self.assertEqual(dl[i][j], 0)
+                else: self.assertEqual(dl[i][j], dist_higher - dist_lower)
 
 
     def test_analytic_simple(self):

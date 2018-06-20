@@ -10,11 +10,11 @@ class TestParams(unittest.TestCase):
         self.assertTrue(p.within_limits(9))
         self.assertFalse(p.within_limits(15))
 
-        self.assertEquals(p.ln_prior(1.1), 0)
-        self.assertEquals(p.ln_prior(100), -np.inf)
+        self.assertEqual(p.ln_prior(1.1), 0)
+        self.assertEqual(p.ln_prior(100), -np.inf)
 
-        self.assertEquals(p.from_unit_interval(0.5), 5.5)
-        self.assertEquals(p.from_unit_interval(0.2), 2.8)
+        self.assertEqual(p.from_unit_interval(0.5), 5.5)
+        self.assertEqual(p.from_unit_interval(0.2), 2.8)
 
     def test_gaussian_param(self):
         mu = 10.0
@@ -26,13 +26,13 @@ class TestParams(unittest.TestCase):
 
         x = mu
         prob_density = np.exp(-(x-mu)**2/2/std**2)/np.sqrt(2*np.pi*std**2)
-        self.assertEquals(np.log(prob_density), p.ln_prior(x))
+        self.assertEqual(np.log(prob_density), p.ln_prior(x))
 
         x = 5
         prob_density = np.exp(-(x-mu)**2/2/std**2)/np.sqrt(2*np.pi*std**2)
-        self.assertEquals(np.log(prob_density), p.ln_prior(x))
+        self.assertEqual(np.log(prob_density), p.ln_prior(x))
 
-        self.assertEquals(p.from_unit_interval(0.5), 10)
+        self.assertEqual(p.from_unit_interval(0.5), 10)
 
         diff = np.abs(p.from_unit_interval(0.01) - (mu - 2.32635*std))
         self.assertTrue(diff < 1e-3)

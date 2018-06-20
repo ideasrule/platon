@@ -38,6 +38,8 @@ install:
   - pip install codecov
   - python setup.py install 
 script:
+  - python examples/transit_depth_example.py
+  - python examples/transit_depth_binned_example.py
   - nosetests -v --with-coverage
 
 after_success:

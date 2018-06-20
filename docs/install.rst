@@ -35,12 +35,11 @@ Another option is to install from source::
 
   git clone https://github.com/ideasrule/platon.git
   cd platon/
-  pip install -r requirements.txt
   python setup.py install
 
 In this case, you can run unit tests to make sure everything works::
   
-  python setup.py test
+  nosetests -v 
 
 The unit tests should also give you a good idea of how fast the code will be.
 On a decent Ubuntu machine with OpenBLAS, it takes 2 minutes.

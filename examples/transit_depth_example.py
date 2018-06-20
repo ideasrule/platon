@@ -21,5 +21,7 @@ print("#Wavelength(m)       Depth")
 for i in range(len(wavelengths)):
     print(wavelengths[i], transit_depths[i])
 
-plt.plot(wavelengths, transit_depths)
-plt.show()
+# Uncomment the code below to plot
+
+#plt.plot(wavelengths, transit_depths)
+#plt.show()

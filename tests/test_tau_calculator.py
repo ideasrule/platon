@@ -34,7 +34,7 @@ class TestTauLOS(unittest.TestCase):
         absorption_coeff = np.ones((12,100))
         Rp = 1000
         radii = Rp + np.linspace(0, 100, 101)
-        radii = np.flip(radii, 0)
+        radii = radii[::-1]
         tau = _tau_calculator.get_line_of_sight_tau(absorption_coeff, radii)
         expected_tau = 2*np.sqrt(radii[0]**2 - radii[1:]**2)
         for t in tau:
@@ -45,7 +45,7 @@ class TestTauLOS(unittest.TestCase):
         Rp = 2000
         scale_height = 100
         radii = Rp + np.linspace(0, 1000, 1001)
-        radii = np.flip(radii, 0)
+        radii = radii[::-1]
         analytic_tau = []
         for i, r in enumerate(radii[1:]):
             absorption_coeff[:,i] *= np.exp(-(r-Rp)/scale_height)

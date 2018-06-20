@@ -54,8 +54,7 @@ def read_ggchem_file(filename, species_info_file):
     for i, h in enumerate(header):
         if h not in species_to_include: continue
         abund_dict[h] = data[:,i].reshape((N_P, N_T))
-        abund_dict[h] = np.flip(abund_dict[h], 0)
-        abund_dict[h] = np.flip(abund_dict[h], 1)
+        abund_dict[h] = abund_dict[h][::-1, ::-1]
 
         if N_T == 55: #T in 50K increments, with 300K min
             include_T = np.arange(N_T) % 2 == 0

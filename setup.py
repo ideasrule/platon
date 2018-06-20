@@ -23,6 +23,6 @@ setuptools.setup(
     include_package_data = True,
     zip_safe = False,
     install_requires = [
-        "numpy >= 1.12", "scipy", "matplotlib", "emcee", "nestle",
+        "numpy", "scipy", "matplotlib", "emcee", "nestle",
         "future", "nose", "setuptools"]
 )

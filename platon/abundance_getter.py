@@ -101,7 +101,6 @@ class AbundanceGetter:
         for i in range(len(species)):
             c = compositions[:, i].reshape((N_pressures, N_temperatures))
             #This file has decreasing temperatures and pressures; we want increasing temperatures and pressures
-            c = np.flip(c, 0)
-            c = np.flip(c, 1)
+            c = c[::-1, ::-1]
             abundance_data[species[i]] = c
         return abundance_data

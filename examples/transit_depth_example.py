@@ -17,9 +17,12 @@ depth_calculator = TransitDepthCalculator()
 wavelengths, transit_depths = depth_calculator.compute_depths(
     Rs, Mp, Rp, 300, T_star=6091, CO_ratio=0.2, cloudtop_pressure=1e4)
 
-print("#Wavelength(m)       Depth")
-for i in range(len(wavelengths)):
-    print(wavelengths[i], transit_depths[i])
+
+# Uncomment the code below to print
+
+#print("#Wavelength(m)       Depth")
+#for i in range(len(wavelengths)):
+#    print(wavelengths[i], transit_depths[i])
 
 # Uncomment the code below to plot
 

@@ -84,6 +84,7 @@ class Retriever:
 
         return fit_info._ln_prior(params) + ln_prob
 
+    
     def run_emcee(self, wavelength_bins, depths, errors, fit_info, nwalkers=50,
                   nsteps=10000, include_condensation=True,
                   plot_best=False, max_P_profile=1e5):
@@ -152,7 +153,10 @@ class Retriever:
             self._ln_prob(best_params_arr, calculator, fit_info, depths, errors, plot=True)
         return sampler
 
-    def run_multinest(self, wavelength_bins, depths, errors, fit_info, maxiter=None, include_condensation=True, plot_best=False, max_P_profile=1e5):
+    
+    def run_multinest(self, wavelength_bins, depths, errors, fit_info,
+                      include_condensation=True, plot_best=False,
+                      max_P_profile=1e5, **nestle_kwargs):
         '''Runs nested sampling to retrieve atmospheric parameters.
 
         Parameters
@@ -169,8 +173,6 @@ class Retriever:
             Tells us what parameters to
             freely vary, and in what range those parameters can vary. Also
             sets default values for the fixed parameters.
-        maxiter : bool, optional
-            If not None, run at most this many iterations of nestled sampling
         include_condensation : bool, optional
             When determining atmospheric abundances, whether to include
             condensation.
@@ -180,6 +182,7 @@ class Retriever:
             Maximum pressure at which to calculate radiative transfer. 
             If you change this, the planetary radius will be interpreted
             as the radius at this max_P_profile.
+        **nestle_kwargs : keyword arguments to pass to nestle's sample method
 
         Returns
         -------
@@ -190,8 +193,7 @@ class Retriever:
             parameter values of each sample, result.weights contains the
             weights, and result.logl contains the log likelihoods.  result.logz
             is the natural logarithm of the evidence.
-        '''
-                    
+        '''        
         calculator = TransitDepthCalculator(max_P_profile=max_P_profile,
             include_condensation=include_condensation)
         calculator.change_wavelength_bins(wavelength_bins)
@@ -212,7 +214,7 @@ class Retriever:
 
         result = nestle.sample(
             multinest_ln_prob, transform_prior, fit_info._get_num_fit_params(),
-            callback=callback, method='multi', maxiter=maxiter)
+            callback=callback, method='multi', **nestle_kwargs)
 
         best_params_arr = result.samples[np.argmax(result.logl)]
         best_params_dict = fit_info._interpret_param_array(best_params_arr)
@@ -277,5 +279,4 @@ class Retriever:
                             'log_cloudtop_P': log_cloudtop_P,
                             'Rs': Rs,
                             'error_multiple': error_multiple, 'T_star': T_star})
-
         return fit_info

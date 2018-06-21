@@ -24,7 +24,5 @@ wavelengths, transit_depths = depth_calculator.compute_depths(
 #for i in range(len(wavelengths)):
 #    print(wavelengths[i], transit_depths[i])
 
-# Uncomment the code below to plot
-
-#plt.plot(wavelengths, transit_depths)
-#plt.show()
+plt.plot(wavelengths, transit_depths)
+plt.show()

@@ -1,6 +1,8 @@
 import unittest
 import numpy as np
 import copy
+import emcee
+import nestle
 import matplotlib
 matplotlib.use('Agg')
 
@@ -24,7 +26,6 @@ class TestRetriever(unittest.TestCase):
             log_scatt_factor = 0,
             scatt_slope = 4, error_multiple = 1)
 
-        
         self.fit_info.add_gaussian_fit_param('Rs', 0.02*R_sun)
         self.fit_info.add_gaussian_fit_param('Mp', 0.04*M_jup)
 
@@ -50,20 +51,35 @@ class TestRetriever(unittest.TestCase):
 
     def test_emcee(self):
         self.initialize(True)
+        nwalkers = 20
+        nsteps = 20
+        
         retriever = Retriever()
-        retriever.run_emcee(self.wavelength_bins, self.depths, self.errors, self.fit_info, nsteps=30, nwalkers=20, include_condensation=False)
-
+        result = retriever.run_emcee(self.wavelength_bins, self.depths, self.errors, self.fit_info, nsteps=nsteps, nwalkers=nwalkers, include_condensation=False)
+        self.assertTrue(isinstance(result, emcee.ensemble.EnsembleSampler))
+        self.assertTrue(result.chain.shape, (nwalkers, nsteps, len(self.fit_info.fit_param_names)))
+        self.assertTrue(result.lnprobability.shape, (nwalkers, nsteps))
+        
         retriever = Retriever()
-        retriever.run_emcee(self.wavelength_bins, self.depths, self.errors, self.fit_info, nsteps=30, nwalkers=20, include_condensation=True, plot_best=True)
-
+        result = retriever.run_emcee(self.wavelength_bins, self.depths, self.errors, self.fit_info, nsteps=nsteps, nwalkers=nwalkers, include_condensation=True, plot_best=True)
+        self.assertTrue(isinstance(result, emcee.ensemble.EnsembleSampler))
+        self.assertEqual(result.chain.shape, (nwalkers, nsteps, len(self.fit_info.fit_param_names)))
+        self.assertEqual(result.lnprobability.shape, (nwalkers, nsteps))
+                
 
     def test_multinest(self):
         self.initialize(False)
         retriever = Retriever()
-        retriever.run_multinest(self.wavelength_bins, self.depths, self.errors, self.fit_info, maxiter=100, include_condensation=False, plot_best=True)
+        result = retriever.run_multinest(self.wavelength_bins, self.depths, self.errors, self.fit_info, maxcall=200, include_condensation=False, plot_best=True)
+        
+        self.assertTrue(isinstance(result, nestle.Result))
+        self.assertEqual(result.samples.shape[1], len(self.fit_info.fit_param_names))
 
         retriever = Retriever()
-        retriever.run_multinest(self.wavelength_bins, self.depths, self.errors, self.fit_info, maxiter=100, include_condensation=True)
+        retriever.run_multinest(self.wavelength_bins, self.depths, self.errors, self.fit_info, maxiter=20, include_condensation=True)
+        self.assertTrue(isinstance(result, nestle.Result))
+        self.assertEqual(result.samples.shape[1], len(self.fit_info.fit_param_names))
+
 
     def test_bounds_check(self):
         self.initialize(False)

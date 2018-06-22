@@ -13,6 +13,7 @@ from .transit_depth_calculator import TransitDepthCalculator
 from .fit_info import FitInfo
 from .constants import METRES_TO_UM
 from ._params import _UniformParam
+from .errors import AtmosphereError
 
 class Retriever:
     def _validate_params(self, fit_info, calculator):
@@ -67,10 +68,14 @@ class Retriever:
         if Rs <= 0 or Mp <= 0:
             return -np.inf
 
-        wavelengths, calculated_depths = calculator.compute_depths(
-            Rs, Mp, R, T, logZ, CO_ratio,
-            scattering_factor=scatt_factor, scattering_slope = scatt_slope,
-            cloudtop_pressure=cloudtop_P, T_star=T_star)
+        try:
+            wavelengths, calculated_depths = calculator.compute_depths(
+                Rs, Mp, R, T, logZ, CO_ratio,
+                scattering_factor=scatt_factor, scattering_slope = scatt_slope,
+                cloudtop_pressure=cloudtop_P, T_star=T_star)
+        except AtmosphereError, e:
+            print(e)
+            return -np.inf
         
         residuals = calculated_depths - measured_depths
         scaled_errors = error_multiple * measured_errors

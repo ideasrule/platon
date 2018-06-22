@@ -9,6 +9,7 @@ import platon
 from platon.abundance_getter import AbundanceGetter
 from platon.transit_depth_calculator import TransitDepthCalculator
 from platon import  __path__
+from platon.errors import AtmosphereError
 
 class TestTransitDepthCalculator(unittest.TestCase):
     def get_frac_dev(self, logZ, CO_ratio, custom_abundances):
@@ -58,7 +59,7 @@ class TestTransitDepthCalculator(unittest.TestCase):
         Rs = 6.97e8
         T = 300
         depth_calculator = TransitDepthCalculator()
-        with self.assertRaises(ValueError):
+        with self.assertRaises(AtmosphereError):
             wavelengths, transit_depths = depth_calculator.compute_depths(
                 Rs, Mp, Rp, T, logZ=0.2, CO_ratio=1.1, T_star=6100)
 

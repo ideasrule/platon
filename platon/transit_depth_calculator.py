@@ -17,6 +17,7 @@ from . import _interpolator_3D
 from ._tau_calculator import get_line_of_sight_tau
 from .constants import k_B, AMU, M_sun, Teff_sun, G, h, c
 from ._get_data import get_data
+from .errors import AtmosphereError
 
 class TransitDepthCalculator:
     def __init__(self, include_condensation=True, min_P_profile=0.1, max_P_profile=1e5, num_profile_heights=400):
@@ -191,8 +192,8 @@ class TransitDepthCalculator:
         scale_height = k_B*np.mean(T_profile)*planet_radius**2/(np.mean(mu) * AMU * G * planet_mass)
         atm_height_estimate = np.log(P_profile[-1]/P_profile[0]) * scale_height
         if atm_height_estimate > R_hill:
-            raise ValueError("Atmosphere unbound: height > hill radius")
-
+            raise AtmosphereError("Atmosphere unbound: height > hill radius")
+        
         # Solve the hydrostatic equation
         def hydrostatic(y, P):
             r = y + planet_radius
@@ -210,6 +211,9 @@ class TransitDepthCalculator:
 
         radii = radius_with_atm - np.cumsum(dr)
         radii = np.append(radius_with_atm, radii[above_cloud_cond])
+        if not np.allclose(radii, np.sort(radii)[::-1]):
+            raise AtmosphereError("Hydrostatic solver failed")
+
         return radii, dr[above_cloud_cond]
 
     def _get_abundances_array(self, logZ, CO_ratio, custom_abundances):

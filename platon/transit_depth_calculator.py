@@ -203,17 +203,18 @@ class TransitDepthCalculator:
             dydP = -r**2/(G * planet_mass * rho)
             return dydP
         
-        y0 = planet_radius
-        radii_ode = planet_radius + integrate.odeint(hydrostatic, 0, P_profile[::-1])[:,0]
-        dr = np.diff(radii_ode)
+        heights, infodict = integrate.odeint(hydrostatic, 0, P_profile[::-1],
+                                             full_output=True)
+        solver_errored = np.any(np.logical_and(infodict["mused"] != 1, infodict["mused"] != 2))
+        if solver_errored:
+            raise AtmosphereError("Hydrostatic solver failed")
+        
+        dr = np.diff(heights.flatten())
         dr = np.flipud(np.append(dr,k_B*T_profile[0]/(mu[0] * AMU * g)))
         radius_with_atm = planet_radius + np.sum(dr)
 
         radii = radius_with_atm - np.cumsum(dr)
         radii = np.append(radius_with_atm, radii[above_cloud_cond])
-        if not np.allclose(radii, np.sort(radii)[::-1]):
-            raise AtmosphereError("Hydrostatic solver failed")
-
         return radii, dr[above_cloud_cond]
 
     def _get_abundances_array(self, logZ, CO_ratio, custom_abundances):

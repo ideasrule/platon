@@ -205,11 +205,14 @@ class TransitDepthCalculator:
         
         heights, infodict = integrate.odeint(hydrostatic, 0, P_profile[::-1],
                                              full_output=True)
+        heights = heights.flatten()
         solver_errored = np.any(np.logical_and(infodict["mused"] != 1, infodict["mused"] != 2))
         if solver_errored:
             raise AtmosphereError("Hydrostatic solver failed")
+        if not np.allclose(heights, np.sort(heights)):
+            raise AtmosphereError("Hydrostatic solver failed: heights not in ascending order")
         
-        dr = np.diff(heights.flatten())
+        dr = np.diff(heights)
         dr = np.flipud(np.append(dr,k_B*T_profile[0]/(mu[0] * AMU * g)))
         radius_with_atm = planet_radius + np.sum(dr)
 

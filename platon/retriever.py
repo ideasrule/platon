@@ -73,7 +73,7 @@ class Retriever:
                 Rs, Mp, R, T, logZ, CO_ratio,
                 scattering_factor=scatt_factor, scattering_slope = scatt_slope,
                 cloudtop_pressure=cloudtop_P, T_star=T_star)
-        except AtmosphereError, e:
+        except AtmosphereError as e:
             print(e)
             return -np.inf
         

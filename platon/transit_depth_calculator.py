@@ -200,12 +200,11 @@ class TransitDepthCalculator:
             r = y + planet_radius
             T_local = T_interpolator(P)
             local_mu = mu_interpolator(P)
-            rho = local_mu*P*AMU / (k_B * T_local)
-            dydP = -r**2/(G * planet_mass * rho)
-            return dydP
+            dy_dlnP = -r**2 * k_B * T_local/(G * planet_mass * local_mu * AMU)
+            return dy_dlnP
         
-        heights, infodict = integrate.odeint(hydrostatic, 0, P_profile[::-1],
-                                             full_output=True)
+        heights, infodict = integrate.odeint(
+            hydrostatic, 0, np.log(P_profile[::-1]), full_output=True)
         if infodict["message"] != "Integration successful.":
             raise AtmosphereError("Hydrostatic solver failed")
         

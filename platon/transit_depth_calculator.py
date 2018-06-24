@@ -188,12 +188,13 @@ class TransitDepthCalculator:
         # Hill radius and atmospheric height
         if T_star is None:
             T_star = Teff_sun
+            
         R_hill = 0.5*star_radius*(T_star/T_profile[0])**2 * (planet_mass/(3*M_sun))**(1.0/3)
-        scale_height = k_B*np.mean(T_profile)*planet_radius**2/(np.mean(mu) * AMU * G * planet_mass)
-        atm_height_estimate = np.log(P_profile[-1]/P_profile[0]) * scale_height
-        if atm_height_estimate > R_hill:
-            raise AtmosphereError("Atmosphere unbound: height > hill radius")
+        max_r_estimate = 1.0/(1/planet_radius + k_B*np.mean(T_profile)*np.log(P_profile[0]/P_profile[-1])/(G * planet_mass * np.mean(mu) * AMU))
         
+        if max_r_estimate > R_hill:
+            raise AtmosphereError("Atmosphere unbound: height > hill radius")
+                
         # Solve the hydrostatic equation
         def hydrostatic(y, P):
             r = y + planet_radius

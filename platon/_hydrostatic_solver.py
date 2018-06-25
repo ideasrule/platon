@@ -6,13 +6,15 @@ import scipy.interpolate
 from .constants import k_B, AMU, M_sun, Teff_sun, G, h, c
 from .errors import AtmosphereError
 
-def _test_solve(pressures, planet_mass, planet_radius,
+def _test_solve(ln_Ps, planet_mass, planet_radius,
                 T_interpolator, mu_interpolator):
     #avg_mu = (mu[1:] + mu[0:-1])/2.0
-    intermediate_mu = (mu_interpolator(pressures[1:]) + mu_interpolator(pressures[0:-1]))/2.0
-    intermediate_T = (T_interpolator(pressures[1:]) + T_interpolator(pressures[0:-1]))/2.0
+    intermediate_mu = (mu_interpolator(ln_Ps[1:]) + mu_interpolator(ln_Ps[0:-1]))/2.0
+    intermediate_T = (T_interpolator(ln_Ps[1:]) + T_interpolator(ln_Ps[0:-1]))/2.0
 
-    d_inv_r = np.diff(np.log(pressures)) * k_B * intermediate_T/(G*planet_mass*intermediate_mu*AMU)
+    d_inv_r = np.diff(ln_Ps) * k_B * intermediate_T/(G*planet_mass*intermediate_mu*AMU)
+
+    assert(np.all(d_inv_r >= 0) or np.all(d_inv_r <= 0))
     inv_r = 1.0/planet_radius + np.cumsum(d_inv_r)
     radii = np.append(planet_radius, 1.0/inv_r)
     return radii - planet_radius
@@ -28,24 +30,24 @@ def _ode_solve(P_profile, T_profile, ref_pressure, mu, planet_mass,
                planet_radius, star_radius, above_cloud_cond,
                T_star=None, approximate=True):
     assert(len(P_profile) == len(T_profile))
-    mu_interpolator = UnivariateSpline(P_profile, mu, s=0)
-    T_interpolator = UnivariateSpline(P_profile, T_profile, s=0)
+    mu_interpolator = UnivariateSpline(np.log(P_profile), mu, s=0)
+    T_interpolator = UnivariateSpline(np.log(P_profile), T_profile, s=0)
 
     # Solve the hydrostatic equation
     def hydrostatic(y, lnP):
         r = y + planet_radius
-        P = np.exp(lnP)
-        T_local = T_interpolator(P)
-        local_mu = mu_interpolator(P)
+        T_local = T_interpolator(lnP)
+        local_mu = mu_interpolator(lnP)
         dy_dlnP = -r**2 * k_B * T_local/(G * planet_mass * local_mu * AMU)
         return dy_dlnP
 
     P_below = np.append(ref_pressure, P_profile[P_profile > ref_pressure])
     P_above = np.append(ref_pressure, P_profile[P_profile <= ref_pressure][::-1])        
     if approximate:
-        heights_below = _test_solve(P_below, planet_mass, planet_radius, T_interpolator, mu_interpolator)
-        heights_above = _test_solve(P_above, planet_mass, planet_radius, T_interpolator, mu_interpolator)        
+        heights_below = _test_solve(np.log(P_below), planet_mass, planet_radius, T_interpolator, mu_interpolator)
+        heights_above = _test_solve(np.log(P_above), planet_mass, planet_radius, T_interpolator, mu_interpolator)        
     else:
+        print("Using exact solver")
         heights_below, infodict = integrate.odeint(
             hydrostatic, 0, np.log(P_below), full_output=True)
         heights_below = heights_below.flatten()

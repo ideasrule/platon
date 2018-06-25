@@ -157,7 +157,9 @@ class TransitDepthCalculator:
         mu_profile = np.zeros(len(P_profile))
         
         for species_name in abundances:
-            interpolator = RectBivariateSpline(self.P_grid, self.T_grid, abundances[species_name], kx=1, ky=1)
+            interpolator = RectBivariateSpline(
+                self.P_grid, self.T_grid,
+                abundances[species_name], kx=1, ky=1)
             atm_abundances = interpolator.ev(P_profile, T_profile)
             mu_profile += atm_abundances * self.mass_data[species_name]
 

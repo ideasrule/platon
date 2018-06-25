@@ -5,6 +5,7 @@ import scipy.integrate
 from platon import _tau_calculator
 
 class TestTauLOS(unittest.TestCase):
+    @unittest.skip("Algorithm no longer identical to ExoTransmit")
     def test_realistic(self):
         absorption_coeffs = np.loadtxt("tests/testing_data/exotransmit_kappa")
         heights = np.loadtxt("tests/testing_data/exotransmit_heights")
@@ -33,7 +34,7 @@ class TestTauLOS(unittest.TestCase):
     def test_analytic_simple(self):
         absorption_coeff = np.ones((12,100))
         Rp = 1000
-        radii = Rp + np.linspace(0, 100, 101)
+        radii = Rp + np.linspace(0, 50, 100)
         radii = radii[::-1]
         tau = _tau_calculator.get_line_of_sight_tau(absorption_coeff, radii)
         expected_tau = 2*np.sqrt(radii[0]**2 - radii[1:]**2)
@@ -44,7 +45,7 @@ class TestTauLOS(unittest.TestCase):
         absorption_coeff = np.ones((1, 1000))
         Rp = 2000
         scale_height = 100
-        radii = Rp + np.linspace(0, 1000, 1001)
+        radii = Rp + np.linspace(0, 1000, 1000)
         radii = radii[::-1]
         analytic_tau = []
         for i, r in enumerate(radii[1:]):

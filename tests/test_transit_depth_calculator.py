@@ -14,13 +14,13 @@ from platon.errors import AtmosphereError
 class TestTransitDepthCalculator(unittest.TestCase):
     def get_frac_dev(self, logZ, CO_ratio, custom_abundances):
         Rp = 7.14e7
-        Mp = 7.49e26
+        Mp = 2.0e27
         Rs = 7e8
         T = 1200
         depth_calculator = TransitDepthCalculator()
         wavelengths, transit_depths = depth_calculator.compute_depths(
             Rs, Mp, Rp, T, logZ=logZ, CO_ratio=CO_ratio,
-            custom_abundances=custom_abundances)
+            custom_abundances=custom_abundances, cloudtop_pressure=1e4)
 
         # This ExoTransmit run is done without SH, since it's not present in
         # GGchem

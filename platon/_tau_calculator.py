@@ -16,8 +16,10 @@ def get_dl(radii):
     return dl
 
 def get_line_of_sight_tau(absorption_coeff, radii):
-    '''radii must be in descending order.  absorption_coeff must be an array whose first dimension is the number of wavelengths and second dimension is the number of radius points, which must be 1 less than the size of radii.''', 
+    '''radii must be in descending order.  absorption_coeff must be an array whose first dimension is the number of wavelengths and second dimension is the number of radius points, which must be 1 less than the size of radii.''',
+    #print(radii)
     assert(np.allclose(radii, np.sort(radii)[::-1]))
+    intermediate_coeff = 0.5*(absorption_coeff[:, 0:-1] + absorption_coeff[:, 1:])
     
     dl = get_dl(radii)
-    return np.dot(absorption_coeff, dl)
+    return np.dot(intermediate_coeff, dl)

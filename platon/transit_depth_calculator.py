@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from scipy import integrate
 import scipy.interpolate
 
+from . import _hydrostatic_solver
 from ._compatible_loader import load_dict_from_pickle
 from .abundance_getter import AbundanceGetter
 from ._species_data_reader import read_species_data
@@ -17,10 +18,9 @@ from . import _interpolator_3D
 from ._tau_calculator import get_line_of_sight_tau
 from .constants import k_B, AMU, M_sun, Teff_sun, G, h, c
 from ._get_data import get_data
-from .errors import AtmosphereError
 
 class TransitDepthCalculator:
-    def __init__(self, include_condensation=True, min_P_profile=0.1, max_P_profile=1e5, num_profile_heights=400):
+    def __init__(self, include_condensation=True, num_profile_heights=500, ref_pressure=1e5):
         '''
         All physical parameters are in SI.
 
@@ -29,11 +29,6 @@ class TransitDepthCalculator:
         include_condensation : bool
             Whether to use equilibrium abundances that take condensation into
             account.
-        min_P_profile : float
-            For the radiative transfer calculation, the atmosphere is divided
-            into zones.  This is the pressure at the topmost zone.
-        max_P_profile: float
-            The pressure at the bottommost zone of the atmosphere
         num_profile_heights : int
             The number of zones the atmosphere is divided into
         '''
@@ -69,23 +64,9 @@ class TransitDepthCalculator:
 
         self.abundance_getter = AbundanceGetter(include_condensation)
 
-        self.min_P_profile = min_P_profile
-        self.max_P_profile = max_P_profile
         self.num_profile_heights = num_profile_heights
+        self.ref_pressure = ref_pressure
 
-        if min_P_profile <= self.P_grid[0] or min_P_profile >= self.P_grid[-1]:
-            raise ValueError(
-                "min_P_profile {} Pa out of bounds ({} to {} Pa)".format(
-                    min_P_profile, self.P_grid[0], self.P_grid[-1]))
-        
-        if max_P_profile <= self.P_grid[0] or max_P_profile >= self.P_grid[-1]:
-            raise ValueError(
-                "max_P_profile {} Pa out of bounds ({} to {} Pa)".format(
-                    max_P_profile, self.P_grid[0], self.P_grid[-1]))
-        
-        if min_P_profile >= max_P_profile:
-            raise ValueError("min_P_profile must be less than max_P_profile")
-                            
 
     def change_wavelength_bins(self, bins):
         """Specify wavelength bins, instead of using the full wavelength grid
@@ -170,51 +151,20 @@ class TransitDepthCalculator:
 
     def _get_above_cloud_r_and_dr(self, P_profile, T_profile, abundances,
                                   planet_mass, planet_radius, star_radius,
-                                  above_cloud_cond, T_star=None):
+                                  above_cloud_cond, T_star=None, approximate=True):
         assert(len(P_profile) == len(T_profile))
         # First, get atmospheric weight profile
-        g = G * planet_mass/planet_radius**2        
-        mu = np.zeros(len(P_profile))
+        mu_profile = np.zeros(len(P_profile))
         
         for species_name in abundances:
             interpolator = RectBivariateSpline(self.P_grid, self.T_grid, abundances[species_name], kx=1, ky=1)
             atm_abundances = interpolator.ev(P_profile, T_profile)
-            mu += atm_abundances * self.mass_data[species_name]
+            mu_profile += atm_abundances * self.mass_data[species_name]
 
-        mu_interpolator = UnivariateSpline(P_profile, mu)
-        T_interpolator = UnivariateSpline(P_profile, T_profile)
-        
-        # Ensure that the atmosphere is bound by making rough estimates of the
-        # Hill radius and atmospheric height
-        if T_star is None:
-            T_star = Teff_sun
-            
-        R_hill = 0.5*star_radius*(T_star/T_profile[0])**2 * (planet_mass/(3*M_sun))**(1.0/3)
-        max_r_estimate = 1.0/(1/planet_radius + k_B*np.mean(T_profile)*np.log(P_profile[0]/P_profile[-1])/(G * planet_mass * np.mean(mu) * AMU))
-        
-        if max_r_estimate > R_hill:
-            raise AtmosphereError("Atmosphere unbound: height > hill radius")
-                
-        # Solve the hydrostatic equation
-        def hydrostatic(y, P):
-            r = y + planet_radius
-            T_local = T_interpolator(P)
-            local_mu = mu_interpolator(P)
-            dy_dlnP = -r**2 * k_B * T_local/(G * planet_mass * local_mu * AMU)
-            return dy_dlnP
-        
-        heights, infodict = integrate.odeint(
-            hydrostatic, 0, np.log(P_profile[::-1]), full_output=True)
-        if infodict["message"] != "Integration successful.":
-            raise AtmosphereError("Hydrostatic solver failed")
-        
-        dr = np.diff(heights.flatten())
-        dr = np.flipud(np.append(dr,k_B*T_profile[0]/(mu[0] * AMU * g)))
-        radius_with_atm = planet_radius + np.sum(dr)
+        return _hydrostatic_solver._solve(
+            P_profile, T_profile, self.ref_pressure, mu_profile, planet_mass,
+            planet_radius, star_radius, above_cloud_cond, T_star, approximate)
 
-        radii = radius_with_atm - np.cumsum(dr)
-        radii = np.append(radius_with_atm, radii[above_cloud_cond])
-        return radii, dr[above_cloud_cond]
 
     def _get_abundances_array(self, logZ, CO_ratio, custom_abundances):
         if custom_abundances is None:
@@ -285,8 +235,8 @@ class TransitDepthCalculator:
                 raise ValueError("C/O ratio {} is out of bounds ({} to {})".format(CO_ratio, minimum, maximum))
 
         if not np.isinf(cloudtop_pressure):
-            minimum = self.min_P_profile
-            maximum = self.max_P_profile
+            minimum = np.min(self.P_grid)
+            maximum = np.max(self.P_grid)
             if cloudtop_pressure <= minimum or cloudtop_pressure > maximum:
                 raise ValueError("Cloudtop pressure is {} Pa, but must be between {} and {} Pa unless it is np.inf".format(cloudtop_pressure, minimum, maximum))                                                                       
                                  
@@ -297,7 +247,7 @@ class TransitDepthCalculator:
                        add_collisional_absorption=True,
                        cloudtop_pressure=np.inf, custom_abundances=None,
                        custom_T_profile=None, custom_P_profile=None,
-                       T_star=None):
+                       T_star=None, approximate=True):
         '''
         Computes transit depths at a range of wavelengths, assuming an
         isothermal atmosphere.  To choose bins, call change_wavelength_bins().
@@ -309,8 +259,7 @@ class TransitDepthCalculator:
         planet_mass : float
             Mass of the planet, in kg
         planet_radius : float
-            radius of the planet at self.max_P_profile (by default,
-            100,000 Pa).  Must be in metres.
+            Radius of the planet at 100,000 Pa. Must be in metres.
         temperature : float
             Temperature of the isothermal atmosphere, in Kelvin
         logZ : float
@@ -369,9 +318,8 @@ class TransitDepthCalculator:
             Central wavelengths, in metres
         transit_depths : array of float
             Transit depths at `wavelengths`
-       '''
+       '''        
         self._validate_params(temperature, logZ, CO_ratio, cloudtop_pressure)
-        
         if custom_P_profile is not None:
             if custom_T_profile is None or len(custom_P_profile) != len(custom_T_profile):
                 raise ValueError("Must specify both custom_T_profile and "\
@@ -383,8 +331,8 @@ class TransitDepthCalculator:
             T_profile = custom_T_profile
         else:    
             P_profile = np.logspace(
-                np.log10(self.min_P_profile),
-                np.log10(self.max_P_profile),
+                np.log10(self.P_grid[0]),
+                np.log10(self.P_grid[-1]),
                 self.num_profile_heights)
             T_profile = np.ones(len(P_profile)) * temperature
 
@@ -393,7 +341,7 @@ class TransitDepthCalculator:
 
         radii, dr = self._get_above_cloud_r_and_dr(
             P_profile, T_profile, abundances, planet_mass, planet_radius,
-            star_radius, above_clouds, T_star)
+            star_radius, above_clouds, T_star, approximate)
         
         P_profile = P_profile[above_clouds]
         T_profile = T_profile[above_clouds]
@@ -416,6 +364,6 @@ class TransitDepthCalculator:
 
         absorption_fraction = 1 - np.exp(-tau_los)
 
-        transit_depths = (planet_radius/star_radius)**2 + 2/star_radius**2 * absorption_fraction.dot(radii[1:] * dr)
+        transit_depths = (np.min(radii)/star_radius)**2 + 2/star_radius**2 * absorption_fraction.dot(radii[1:] * dr)
 
         return self._get_binned_depths(transit_depths, T_star)

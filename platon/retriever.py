@@ -92,7 +92,7 @@ class Retriever:
     
     def run_emcee(self, wavelength_bins, depths, errors, fit_info, nwalkers=50,
                   nsteps=10000, include_condensation=True,
-                  plot_best=False, max_P_profile=1e5):
+                  plot_best=False):
         '''Runs affine-invariant MCMC to retrieve atmospheric parameters.
 
         Parameters
@@ -118,10 +118,6 @@ class Retriever:
             condensation.
         plot_best : bool, optional
             If True, plots the best fit model with the data
-        max_P_profile : float, optional
-            Maximum pressure at which to calculate radiative transfer. 
-            If you change this, the planetary radius will be interpreted
-            as the radius at this max_P_profile
 
         Returns
         -------
@@ -137,7 +133,7 @@ class Retriever:
         '''
         
         initial_positions = fit_info._generate_rand_param_arrays(nwalkers)
-        calculator = TransitDepthCalculator(max_P_profile=max_P_profile,
+        calculator = TransitDepthCalculator(
             include_condensation=include_condensation)
         calculator.change_wavelength_bins(wavelength_bins)
         self._validate_params(fit_info, calculator)
@@ -161,7 +157,7 @@ class Retriever:
     
     def run_multinest(self, wavelength_bins, depths, errors, fit_info,
                       include_condensation=True, plot_best=False,
-                      max_P_profile=1e5, **nestle_kwargs):
+                      **nestle_kwargs):
         '''Runs nested sampling to retrieve atmospheric parameters.
 
         Parameters
@@ -183,10 +179,6 @@ class Retriever:
             condensation.
         plot_best : bool, optional
             If True, plots the best fit model with the data
-        max_P_profile : float, optional
-            Maximum pressure at which to calculate radiative transfer. 
-            If you change this, the planetary radius will be interpreted
-            as the radius at this max_P_profile.
         **nestle_kwargs : keyword arguments to pass to nestle's sample method
 
         Returns
@@ -199,7 +191,7 @@ class Retriever:
             weights, and result.logl contains the log likelihoods.  result.logz
             is the natural logarithm of the evidence.
         '''        
-        calculator = TransitDepthCalculator(max_P_profile=max_P_profile,
+        calculator = TransitDepthCalculator(
             include_condensation=include_condensation)
         calculator.change_wavelength_bins(wavelength_bins)
         self._validate_params(fit_info, calculator)

@@ -17,7 +17,7 @@ class TestTransitDepthCalculator(unittest.TestCase):
         Mp = 7.49e26
         Rs = 7e8
         T = 1200
-        depth_calculator = TransitDepthCalculator(max_P_profile=1.014e5)
+        depth_calculator = TransitDepthCalculator()
         wavelengths, transit_depths = depth_calculator.compute_depths(
             Rs, Mp, Rp, T, logZ=logZ, CO_ratio=CO_ratio,
             custom_abundances=custom_abundances)
@@ -68,7 +68,7 @@ class TestTransitDepthCalculator(unittest.TestCase):
         Mp = 7.49e26
         Rs = 7e8
         T = 1200
-        depth_calculator = TransitDepthCalculator(max_P_profile=1.014e5)
+        depth_calculator = TransitDepthCalculator()
         bins = np.array([[0.4,0.6], [1,1.1], [1.2,1.4], [3.2,4], [5,6]])
         bins *= 1e-6
         depth_calculator.change_wavelength_bins(bins)
@@ -107,26 +107,14 @@ class TestTransitDepthCalculator(unittest.TestCase):
             calculator.compute_depths(Rs, Mp, Rp, T, logZ=logZ, CO_ratio=11)
 
         with self.assertRaises(ValueError):
-            calculator.compute_depths(Rs, Mp, Rp, T, logZ=logZ, CO_ratio=CO_ratio, cloudtop_pressure=0.1)
+            calculator.compute_depths(Rs, Mp, Rp, T, logZ=logZ, CO_ratio=CO_ratio, cloudtop_pressure=1e-4)
         
         with self.assertRaises(ValueError):
-            calculator.compute_depths(Rs, Mp, Rp, T, logZ=logZ, CO_ratio=CO_ratio, cloudtop_pressure=1.1e5)
+            calculator.compute_depths(Rs, Mp, Rp, T, logZ=logZ, CO_ratio=CO_ratio, cloudtop_pressure=1.1e8)
 
         # Infinity should be fine
         calculator.compute_depths(Rs, Mp, Rp, T, logZ=logZ, CO_ratio=CO_ratio, cloudtop_pressure=np.inf)
-
-        # If min_P_profile or max_P_profile are different, so should the
-        # appropriate bounds for cloudtop_pressure
-        calculator = TransitDepthCalculator(min_P_profile=1e-2, max_P_profile=1e6)
-        calculator.compute_depths(Rs, Mp, Rp, T, logZ=logZ, CO_ratio=CO_ratio, cloudtop_pressure=1.1e-2)
-        calculator.compute_depths(Rs, Mp, Rp, T, logZ=logZ, CO_ratio=CO_ratio, cloudtop_pressure=1e6)
-
-        with self.assertRaises(ValueError):
-            calculator.compute_depths(Rs, Mp, Rp, T, logZ=logZ, CO_ratio=CO_ratio, cloudtop_pressure=0.99e-2)
-        
-        with self.assertRaises(ValueError):
-            calculator.compute_depths(Rs, Mp, Rp, T, logZ=logZ, CO_ratio=CO_ratio, cloudtop_pressure=1.1e6)
-
+       
             
         
 if __name__ == '__main__':

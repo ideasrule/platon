@@ -20,7 +20,7 @@ from ._get_data import get_data
 from .errors import AtmosphereError
 
 class TransitDepthCalculator:
-    def __init__(self, include_condensation=True, min_P_profile=0.1, max_P_profile=1e5, num_profile_heights=400):
+    def __init__(self, include_condensation=True, min_P_profile=1e-3, max_P_profile=1e5, num_profile_heights=400):
         '''
         All physical parameters are in SI.
 
@@ -196,8 +196,9 @@ class TransitDepthCalculator:
             raise AtmosphereError("Atmosphere unbound: height > hill radius")
                 
         # Solve the hydrostatic equation
-        def hydrostatic(y, P):
+        def hydrostatic(y, lnP):
             r = y + planet_radius
+            P = np.exp(lnP)
             T_local = T_interpolator(P)
             local_mu = mu_interpolator(P)
             dy_dlnP = -r**2 * k_B * T_local/(G * planet_mass * local_mu * AMU)

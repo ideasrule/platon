@@ -17,7 +17,7 @@ class TestTransitDepthCalculator(unittest.TestCase):
         Mp = 7.49e26
         Rs = 7e8
         T = 1200
-        depth_calculator = TransitDepthCalculator(max_P_profile=1.014e5)
+        depth_calculator = TransitDepthCalculator(min_P_profile=0.1, max_P_profile=1.014e5)
         wavelengths, transit_depths = depth_calculator.compute_depths(
             Rs, Mp, Rp, T, logZ=logZ, CO_ratio=CO_ratio,
             custom_abundances=custom_abundances)
@@ -107,7 +107,7 @@ class TestTransitDepthCalculator(unittest.TestCase):
             calculator.compute_depths(Rs, Mp, Rp, T, logZ=logZ, CO_ratio=11)
 
         with self.assertRaises(ValueError):
-            calculator.compute_depths(Rs, Mp, Rp, T, logZ=logZ, CO_ratio=CO_ratio, cloudtop_pressure=0.1)
+            calculator.compute_depths(Rs, Mp, Rp, T, logZ=logZ, CO_ratio=CO_ratio, cloudtop_pressure=1e-3)
         
         with self.assertRaises(ValueError):
             calculator.compute_depths(Rs, Mp, Rp, T, logZ=logZ, CO_ratio=CO_ratio, cloudtop_pressure=1.1e5)

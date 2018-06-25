@@ -109,8 +109,8 @@ class TestRetriever(unittest.TestCase):
         run_both("CO_ratio", 0.19, 0.53, 10)
         run_both("CO_ratio", 0.2, 0.53, 10.1)
 
-        run_both("log_cloudtop_P", -1.1, 0, 5)
-        run_both("log_cloudtop_P", -1, 2, 5.1) 
+        run_both("log_cloudtop_P", -3.1, 0, 5)
+        run_both("log_cloudtop_P", -3, 2, 5.1) 
         
 
 if __name__ == '__main__':

@@ -151,7 +151,7 @@ class TransitDepthCalculator:
 
     def _get_above_cloud_r_and_dr(self, P_profile, T_profile, abundances,
                                   planet_mass, planet_radius, star_radius,
-                                  above_cloud_cond, T_star=None, approximate=True):
+                                  above_cloud_cond, T_star=None):
         assert(len(P_profile) == len(T_profile))
         # First, get atmospheric weight profile
         mu_profile = np.zeros(len(P_profile))
@@ -165,7 +165,7 @@ class TransitDepthCalculator:
 
         return _hydrostatic_solver._solve(
             P_profile, T_profile, self.ref_pressure, mu_profile, planet_mass,
-            planet_radius, star_radius, above_cloud_cond, T_star, approximate)
+            planet_radius, star_radius, above_cloud_cond, T_star)
 
 
     def _get_abundances_array(self, logZ, CO_ratio, custom_abundances):
@@ -249,7 +249,7 @@ class TransitDepthCalculator:
                        add_collisional_absorption=True,
                        cloudtop_pressure=np.inf, custom_abundances=None,
                        custom_T_profile=None, custom_P_profile=None,
-                       T_star=None, approximate=True):
+                       T_star=None):
         '''
         Computes transit depths at a range of wavelengths, assuming an
         isothermal atmosphere.  To choose bins, call change_wavelength_bins().
@@ -343,7 +343,7 @@ class TransitDepthCalculator:
 
         radii, dr = self._get_above_cloud_r_and_dr(
             P_profile, T_profile, abundances, planet_mass, planet_radius,
-            star_radius, above_clouds, T_star, approximate)
+            star_radius, above_clouds, T_star)
         
         P_profile = P_profile[above_clouds]
         T_profile = T_profile[above_clouds]

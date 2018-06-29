@@ -1,6 +1,7 @@
 import numpy as np
 import scipy.stats
 
+
 class _Param:
     def __init__(self, best_guess, low_guess=None, high_guess=None):
         self.best_guess = best_guess
@@ -16,34 +17,35 @@ class _Param:
 
     def within_limits(self, value):
         raise NotImplementedError
-    
+
     def get_random_value(self):
         return np.random.uniform(self.low_guess, self.high_guess)
 
-    
+
 class _UniformParam(_Param):
     def __init__(self, best_guess, low_lim, high_lim, low_guess, high_guess):
-        _Param.__init__(self, best_guess, low_guess, high_guess)        
+        _Param.__init__(self, best_guess, low_guess, high_guess)
         self.low_lim = low_lim
         self.high_lim = high_lim
 
     def within_limits(self, value):
         return value > self.low_lim and value < self.high_lim
-        
+
     def ln_prior(self, value):
-        if not self.within_limits(value): return -np.inf
+        if not self.within_limits(value):
+            return -np.inf
         return 0
 
     def from_unit_interval(self, u):
         assert(u >= 0 and u <= 1)
         if np.isinf(self.low_lim) or np.isinf(self.high_lim):
-            raise ValueError("Limit cannot be infinity")       
-        return self.low_lim + (self.high_lim - self.low_lim)*u
+            raise ValueError("Limit cannot be infinity")
+        return self.low_lim + (self.high_lim - self.low_lim) * u
 
 
 class _GaussianParam(_Param):
     def __init__(self, best_guess, std, low_guess, high_guess):
-        _Param.__init__(self, best_guess, low_guess, high_guess)        
+        _Param.__init__(self, best_guess, low_guess, high_guess)
 
         self.std = std
 
@@ -55,5 +57,3 @@ class _GaussianParam(_Param):
 
     def within_limits(self, value):
         return True
-        
-    

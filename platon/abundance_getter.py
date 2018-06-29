@@ -8,12 +8,13 @@ from pkg_resources import resource_filename
 from ._interpolator_3D import fast_interpolate
 from ._compatible_loader import load_dict_from_pickle
 
+
 class AbundanceGetter:
     def __init__(self, include_condensation=True):
         self.min_temperature = 300
         self.logZs = np.linspace(-1, 3, 81)
         self.CO_ratios = np.arange(0.2, 2.2, 0.2)
-        
+
         if include_condensation:
             sub_dir = "cond"
         else:
@@ -26,7 +27,6 @@ class AbundanceGetter:
         self.included_species = np.loadtxt(
             resource_filename(__name__, species_path), dtype=str)
 
-        
     def get(self, logZ, CO_ratio=0.53):
         '''Get an abundance grid at the specified logZ and C/O ratio.  This
         abundance grid can be passed to TransitDepthCalculator, with or without
@@ -39,34 +39,37 @@ class AbundanceGetter:
             A dictionary mapping species name to a 2D abundance array, specifying
             the number fraction of the species at a certain temperature and
             pressure.'''
-        
+
         N_P, N_T, N_species, N_CO, N_Z = self.log_abundances.shape
-        
+
         reshaped_log_abund = self.log_abundances.reshape((-1, N_CO, N_Z))
         interp_log_abund = 10 ** fast_interpolate(
             reshaped_log_abund, self.logZs, np.log10(self.CO_ratios),
             logZ, np.log10(CO_ratio))
         interp_log_abund = interp_log_abund.reshape((N_P, N_T, N_species))
-        
+
         abund_dict = {}
         for i, s in enumerate(self.included_species):
-            abund_dict[s] = interp_log_abund[:,:,i]
+            abund_dict[s] = interp_log_abund[:, :, i]
 
         return abund_dict
 
-    
     def is_in_bounds(self, logZ, CO_ratio, T):
         '''Check to see if a certain metallicity, C/O ratio, and temperature
         combination is within the supported bounds'''
-        if T <= self.min_temperature: return False
-        if logZ <= np.min(self.logZs) or logZ >= np.max(self.logZs): return False
-        if CO_ratio <= np.min(self.CO_ratios) or CO_ratio >= np.max(self.CO_ratios): return False
+        if T <= self.min_temperature:
+            return False
+        if logZ <= np.min(self.logZs) or logZ >= np.max(self.logZs):
+            return False
+        if CO_ratio <= np.min(self.CO_ratios) or \
+           CO_ratio >= np.max(self.CO_ratios):
+            return False
         return True
 
     @staticmethod
     def from_file(filename):
         '''Reads abundances file in the ExoTransmit format (called "EOS" files
-        in ExoTransmit), returning a dictionary mapping species name to an 
+        in ExoTransmit), returning a dictionary mapping species name to an
         abundance array of dimension'''
         line_counter = 0
 
@@ -100,7 +103,8 @@ class AbundanceGetter:
 
         for i in range(len(species)):
             c = compositions[:, i].reshape((N_pressures, N_temperatures))
-            #This file has decreasing temperatures and pressures; we want increasing temperatures and pressures
+            # This file has decreasing temperatures and pressures; we want
+            # increasing temperatures and pressures
             c = c[::-1, ::-1]
             abundance_data[species[i]] = c
         return abundance_data

@@ -15,6 +15,7 @@ from .constants import METRES_TO_UM
 from ._params import _UniformParam
 from .errors import AtmosphereError
 
+
 class Retriever:
     def _validate_params(self, fit_info, calculator):
         # This assumes that the valid parameter space is rectangular, so that
@@ -22,7 +23,7 @@ class Retriever:
         # there is no good way to validate Gaussian parameters, which have
         # infinite range.
         fit_info = copy.deepcopy(fit_info)
-        
+
         for name in fit_info.fit_param_names:
             this_param = fit_info.all_params[name]
             if not isinstance(this_param, _UniformParam):
@@ -36,7 +37,7 @@ class Retriever:
             if this_param.low_lim >= this_param.high_lim:
                 raise ValueError(
                     "low_lim for {} is higher than high_lim".format(name))
-            
+
             for lim in [this_param.low_lim, this_param.high_lim]:
                 this_param.best_guess = lim
                 calculator._validate_params(
@@ -45,13 +46,12 @@ class Retriever:
                     fit_info._get("CO_ratio"),
                     10**fit_info._get("log_cloudtop_P"))
 
-    
     def _ln_prob(self, params, calculator, fit_info, measured_depths,
-                measured_errors, plot=False):
-        
+                 measured_errors, plot=False):
+
         if not fit_info._within_limits(params):
             return -np.inf
-        
+
         params_dict = fit_info._interpret_param_array(params)
         R = params_dict["R"]
         T = params_dict["T"]
@@ -64,32 +64,34 @@ class Retriever:
         Rs = params_dict["Rs"]
         Mp = params_dict["Mp"]
         T_star = params_dict["T_star"]
-        
+
         if Rs <= 0 or Mp <= 0:
             return -np.inf
 
         try:
             wavelengths, calculated_depths = calculator.compute_depths(
                 Rs, Mp, R, T, logZ, CO_ratio,
-                scattering_factor=scatt_factor, scattering_slope = scatt_slope,
+                scattering_factor=scatt_factor, scattering_slope=scatt_slope,
                 cloudtop_pressure=cloudtop_P, T_star=T_star)
         except AtmosphereError as e:
             print(e)
             return -np.inf
-        
+
         residuals = calculated_depths - measured_depths
         scaled_errors = error_multiple * measured_errors
-        ln_prob = -0.5 * np.sum(residuals**2/scaled_errors**2 + np.log(2*np.pi*scaled_errors**2))
+        ln_prob = -0.5 * np.sum(residuals**2 / scaled_errors**2 + \
+                                np.log(2 * np.pi * scaled_errors**2))
 
         if plot:
-            plt.errorbar(METRES_TO_UM*wavelengths, measured_depths, yerr=measured_errors, fmt='.')
-            plt.plot(METRES_TO_UM*wavelengths, calculated_depths)
+            plt.errorbar(
+                METRES_TO_UM * wavelengths, measured_depths,
+                yerr=measured_errors, fmt='.')
+            plt.plot(METRES_TO_UM * wavelengths, calculated_depths)
             plt.xlabel("Wavelength (um)")
             plt.ylabel("Transit depth")
 
         return fit_info._ln_prior(params) + ln_prob
 
-    
     def run_emcee(self, wavelength_bins, depths, errors, fit_info, nwalkers=50,
                   nsteps=10000, include_condensation=True,
                   plot_best=False):
@@ -98,8 +100,8 @@ class Retriever:
         Parameters
         ----------
         wavelength_bins : array_like, shape (N,2)
-            Wavelength bins, where wavelength_bins[i][0] is the start 
-            wavelength and wavelength_bins[i][1] is the end wavelength for 
+            Wavelength bins, where wavelength_bins[i][0] is the start
+            wavelength and wavelength_bins[i][1] is the end wavelength for
             bin i.
         depths : array_like, length N
             Measured transit depths for the specified wavelength bins
@@ -128,33 +130,41 @@ class Retriever:
             and P is the number of parameters; and result.lnprobability, a
             (W x S) array of log probabilities.  For your convenience, this
             object also contains result.flatchain, which is a (WS x P) array
-            where WS = W x S is the number of samples; and 
-            result.flatlnprobability, an array of length WS      
+            where WS = W x S is the number of samples; and
+            result.flatlnprobability, an array of length WS
         '''
-        
+
         initial_positions = fit_info._generate_rand_param_arrays(nwalkers)
         calculator = TransitDepthCalculator(
             include_condensation=include_condensation)
         calculator.change_wavelength_bins(wavelength_bins)
         self._validate_params(fit_info, calculator)
-        
+
         sampler = emcee.EnsembleSampler(
             nwalkers, fit_info._get_num_fit_params(), self._ln_prob,
             args=(calculator, fit_info, depths, errors))
 
-        for i, result in enumerate(sampler.sample(initial_positions, iterations=nsteps)):
-            if (i+1) % 10 == 0:
-                print(str(i+1) + "/" + str(nsteps), sampler.lnprobability[0,i], sampler.chain[0,i])
-                
-        best_params_arr = sampler.flatchain[np.argmax(sampler.flatlnprobability)]
+        for i, result in enumerate(sampler.sample(
+                initial_positions, iterations=nsteps)):
+            if (i + 1) % 10 == 0:
+                print(str(i + 1) + "/" + str(nsteps),
+                      sampler.lnprobability[0, i], sampler.chain[0, i])
+
+        best_params_arr = sampler.flatchain[np.argmax(
+            sampler.flatlnprobability)]
         best_params_dict = fit_info._interpret_param_array(best_params_arr)
         print("Best params", best_params_dict)
 
         if plot_best:
-            self._ln_prob(best_params_arr, calculator, fit_info, depths, errors, plot=True)
+            self._ln_prob(
+                best_params_arr,
+                calculator,
+                fit_info,
+                depths,
+                errors,
+                plot=True)
         return sampler
 
-    
     def run_multinest(self, wavelength_bins, depths, errors, fit_info,
                       include_condensation=True, plot_best=False,
                       **nestle_kwargs):
@@ -163,8 +173,8 @@ class Retriever:
         Parameters
         ----------
         wavelength_bins : array_like, shape (N,2)
-            Wavelength bins, where wavelength_bins[i][0] is the start 
-            wavelength and wavelength_bins[i][1] is the end wavelength for 
+            Wavelength bins, where wavelength_bins[i][0] is the start
+            wavelength and wavelength_bins[i][1] is the end wavelength for
             bin i.
         depths : array_like, length N
             Measured transit depths for the specified wavelength bins
@@ -190,12 +200,12 @@ class Retriever:
             parameter values of each sample, result.weights contains the
             weights, and result.logl contains the log likelihoods.  result.logz
             is the natural logarithm of the evidence.
-        '''        
+        '''
         calculator = TransitDepthCalculator(
             include_condensation=include_condensation)
         calculator.change_wavelength_bins(wavelength_bins)
         self._validate_params(fit_info, calculator)
-        
+
         def transform_prior(cube):
             new_cube = np.zeros(len(cube))
             for i in range(len(cube)):
@@ -216,18 +226,18 @@ class Retriever:
         best_params_arr = result.samples[np.argmax(result.logl)]
         best_params_dict = fit_info._interpret_param_array(best_params_arr)
         print("Best params", best_params_dict)
-        
-        if plot_best:
-            self._ln_prob(best_params_arr, calculator, fit_info, depths, errors, plot=True)
-        return result
 
+        if plot_best:
+            self._ln_prob(best_params_arr, calculator, fit_info,
+                          depths, errors, plot=True)
+        return result
 
     @staticmethod
     def get_default_fit_info(Rs, Mp, Rp, T, logZ=0, CO_ratio=0.53,
                              log_cloudtop_P=np.inf, log_scatt_factor=0,
                              scatt_slope=4, error_multiple=1, T_star=None):
-        '''Get a :class:`.FitInfo` object filled with best guess values.  A few 
-        parameters are required, but others can be set to default values if you 
+        '''Get a :class:`.FitInfo` object filled with best guess values.  A few
+        parameters are required, but others can be set to default values if you
         do not want to specify them.  All parameters are in SI.
 
         Parameters
@@ -245,10 +255,10 @@ class Retriever:
         CO_ratio : float, optional
             C/O atomic ratio in the atmosphere.  The solar value is 0.53.
         log_cloudtop_P : float, optional
-            Base-10 log of the pressure level (in Pa) below which light cannot 
+            Base-10 log of the pressure level (in Pa) below which light cannot
             penetrate.  Use np.inf for a cloudless atmosphere.
         log_scatt_factor : float, optional
-            Base-10 logarithm of scattering factoring, which make scattering 
+            Base-10 logarithm of scattering factoring, which make scattering
             that many times as strong. If `scatt_slope` is 4, corresponding to
             Rayleigh scattering, the absorption coefficients are simply
             multiplied by `scattering_factor`. If slope is not 4,
@@ -268,12 +278,16 @@ class Retriever:
         fit_info : :class:`.FitInfo` object
             This object is used to indicate which parameters to fit for, which
             to fix, and what values all parameters should take.'''
-        
-        fit_info = FitInfo({'Mp': Mp, 'R': Rp, 'T': T, 'logZ': logZ,
+
+        fit_info = FitInfo({'Mp': Mp,
+                            'R': Rp,
+                            'T': T,
+                            'logZ': logZ,
                             'CO_ratio': CO_ratio,
                             'log_scatt_factor': log_scatt_factor,
                             'scatt_slope': scatt_slope,
                             'log_cloudtop_P': log_cloudtop_P,
                             'Rs': Rs,
-                            'error_multiple': error_multiple, 'T_star': T_star})
+                            'error_multiple': error_multiple,
+                            'T_star': T_star})
         return fit_info

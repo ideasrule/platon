@@ -9,6 +9,7 @@ import zipfile
 import os
 import shutil
 
+
 def get_data(target_dir):
     MB_TO_BYTES = 2**20
     filename = "data.zip"
@@ -21,7 +22,8 @@ def get_data(target_dir):
         # Python 2
         file_size = int(u.info().getheaders("Content-Length")[0])
 
-    print("Downloading {}: {:.0f} MB".format(filename, file_size/MB_TO_BYTES))
+    print("Downloading {}: {:.0f} MB".format(
+        filename, file_size / MB_TO_BYTES))
 
     bytes_downloaded = 0
     block_sz = 8192
@@ -33,7 +35,8 @@ def get_data(target_dir):
         bytes_downloaded += len(buffer)
         f.write(buffer)
         percentage = int(100 * bytes_downloaded / file_size)
-        status = "{:.0f} MB  [{}%]".format(bytes_downloaded/MB_TO_BYTES, percentage)
+        status = "{:.0f} MB  [{}%]".format(
+            bytes_downloaded / MB_TO_BYTES, percentage)
         print(status, end="\r")
 
     f.close()
@@ -45,5 +48,3 @@ def get_data(target_dir):
 
     print("Extraction finished!")
     os.remove(filename)
-
-

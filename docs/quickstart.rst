@@ -29,8 +29,7 @@ To compute transit depths, look at transit_depth_example.py, then go to
 You can adjust a variety of parameters, including the metallicity (Z) and C/O
 ratio. By default, logZ = 0 and C/O = 0.53. Any other value for
 logZ and C/O in the range -1 < logZ < 3 and 0.2 < C/O < 2 can also be used.
-You can use a dictionary of numpy arrays to specify abundances as well
-(See the API).
+
 You can also specify custom abundances, such as by providing the filename or
 one of the abundance files included in the package (from ExoTransmit). The
 custom abundance files specified by the user must be compatible with the

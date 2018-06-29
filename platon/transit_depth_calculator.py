@@ -20,7 +20,8 @@ from .constants import k_B, AMU, M_sun, Teff_sun, G, h, c
 from ._get_data import get_data
 
 class TransitDepthCalculator:
-    def __init__(self, include_condensation=True, num_profile_heights=500, ref_pressure=1e5):
+    def __init__(self, include_condensation=True, num_profile_heights=500,
+                 ref_pressure=1e5):
         '''
         All physical parameters are in SI.
 
@@ -31,6 +32,8 @@ class TransitDepthCalculator:
             account.
         num_profile_heights : int
             The number of zones the atmosphere is divided into
+        ref_pressure : float
+            The planetary radius is defined as the radius at this pressure
         '''
         
         if not os.path.isdir(resource_filename(__name__, "data/")):
@@ -240,8 +243,9 @@ class TransitDepthCalculator:
             minimum = np.min(self.P_grid)
             maximum = np.max(self.P_grid)
             if cloudtop_pressure <= minimum or cloudtop_pressure > maximum:
-                raise ValueError("Cloudtop pressure is {} Pa, but must be between {} and {} Pa unless it is np.inf".format(cloudtop_pressure, minimum, maximum))                                                                       
-                                 
+                raise ValueError("Cloudtop pressure is {} Pa, but must be between {} and {} Pa unless it is np.inf".format(cloudtop_pressure, minimum, maximum))
+
+            
     def compute_depths(self, star_radius, planet_mass, planet_radius,
                        temperature, logZ=0, CO_ratio=0.53,
                        add_scattering=True, scattering_factor=1,
@@ -349,7 +353,8 @@ class TransitDepthCalculator:
         T_profile = T_profile[above_clouds]
 
         T_cond = _interpolator_3D.get_condition_array(T_profile, self.T_grid)
-        P_cond = _interpolator_3D.get_condition_array(P_profile, self.P_grid, cloudtop_pressure)
+        P_cond = _interpolator_3D.get_condition_array(
+            P_profile, self.P_grid, cloudtop_pressure)
 
         absorption_coeff = self._get_gas_absorption(abundances, P_cond, T_cond)
         if add_scattering:
@@ -358,9 +363,12 @@ class TransitDepthCalculator:
                 scattering_factor, scattering_slope, scattering_ref_wavelength)
 
         if add_collisional_absorption:
-            absorption_coeff += self._get_collisional_absorption(abundances, P_cond, T_cond)
+            absorption_coeff += self._get_collisional_absorption(
+                abundances, P_cond, T_cond)
 
-        absorption_coeff_atm = _interpolator_3D.fast_interpolate(absorption_coeff, self.T_grid[T_cond], self.P_grid[P_cond], T_profile, P_profile)
+        absorption_coeff_atm = _interpolator_3D.fast_interpolate(
+            absorption_coeff, self.T_grid[T_cond], self.P_grid[P_cond],
+            T_profile, P_profile)
 
         tau_los = get_line_of_sight_tau(absorption_coeff_atm, radii)
 

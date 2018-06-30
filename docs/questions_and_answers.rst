@@ -88,3 +88,31 @@ in that order.
     radii = equal_samples[:,0]
     print(np.percentile(radii, 16), np.median(radii), np.percentile(radii, 84))
     
+* **How do I do check what effect a species has on the transit spectrum?**
+  You can tweak the atmospheric abundances and see what happens.  First, get
+  baseline abundances: ::
+
+    # Solar logZ and C/O ratio. Modify as required.
+    abundances = AbundanceGetter.get(0, 0.53)
+
+  You can then modify this at will: ::
+
+    # Zero out CO.  (Note that if CO is a major component, you should probably
+    # renormalize the abundances of other species so that they add up to 1.)
+    
+    abundances["CO"] *= 0
+
+    # Set CH4 abundance to a constant throughout the atmosphere
+    abundances["CH4"] *= 0
+    abundances["CH4"] += 1e-5
+
+  Then call compute_depths with logZ and CO_ratio set to None: ::
+
+    calculator.compute_depths(star_radius, planet_mass, planet_radius, temperature, logZ=None, CO_ratio=None, custom_abundances=abundances)
+
+* **How do I retrieve individual species abundances?**
+  You can't.  While this would be trivial to implement--and you can do so if
+  you really need to--it could easily lead to combinations of species
+  that are unstable on very short timescales.  We have therefore decided not
+  to support retrieving on individual abundances.
+  

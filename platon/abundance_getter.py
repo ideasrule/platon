@@ -3,6 +3,7 @@ import os
 import scipy
 from io import open
 import time
+import configparser
 from pkg_resources import resource_filename
 
 from ._interpolator_3D import fast_interpolate
@@ -11,22 +12,29 @@ from ._compatible_loader import load_dict_from_pickle
 
 class AbundanceGetter:
     def __init__(self, include_condensation=True):
-        self.min_temperature = 300
-        self.logZs = np.linspace(-1, 3, 81)
-        self.CO_ratios = np.arange(0.2, 2.2, 0.2)
+        config = configparser.ConfigParser()
+        config.read(resource_filename(__name__, "data/abundances/properties.cfg"))
+        properties = config["DEFAULT"]
+        self.min_temperature = float(properties["min_temperature"])
+        self.logZs = np.linspace(float(properties["min_logZ"]),
+                                 float(properties["max_logZ"]),
+                                 int(properties["num_logZ"]))
+        self.CO_ratios = np.linspace(float(properties["min_CO"]),
+                                     float(properties["max_CO"]),
+                                     int(properties["num_CO"]))
+        self.included_species = eval(properties["included_species"])
 
         if include_condensation:
-            sub_dir = "cond"
+            filename = "with_condensation.npy"
         else:
-            sub_dir = "gas_only"
+            filename = "gas_only.npy"
 
-        abundances_path = "data/abundances/{}/all_data.npy".format(sub_dir)
-        species_path = "data/abundances/{}/included_species".format(sub_dir)
+        abundances_path = "data/abundances/{}".format(filename)
+
         self.log_abundances = np.log10(np.load(
             resource_filename(__name__, abundances_path)))
-        self.included_species = np.loadtxt(
-            resource_filename(__name__, species_path), dtype=str)
 
+        
     def get(self, logZ, CO_ratio=0.53):
         '''Get an abundance grid at the specified logZ and C/O ratio.  This
         abundance grid can be passed to TransitDepthCalculator, with or without

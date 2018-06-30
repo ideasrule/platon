@@ -24,5 +24,5 @@ setuptools.setup(
     zip_safe = False,
     install_requires = [
         "numpy", "scipy", "matplotlib", "emcee", "nestle",
-        "future", "nose", "setuptools"]
+        "future", "nose", "setuptools", "configparser"]
 )

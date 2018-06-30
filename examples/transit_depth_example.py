@@ -26,7 +26,7 @@ wavelengths, transit_depths = depth_calculator.compute_depths(
 
 # Uncomment the code below to plot
 
-plt.plot(1e6*wavelengths, transit_depths)
-plt.xlabel("Wavelength (um)")
-plt.ylabel("Transit depth")
-plt.show()
+#plt.plot(1e6*wavelengths, transit_depths)
+#plt.xlabel("Wavelength (um)")
+#plt.ylabel("Transit depth")
+#plt.show()

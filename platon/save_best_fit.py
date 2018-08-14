@@ -1,16 +1,6 @@
 from __future__ import division
 import numpy as np
-
-#import scipy.io as spio
-from scipy.io.idl import readsav
-import pdb
-
-import batman
-import emcee
-import corner
-from time import time
 from sys import stdout
-
 import os, glob
 
 def signiDigits(xMean,dx1Low,dx1Upp):

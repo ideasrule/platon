@@ -199,9 +199,12 @@ class TransitDepthCalculator:
 
         raise ValueError("Unrecognized format for custom_abundances")
 
-    def _get_binned_depths(self, depths, T_star):
+    def _get_binned_corrected_depths(self, depths, T_star, T_spot,
+                                    spot_cov_frac):
         if self.wavelength_bins is None:
             return self.lambda_grid, depths
+        if spot_cov_frac is None:
+            spot_cov_frac = 0
 
         temperatures = list(self.stellar_spectra.keys())
         if T_star is None:
@@ -215,6 +218,17 @@ class TransitDepthCalculator:
             stellar_spectrum = 1.0 / self.lambda_grid**5 / \
                 (np.exp(h * c / self.lambda_grid / k_B / T_star) - 1)
 
+        if T_spot is None or T_spot == T_star:
+            spot_spectrum = np.copy(stellar_spectrum)    #np.ones(len(self.lambda_grid))
+        elif T_spot >= np.min(temperatures) and T_spot <= np.max(temperatures):
+            interpolator = scipy.interpolate.interp1d(
+                temperatures, list(self.stellar_spectra.values()),
+                axis=0)
+            spot_spectrum = interpolator(T_spot)
+        else:
+            spot_spectrum = 1.0 / self.lambda_grid**5 / \
+                (np.exp(h * c / self.lambda_grid / k_B / T_spot) - 1)
+
         binned_wavelengths = []
         binned_depths = []
         for (start, end) in self.wavelength_bins:
@@ -222,8 +236,7 @@ class TransitDepthCalculator:
                 self.lambda_grid >= start,
                 self.lambda_grid < end)
             binned_wavelengths.append(np.mean(self.lambda_grid[cond]))
-            binned_depth = np.average(
-                depths[cond], weights=stellar_spectrum[cond])
+            binned_depth = np.average(depths[cond] / (1 - spot_cov_frac*(1-spot_spectrum[cond]/stellar_spectrum[cond])), weights=stellar_spectrum[cond])
             binned_depths.append(binned_depth)
 
         return np.array(binned_wavelengths), np.array(binned_depths)
@@ -270,7 +283,7 @@ class TransitDepthCalculator:
                        add_collisional_absorption=True,
                        cloudtop_pressure=np.inf, custom_abundances=None,
                        custom_T_profile=None, custom_P_profile=None,
-                       T_star=None):
+                       T_star=None,T_spot=None,spot_cov_frac=None):
         '''
         Computes transit depths at a range of wavelengths, assuming an
         isothermal atmosphere.  To choose bins, call change_wavelength_bins().
@@ -329,6 +342,12 @@ class TransitDepthCalculator:
             Effective temperature of the star.  If you specify this and
             use wavelength binning, the wavelength binning becomes
             more accurate.
+        T_spot : float, optional
+            Effective temperature of the star spots. This can be used to make
+            wavelength dependent correction to the observed transit depths.
+        spot_cov_frac : float, optional
+            The spot covering fraction of the star by area. This can be used to
+            make wavelength dependent correction to the transit depths.
 
         Raises
         ------
@@ -397,4 +416,4 @@ class TransitDepthCalculator:
         transit_depths = (np.min(radii) / star_radius)**2 \
             + 2 / star_radius**2 * absorption_fraction.dot(radii[1:] * dr)
 
-        return self._get_binned_depths(transit_depths, T_star)
+        return self._get_binned_corrected_depths(transit_depths, T_star, T_spot, spot_cov_frac)

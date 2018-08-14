@@ -14,6 +14,7 @@ from .fit_info import FitInfo
 from .constants import METRES_TO_UM
 from ._params import _UniformParam
 from .errors import AtmosphereError
+from .save_best_fit import calcParaEstimates
 
 
 class Retriever:
@@ -64,6 +65,8 @@ class Retriever:
         Rs = params_dict["Rs"]
         Mp = params_dict["Mp"]
         T_star = params_dict["T_star"]
+        T_spot = params_dict["T_spot"]
+        spot_cov_frac = params_dict["spot_cov_frac"]
 
         if Rs <= 0 or Mp <= 0:
             return -np.inf
@@ -72,7 +75,8 @@ class Retriever:
             wavelengths, calculated_depths = calculator.compute_depths(
                 Rs, Mp, R, T, logZ, CO_ratio,
                 scattering_factor=scatt_factor, scattering_slope=scatt_slope,
-                cloudtop_pressure=cloudtop_P, T_star=T_star)
+                cloudtop_pressure=cloudtop_P, T_star=T_star,
+                T_spot=T_spot, spot_cov_frac=spot_cov_frac)
         except AtmosphereError as e:
             print(e)
             return -np.inf
@@ -153,7 +157,9 @@ class Retriever:
         best_params_arr = sampler.flatchain[np.argmax(
             sampler.flatlnprobability)]
         best_params_dict = fit_info._interpret_param_array(best_params_arr)
-        print("Best params", best_params_dict)
+        #print("Best params", best_params_dict)
+        param_name = list(best_params_dict.keys())
+        calcParaEstimates(sampler.flatchain,sampler.flatlnprobability,param_name)
 
         if plot_best:
             self._ln_prob(
@@ -225,7 +231,10 @@ class Retriever:
 
         best_params_arr = result.samples[np.argmax(result.logl)]
         best_params_dict = fit_info._interpret_param_array(best_params_arr)
-        print("Best params", best_params_dict)
+        param_name = list(best_params_dict.keys())
+        #print("Best params", best_params_dict)
+
+        calcParaEstimates(result.samples,result.logl,param_name)
 
         if plot_best:
             self._ln_prob(best_params_arr, calculator, fit_info,
@@ -235,7 +244,8 @@ class Retriever:
     @staticmethod
     def get_default_fit_info(Rs, Mp, Rp, T, logZ=0, CO_ratio=0.53,
                              log_cloudtop_P=np.inf, log_scatt_factor=0,
-                             scatt_slope=4, error_multiple=1, T_star=None):
+                             scatt_slope=4, error_multiple=1, T_star=None,
+                             T_spot=None, spot_cov_frac=None):
         '''Get a :class:`.FitInfo` object filled with best guess values.  A few
         parameters are required, but others can be set to default values if you
         do not want to specify them.  All parameters are in SI.
@@ -272,6 +282,12 @@ class Retriever:
         T_star : float, optional
             Effective temperature of the star.  This is used to make wavelength
             binning of transit depths more accurate.
+        T_spot : float, optional
+            Effective temperature of the star spots. This is used to make
+            wavelength dependent correction to the observed transit depths.
+        spot_cov_frac : float, optional
+            The spot covering fraction of the star by area. This is used to make
+            wavelength dependent correction to the transit depths.
 
         Returns
         -------
@@ -289,5 +305,7 @@ class Retriever:
                             'log_cloudtop_P': log_cloudtop_P,
                             'Rs': Rs,
                             'error_multiple': error_multiple,
-                            'T_star': T_star})
+                            'T_star': T_star,
+                            'T_spot': T_spot,
+                            'spot_cov_frac': spot_cov_frac})
         return fit_info

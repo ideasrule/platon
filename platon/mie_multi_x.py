@@ -26,8 +26,6 @@ def shexqnn2 (ri, x):
     eps = 1.0 * 10**(-15)
     xmin = 1.0 * 10**(-6)
 
-    ru = np.zeros((nterms,len(x)),dtype=complex)
-
     ier     = 0
     Qext    = np.zeros(len(x))
     Qsca    = np.zeros(len(x))
@@ -63,6 +61,8 @@ def shexqnn2 (ri, x):
     num[y>50000.0] = 1.005 * y[y>50000.0] + 50.5
 
     num = num.astype(int)
+    
+    ru = np.zeros((2*max(num),len(x)),dtype=complex)
 
     if np.any(np.greater(num,nterms)):
         ier = 2

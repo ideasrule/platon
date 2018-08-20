@@ -67,6 +67,10 @@ class Retriever:
         T_star = params_dict["T_star"]
         T_spot = params_dict["T_spot"]
         spot_cov_frac = params_dict["spot_cov_frac"]
+        frac_scale_height = params_dict["frac_scale_height"]
+        number_density = 10.0**params_dict["log_number_density"]
+        part_size = 10.0**params_dict["log_part_size"]
+        ri = params_dict["ri"]
 
         if Rs <= 0 or Mp <= 0:
             return -np.inf
@@ -76,7 +80,9 @@ class Retriever:
                 Rs, Mp, R, T, logZ, CO_ratio,
                 scattering_factor=scatt_factor, scattering_slope=scatt_slope,
                 cloudtop_pressure=cloudtop_P, T_star=T_star,
-                T_spot=T_spot, spot_cov_frac=spot_cov_frac)
+                T_spot=T_spot, spot_cov_frac=spot_cov_frac,
+                frac_scale_height=frac_scale_height, number_density=number_density,
+                part_size = part_size, ri = ri)
         except AtmosphereError as e:
             print(e)
             return -np.inf
@@ -157,7 +163,6 @@ class Retriever:
         best_params_arr = sampler.flatchain[np.argmax(
             sampler.flatlnprobability)]
         best_params_dict = fit_info._interpret_param_array(best_params_arr)
-        #print("Best params", best_params_dict)
         param_name = list(best_params_dict.keys())
         calcParaEstimates(sampler.flatchain,sampler.flatlnprobability,param_name)
 
@@ -232,8 +237,6 @@ class Retriever:
         best_params_arr = result.samples[np.argmax(result.logl)]
         best_params_dict = fit_info._interpret_param_array(best_params_arr)
         param_name = list(best_params_dict.keys())
-        #print("Best params", best_params_dict)
-
         calcParaEstimates(result.samples,result.logl,param_name)
 
         if plot_best:
@@ -245,7 +248,8 @@ class Retriever:
     def get_default_fit_info(Rs, Mp, Rp, T, logZ=0, CO_ratio=0.53,
                              log_cloudtop_P=np.inf, log_scatt_factor=0,
                              scatt_slope=4, error_multiple=1, T_star=None,
-                             T_spot=None, spot_cov_frac=None):
+                             T_spot=None, spot_cov_frac=None,frac_scale_height=1,
+                             log_number_density=0, log_part_size =-6, ri = 1.3):
         '''Get a :class:`.FitInfo` object filled with best guess values.  A few
         parameters are required, but others can be set to default values if you
         do not want to specify them.  All parameters are in SI.
@@ -307,5 +311,8 @@ class Retriever:
                             'error_multiple': error_multiple,
                             'T_star': T_star,
                             'T_spot': T_spot,
-                            'spot_cov_frac': spot_cov_frac})
+                            'spot_cov_frac': spot_cov_frac,
+                            'frac_scale_height': frac_scale_height,
+                            'log_number_density': log_number_density,
+                            'log_part_size': log_part_size, 'ri': ri})
         return fit_info

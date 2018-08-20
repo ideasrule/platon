@@ -9,6 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy import integrate
 import scipy.interpolate
+from scipy.stats import lognorm
 
 from . import _hydrostatic_solver
 from ._compatible_loader import load_dict_from_pickle
@@ -19,6 +20,8 @@ from ._tau_calculator import get_line_of_sight_tau
 from .constants import k_B, AMU, M_sun, Teff_sun, G, h, c
 from ._get_data import get_data
 
+import pdb, time
+from . import mie_multi_x
 
 class TransitDepthCalculator:
     def __init__(self, include_condensation=True, num_profile_heights=500,
@@ -157,6 +160,39 @@ class TransitDepthCalculator:
 
         return absorption_coeff
 
+    def _get_mie_scattering_absorption(self,P_cond,T_cond,ri,part_size,
+                                        frac_scale_height,number_density):
+        absorption_coeff = np.zeros((self.N_lambda, np.sum(P_cond), np.sum(T_cond)))
+        n_particle = number_density * np.power(self.P_meshgrid[:, P_cond, :][:, :, T_cond] / max(self.P_meshgrid[0,P_cond,0]), 1/frac_scale_height)
+        sigma = 0.5
+        r = lognorm.rvs(s=sigma,scale=part_size,size=100) #np.random.lognormal(np.log(part_size),sigma,100)
+        r = np.sort(r)
+        prob = lognorm.pdf(r,s=sigma,scale=part_size)
+        geometric_cross_section = np.pi*r**2
+
+        x = 2*np.pi*r[np.newaxis,:] / self.lambda_grid[:,np.newaxis]
+        x = x.flatten()
+
+        part_hist = np.histogram(x,bins='auto')
+        x_dist = part_hist[0]
+        x_hist = part_hist[1]
+        output_hist = mie_multi_x.shexqnn2(ri,x_hist)
+        if output_hist==None:
+            print('Mie Scattering Calculation Failed')
+            print(str(x_hist))
+            print(part_size,ri,frac_scale_height,number_density)
+            
+        Qext_hist = output_hist[0]
+        spl = scipy.interpolate.splrep(x_hist,Qext_hist)
+        Qext_intpl = scipy.interpolate.splev(x,spl)
+        Qext_intpl = np.reshape(Qext_intpl,(self.N_lambda,len(r)))
+        weighted_Qext_intpl = np.trapz(prob*geometric_cross_section*Qext_intpl,r)/np.trapz(prob*geometric_cross_section,r)
+        eff_cross_section = np.trapz(prob*geometric_cross_section*Qext_intpl,r)/np.trapz(prob,r)
+        eff_cross_section = np.reshape(eff_cross_section,(self.N_lambda,1,1))
+        absorption_coeff =  n_particle * eff_cross_section
+
+        return absorption_coeff
+
     def _get_above_cloud_r_and_dr(self, P_profile, T_profile, abundances,
                                   planet_mass, planet_radius, star_radius,
                                   above_cloud_cond, T_star=None):
@@ -283,7 +319,9 @@ class TransitDepthCalculator:
                        add_collisional_absorption=True,
                        cloudtop_pressure=np.inf, custom_abundances=None,
                        custom_T_profile=None, custom_P_profile=None,
-                       T_star=None,T_spot=None,spot_cov_frac=None):
+                       T_star=None,T_spot=None,spot_cov_frac=None,
+                       frac_scale_height=1,number_density=0,
+                       part_size = 10**-6, ri = 1.3, Mie_scattering = True):
         '''
         Computes transit depths at a range of wavelengths, assuming an
         isothermal atmosphere.  To choose bins, call change_wavelength_bins().
@@ -397,9 +435,13 @@ class TransitDepthCalculator:
 
         absorption_coeff = self._get_gas_absorption(abundances, P_cond, T_cond)
         if add_scattering:
-            absorption_coeff += self._get_scattering_absorption(
-                abundances, P_cond, T_cond,
-                scattering_factor, scattering_slope, scattering_ref_wavelength)
+            if Mie_scattering:
+                absorption_coeff += self._get_mie_scattering_absorption(P_cond,
+                        T_cond,ri, part_size, frac_scale_height, number_density)
+            else:
+                absorption_coeff += self._get_scattering_absorption(abundances,
+                P_cond, T_cond, scattering_factor, scattering_slope,
+                scattering_ref_wavelength)
 
         if add_collisional_absorption:
             absorption_coeff += self._get_collisional_absorption(
@@ -410,10 +452,8 @@ class TransitDepthCalculator:
             T_profile, P_profile)
 
         tau_los = get_line_of_sight_tau(absorption_coeff_atm, radii)
-
         absorption_fraction = 1 - np.exp(-tau_los)
 
         transit_depths = (np.min(radii) / star_radius)**2 \
             + 2 / star_radius**2 * absorption_fraction.dot(radii[1:] * dr)
-
         return self._get_binned_corrected_depths(transit_depths, T_star, T_spot, spot_cov_frac)

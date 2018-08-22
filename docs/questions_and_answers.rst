@@ -112,6 +112,11 @@ in that order.
 
     calculator.compute_depths(star_radius, planet_mass, planet_radius, temperature, logZ=None, CO_ratio=None, custom_abundances=abundances)
 
+* **How do I specify custom abundances in the forward model?**
+  See the answer to the above question.  If you want to specify different
+  abundances for each temperature/pressure point instead of a constant
+  abundance, see the documentation for custom_abundances in :func:`~platon.transit_depth_calculator.TransitDepthCalculator.compute_depths`
+    
 * **How do I retrieve individual species abundances?**
   You can't.  While this would be trivial to implement--and you can do so if
   you really need to--it could easily lead to combinations of species

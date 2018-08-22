@@ -92,8 +92,10 @@ in that order.
   You can tweak the atmospheric abundances and see what happens.  First, get
   baseline abundances: ::
 
+    from platon.abundance_getter import AbundanceGetter
+    getter = AbundanceGetter()
     # Solar logZ and C/O ratio. Modify as required.
-    abundances = AbundanceGetter.get(0, 0.53)
+    abundances = getter.get(0, 0.53)
 
   You can then modify this at will: ::
 

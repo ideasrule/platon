@@ -61,7 +61,7 @@ def shexqnn2 (ri, x):
     num[y>50000.0] = 1.005 * y[y>50000.0] + 50.5
 
     num = num.astype(int)
-    
+
     ru = np.zeros((2*max(num),len(x)),dtype=complex)
 
     if np.any(np.greater(num,nterms)):
@@ -91,7 +91,7 @@ def shexqnn2 (ri, x):
     iu2 = 0
 
     #Mie Coefficients
-    s = ru[iterm] / ri + ass
+    s = ru[iterm] / ri + ax
     s1 = s * besJ1 - besJ0
     s2 = s * besY1 - besY0
     ra0 = s1 / (s1 - s3 * s2)

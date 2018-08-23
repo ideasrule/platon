@@ -36,7 +36,22 @@ class TestMie(unittest.TestCase):
         Qext = np.sum(all_terms[~np.isnan(all_terms)])
         return Qext
     
-    def compare_with_lx_mie(self):
+    def test_real_refractive_index(self):
+        radius = 1e-6
+        m = 2.1
+        wavelengths = np.load("platon/data/wavelengths.npy")
+        xs = 2*np.pi*radius/wavelengths
+        Qext = mie_multi_x.shexqnn2(m, xs)[0]
+        simple_Qext = np.array([self.simple_Qext(m, x) for x in xs])
+        
+        #Make sure fiducial Qext calculation agrees with simple version
+        #plt.plot(xs, Qext)
+        #plt.plot(xs, simple_Qext)
+        #plt.show()
+        self.assertTrue(np.allclose(Qext, simple_Qext))
+
+        
+    def test_complex_refractive_index(self):
         radius = 1e-6
         m = 1.33 - 0.1j
         wavelengths = np.load("platon/data/wavelengths.npy")
@@ -55,8 +70,6 @@ class TestMie(unittest.TestCase):
         #plt.plot(xs, lx_mie_Qext)
         #plt.plot(xs, simple_Qext)
         #plt.show()
-
-    
         
 if __name__ == '__main__':
     unittest.main()

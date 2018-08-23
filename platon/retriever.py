@@ -249,7 +249,7 @@ class Retriever:
                              log_cloudtop_P=np.inf, log_scatt_factor=0,
                              scatt_slope=4, error_multiple=1, T_star=None,
                              T_spot=None, spot_cov_frac=None,frac_scale_height=1,
-                             log_number_density=0, log_part_size =-6, ri = 1.3):
+                             log_number_density=0, log_part_size =-6, ri = None):
         '''Get a :class:`.FitInfo` object filled with best guess values.  A few
         parameters are required, but others can be set to default values if you
         do not want to specify them.  All parameters are in SI.

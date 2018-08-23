@@ -320,8 +320,8 @@ class TransitDepthCalculator:
                        cloudtop_pressure=np.inf, custom_abundances=None,
                        custom_T_profile=None, custom_P_profile=None,
                        T_star=None,T_spot=None,spot_cov_frac=None,
-                       frac_scale_height=1,number_density=0,
-                       part_size = 10**-6, ri = 1.3, Mie_scattering = True):
+                       ri = None, frac_scale_height=1,number_density=0,
+                       part_size = 10**-6):
         '''
         Computes transit depths at a range of wavelengths, assuming an
         isothermal atmosphere.  To choose bins, call change_wavelength_bins().
@@ -435,7 +435,7 @@ class TransitDepthCalculator:
 
         absorption_coeff = self._get_gas_absorption(abundances, P_cond, T_cond)
         if add_scattering:
-            if Mie_scattering:
+            if ri is not None:
                 absorption_coeff += self._get_mie_scattering_absorption(P_cond,
                         T_cond,ri, part_size, frac_scale_height, number_density)
                 absorption_coeff += self._get_scattering_absorption(abundances,

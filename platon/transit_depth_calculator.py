@@ -181,7 +181,7 @@ class TransitDepthCalculator:
             print('Mie Scattering Calculation Failed')
             print(str(x_hist))
             print(part_size,ri,frac_scale_height,number_density)
-            
+
         Qext_hist = output_hist[0]
         spl = scipy.interpolate.splrep(x_hist,Qext_hist)
         Qext_intpl = scipy.interpolate.splev(x,spl)
@@ -438,6 +438,8 @@ class TransitDepthCalculator:
             if Mie_scattering:
                 absorption_coeff += self._get_mie_scattering_absorption(P_cond,
                         T_cond,ri, part_size, frac_scale_height, number_density)
+                absorption_coeff += self._get_scattering_absorption(abundances,
+                P_cond, T_cond)
             else:
                 absorption_coeff += self._get_scattering_absorption(abundances,
                 P_cond, T_cond, scattering_factor, scattering_slope,

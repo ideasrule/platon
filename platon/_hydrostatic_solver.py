@@ -31,7 +31,7 @@ def _solve(P_profile, T_profile, ref_pressure, mu_profile,
     if T_star is None:
         T_star = Teff_sun
 
-    R_hill = 0.5 * star_radius * \
+    R_hill = star_radius * \
         (T_star / T_profile[0])**2 * (planet_mass / (3 * M_sun))**(1.0 / 3)
     max_r_estimate = 1.0 / (1 / planet_radius + k_B * np.mean(T_profile) * np.log(
         P_profile[0] / P_profile[-1]) / (G * planet_mass * np.mean(mu_profile) * AMU))

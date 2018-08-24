@@ -4,7 +4,6 @@ import copy
 import emcee
 import nestle
 import matplotlib
-matplotlib.use('Agg')
 
 from platon.retriever import Retriever
 from platon.fit_info import FitInfo

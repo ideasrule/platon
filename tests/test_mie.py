@@ -41,7 +41,7 @@ class TestMie(unittest.TestCase):
         m = 2.1
         wavelengths = np.load("platon/data/wavelengths.npy")
         xs = 2*np.pi*radius/wavelengths
-        Qext = mie_multi_x.shexqnn2(m, xs)[0]
+        Qext = mie_multi_x.get_Qext(m, xs)
         simple_Qext = np.array([self.simple_Qext(m, x) for x in xs])
         
         #Make sure fiducial Qext calculation agrees with simple version
@@ -56,7 +56,7 @@ class TestMie(unittest.TestCase):
         m = 1.33 - 0.1j
         wavelengths = np.load("platon/data/wavelengths.npy")
         xs = 2*np.pi*radius/wavelengths
-        Qext = mie_multi_x.shexqnn2(m, xs)[0]
+        Qext = mie_multi_x.get_Qext(m.conjugate(), xs)
         simple_Qext = np.array([self.simple_Qext(m, x) for x in xs])
         
         lx_mie_Qext = np.loadtxt("tests/testing_data/lx_mie_output.dat", unpack=True)[4]

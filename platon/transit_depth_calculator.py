@@ -176,7 +176,7 @@ class TransitDepthCalculator:
         part_hist = np.histogram(x,bins='auto')
         x_dist = part_hist[0]
         x_hist = part_hist[1]
-        Qext_hist = mie_multi_x.get_Qext(ri,x_hist)[0]
+        Qext_hist = mie_multi_x.get_Qext(ri,x_hist)
         if Qext_hist is None:
             print('Mie Scattering Calculation Failed')
             print(str(x_hist))

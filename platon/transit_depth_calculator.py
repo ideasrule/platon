@@ -161,35 +161,39 @@ class TransitDepthCalculator:
         return absorption_coeff
 
     def _get_mie_scattering_absorption(self,P_cond,T_cond,ri,part_size,
-                                        frac_scale_height,number_density):
-        absorption_coeff = np.zeros((self.N_lambda, np.sum(P_cond), np.sum(T_cond)))
-        n_particle = number_density * np.power(self.P_meshgrid[:, P_cond, :][:, :, T_cond] / max(self.P_meshgrid[0,P_cond,0]), 1/frac_scale_height)
-        sigma = 0.5
-        r = lognorm.rvs(s=sigma,scale=part_size,size=100) #np.random.lognormal(np.log(part_size),sigma,100)
-        r = np.sort(r)
-        prob = lognorm.pdf(r,s=sigma,scale=part_size)
-        geometric_cross_section = np.pi*r**2
-
+                                       frac_scale_height,number_density,
+                                       sigma = 0.5, quadrature_deg = 20):
+        start = time.time()
+        '''r = lognorm.rvs(s=sigma,scale=part_size,size=100)
         x = 2*np.pi*r[np.newaxis,:] / self.lambda_grid[:,np.newaxis]
         x = x.flatten()
 
         part_hist = np.histogram(x,bins='auto')
         x_dist = part_hist[0]
         x_hist = part_hist[1]
-        Qext_hist = mie_multi_x.get_Qext(ri,x_hist)
-        if Qext_hist is None:
-            print('Mie Scattering Calculation Failed')
-            print(str(x_hist))
-            print(part_size,ri,frac_scale_height,number_density)
+        Qext_hist = mie_multi_x.get_Qext(ri, x_hist)
+        interpolator = scipy.interpolate.interp1d(x_hist, Qext_hist)'''
 
-        interpolator = scipy.interpolate.interp1d(x_hist, Qext_hist)
-        Qext_intpl = interpolator(x)
+        absorption_coeff = np.zeros((self.N_lambda, np.sum(P_cond), np.sum(T_cond)))
+        n_particle = number_density * np.power(self.P_meshgrid[:, P_cond, :][:, :, T_cond] / max(self.P_meshgrid[0,P_cond,0]), 1/frac_scale_height)
 
-        Qext_intpl = np.reshape(Qext_intpl, (self.N_lambda, len(r)))
-        weighted_Qext_intpl = np.trapz(prob*geometric_cross_section*Qext_intpl, r)/np.trapz(prob*geometric_cross_section, r)
-        eff_cross_section = np.trapz(prob*geometric_cross_section*Qext_intpl,r)/np.trapz(prob,r)
+        points, weights = np.polynomial.hermite.hermgauss(quadrature_deg)
+        min_x = 2 * np.pi * part_size * np.exp(np.sqrt(2) * sigma * points[0]) / np.max(self.lambda_grid)
+        max_x = 2 * np.pi * part_size * np.exp(np.sqrt(2) * sigma * points[-1]) / np.min(self.lambda_grid)
+        xs_interp = np.logspace(np.log10(0.9*min_x), np.log10(1.1*max_x), 100)
+        #print(xs_interp)
+        Qext_interp = scipy.interpolate.interp1d(xs_interp, mie_multi_x.get_Qext(ri, xs_interp))
+
+        eff_cross_section = np.zeros(self.N_lambda)
+        for i in range(len(points)):
+            size = part_size * np.exp(np.sqrt(2) * sigma * points[i])
+            xs = 2 * np.pi * size / self.lambda_grid            
+            Cexts = Qext_interp(xs) * np.pi * size**2
+            eff_cross_section += 1.0/np.sqrt(np.pi) * weights[i] * Cexts
+
         eff_cross_section = np.reshape(eff_cross_section,(self.N_lambda,1,1))
         absorption_coeff =  n_particle * eff_cross_section
+        print("Time", time.time() - start)                
         return absorption_coeff
 
     def _get_above_cloud_r_and_dr(self, P_profile, T_profile, abundances,

@@ -182,14 +182,14 @@ class TransitDepthCalculator:
             print(str(x_hist))
             print(part_size,ri,frac_scale_height,number_density)
 
-        spl = scipy.interpolate.splrep(x_hist,Qext_hist)
-        Qext_intpl = scipy.interpolate.splev(x,spl)
-        Qext_intpl = np.reshape(Qext_intpl,(self.N_lambda,len(r)))
-        weighted_Qext_intpl = np.trapz(prob*geometric_cross_section*Qext_intpl,r)/np.trapz(prob*geometric_cross_section,r)
+        interpolator = scipy.interpolate.interp1d(x_hist, Qext_hist)
+        Qext_intpl = interpolator(x)
+
+        Qext_intpl = np.reshape(Qext_intpl, (self.N_lambda, len(r)))
+        weighted_Qext_intpl = np.trapz(prob*geometric_cross_section*Qext_intpl, r)/np.trapz(prob*geometric_cross_section, r)
         eff_cross_section = np.trapz(prob*geometric_cross_section*Qext_intpl,r)/np.trapz(prob,r)
         eff_cross_section = np.reshape(eff_cross_section,(self.N_lambda,1,1))
         absorption_coeff =  n_particle * eff_cross_section
-
         return absorption_coeff
 
     def _get_above_cloud_r_and_dr(self, P_profile, T_profile, abundances,

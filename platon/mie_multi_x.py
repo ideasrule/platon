@@ -1,70 +1,84 @@
 import numpy as np
-import scipy
-import scipy.special as spl
-import copy
-import pdb
-import time
 
-def get_iterations_required(refractive_index, x):
-    y = np.sqrt(np.real(refractive_index * np.conj(refractive_index))) * x
-    num = 1.25 * y + 15.5
+def get_iterations_required(xs, c=4.3):
+    # c=4.3 corresponds to epsilon=1e-8, according to Cachorro & Salcedo 2001
+    # (https://arxiv.org/abs/physics/0103052)
+    num_iters = xs + c * xs**(1.0/3)
+    num_iters = num_iters.astype(int) + 2
+    return num_iters
 
-    num[y<1.0] = 7.5 * y[y<1.0] + 9.0
+def get_An(zs, n):
+    # Evaluate A_n(z) for an array of z's using the continued fraction method.
+    # This is necessary for downward recursion of A_n(z) for lower n's.
+    # The algorithm is from http://adsabs.harvard.edu/abs/1976ApOpt..15..668L
+    nu = n + 0.5
+    ratio = 1
 
-    num[(y>100.0) & (y<50000.0)] = 1.0625 * y[(y>100.0) & (y<50000.0)] + 28.5
+    numerator = None
+    denominator = None
 
-    num[y>50000.0] = 1.005 * y[y>50000.0] + 50.5
+    i = 1
+    
+    while True:
+        an = (-1)**(i+1) * 2 * (nu + i - 1)/zs
+        if i == 1:
+            numerator = an
+        elif i > 1:
+            numerator = an + 1.0/numerator
 
-    num = num.astype(int)
-    return num
+        ratio *= numerator
+        
+        if i == 2:
+            denominator = an
+        elif i > 2:
+            denominator = an + 1.0/denominator
 
-def get_An(max_n, m, xs):
-    #Returns An(mx) from n=0 to n = max_n-1 using downward recursion
-    An = np.zeros((max_n, len(xs)), dtype=complex)
-    An[max_n - 1] = max_n / (m * xs)
+        if denominator is not None:
+            ratio /= denominator
+            if np.allclose(numerator, denominator):
+                break
+        i += 1
+
+    A_n =  -n/zs + ratio
+    return A_n
+            
+
+def get_As(max_n, zs):
+    # Returns An(zs) from n=0 to n = max_n-1 using downward recursion.
+    # zs should be an array of real or complex numbers.
+    An = np.zeros((max_n, len(zs)), dtype=complex)
+    An[max_n - 1] = get_An(zs, max_n-1)
+    
     for i in range(max_n - 2, -1, -1):
-        An[i] = (i + 1)/(m*xs) - 1.0/((i + 1)/(m*xs) + An[i+1])
+        An[i] = (i + 1)/zs - 1.0/((i + 1)/zs + An[i+1])
     return An
     
 
 def get_Qext(m, xs):
-    num_iterations = get_iterations_required(m, xs)
-    A = get_An(np.max(num_iterations), m, xs)
+    # Uses algorithm from Kitzmann & Heng 2017 to compute Qext(x) for an array
+    # of x's and refractive index m.  This algorithm is stable and does not
+    # lead to numerical overflows.  Paper: https://arxiv.org/abs/1710.04946
+    
+    num_iterations = get_iterations_required(xs) 
+    max_iter = max(num_iterations) 
+    
+    A_mx = get_As(max_iter, m * xs)
+    A_x = get_As(max_iter, xs)
     Qext = np.zeros(len(xs))
 
-    #At iteration i, curr_J is the first kind Bessel function of order i+1/2
-    curr_Y = np.zeros(len(xs))
-
-    #At iteration i, curr_J is the second kind Bessel function of order i+1/2
-    curr_J = np.zeros(len(xs))
+    curr_B = 1.0/(1 + 1j * (np.cos(xs) + xs*np.sin(xs))/(np.sin(xs) - xs*np.cos(xs)))
+    curr_C = -1.0/xs + 1.0/(1.0/xs  + 1.0j)
     
-    prev_Y = -np.sqrt(2/np.pi/xs) * np.cos(xs) #Y_(i-1/2)
-    prev_prev_Y = None # Y_(i-3/2) (but i=1 at beginning)
-    prev_J = np.sqrt(2/np.pi/xs) * np.sin(xs) #J_(i-1/2)
-    
-    for i in range(1, np.max(num_iterations)):
+    for i in range(1, max_iter):
         cond = num_iterations > i
+        if i > 1:
+            curr_C[cond] = -i/xs[cond] + 1.0/(i/xs[cond] - curr_C[cond])
+            curr_B[cond] = curr_B[cond] * (curr_C[cond] + i/xs[cond])/(A_x[i][cond] + i/xs[cond])
+            
+        an = curr_B[cond] * (A_mx[i][cond]/m - A_x[i][cond])/(A_mx[i][cond]/m - curr_C[cond])
+        bn = curr_B[cond] * (A_mx[i][cond]*m - A_x[i][cond])/(A_mx[i][cond]*m - curr_C[cond])
         
-        if i == 1:
-            curr_Y = -np.sqrt(2/np.pi/xs) * (np.cos(xs)/xs + np.sin(xs))
-        else:
-            curr_Y[cond] = (2*i - 1)/xs[cond] * prev_Y[cond] - prev_prev_Y[cond]
-
-        curr_J[cond] = 2/np.pi/xs[cond]/prev_Y[cond] + curr_Y[cond]/prev_Y[cond]*prev_J[cond]
-        
-        an_numerator = (A[i][cond]/m + i/xs[cond]) * curr_J[cond] - prev_J[cond]
-        an_denominator = an_numerator + 1j*((A[i][cond]/m + i/xs[cond])*curr_Y[cond] - prev_Y[cond])
-        an = an_numerator/an_denominator
-
-        bn_numerator = (m*A[i][cond] + i/xs[cond])*curr_J[cond] - prev_J[cond]
-        bn_denominator = bn_numerator + 1j*((m*A[i][cond] + i/xs[cond])*curr_Y[cond] - prev_Y[cond])
-        bn = bn_numerator/bn_denominator
         Qext[cond] += (2*i + 1) * (an + bn).real
-
-        prev_prev_Y = np.copy(prev_Y)
-        prev_J = np.copy(curr_J)
-        prev_Y = np.copy(curr_Y)
         
     Qext *= 2/xs**2
     return Qext
-        

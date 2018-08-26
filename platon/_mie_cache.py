@@ -9,34 +9,32 @@ class MieCache:
         self.all_xs = np.array([])
         self.all_Qexts = np.array([])
         self.all_ms = np.array([], dtype=complex)
-        self.total_gets = 1
-        self.total_hits = 1
+
         
     def get(self, m, xs, max_frac_error=0.01):
-        self.total_gets += 1
-        #if self.total_gets % 10 == 0:
-        #    print float(self.total_hits)/self.total_gets, len(self.all_xs)
+        result = np.ones(len(xs)) * np.nan
+
         if len(self.all_xs) == 0:
-            return None
+            return result
         
-        closest_matches = np.searchsorted(self.all_xs, xs)
-        if np.min(closest_matches) == 0 or np.max(closest_matches) == len(self.all_xs):
-            return None
-
-        if np.any(self.all_ms[closest_matches] != m):
-            return None
-
+        in_cache = np.ones(len(xs), dtype=bool)
+        closest_matches = np.searchsorted(self.all_xs, xs)        
+        in_cache[np.logical_or(closest_matches == 0, closest_matches == len(self.all_xs))] = False
+        
+        closest_matches[closest_matches == len(self.all_xs)] -= 1
+        in_cache[self.all_ms[closest_matches] != m] = False
         frac_errors = np.abs(self.all_xs[closest_matches] - xs)/xs
-        if np.max(frac_errors) > max_frac_error:
-            return None
+        in_cache[frac_errors > max_frac_error] = False
 
-        Qexts = self.interpolator(xs)
-        self.total_hits += 1
-        return Qexts
-
+        result[in_cache] = self.interpolator(xs[in_cache])
+        
+        return result
+        
 
     def add(self, m, xs, Qexts, size_limit=1000000):
-        print("Adding")
+        if len(xs) == 0:
+            return
+        
         self.all_xs = np.append(self.all_xs, xs)
         self.all_Qexts = np.append(self.all_Qexts, Qexts)
         self.all_ms = np.append(self.all_ms, np.array([m] * len(xs)))
@@ -57,27 +55,3 @@ class MieCache:
         self.interpolator = scipy.interpolate.interp1d(
             self.all_xs, self.all_Qexts, assume_sorted=True)
 
-'''import numpy as np
-import time
-import scipy.interpolate
-
-cache = MieCache()
-while True:
-    xs = np.random.uniform(0, 1000, 1000)
-    y_vals = np.random.uniform(0, 2, 1000)
-    cache.add(xs, y_vals)
-    print cache.get(np.array([1, 3, 951]))
-
-#cache = MieCache()
-#cache.add(xs, y_vals)
-
-exit(0)
-
-
-start = time.time()
-interpolator = scipy.interpolate.interp1d(arr, y_vals)
-interpolator(152)
-#np.sort(arr)
-print time.time() - start
-print len(arr)
-'''

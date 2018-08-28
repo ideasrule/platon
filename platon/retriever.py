@@ -24,11 +24,11 @@ class Retriever:
         # there is no good way to validate Gaussian parameters, which have
         # infinite range.
         fit_info = copy.deepcopy(fit_info)
-
-        if fit_info.all_params["ri"] is None:
+        
+        if fit_info.all_params["ri"].best_guess is None:
             # Not using Mie scattering
-            if fit_info.all_params["log_part_size"].best_guess != -np.inf:
-                raise ValueError("log particle size must be -inf if not using Mie scattering")            
+            if fit_info.all_params["log_number_density"].best_guess != -np.inf:
+                raise ValueError("log number density must be -inf if not using Mie scattering")            
         else:
             if fit_info.all_params["log_scatt_factor"].best_guess != -np.inf:
                 raise ValueError("log scattering factor must be -inf if using Mie scattering")           

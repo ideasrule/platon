@@ -25,6 +25,15 @@ class Retriever:
         # infinite range.
         fit_info = copy.deepcopy(fit_info)
 
+        if fit_info.all_params["ri"] is None:
+            # Not using Mie scattering
+            if fit_info.all_params["log_part_size"].best_guess != -np.inf:
+                raise ValueError("log particle size must be -inf if not using Mie scattering")            
+        else:
+            if fit_info.all_params["log_scatt_factor"].best_guess != -np.inf:
+                raise ValueError("log scattering factor must be -inf if using Mie scattering")           
+            
+        
         for name in fit_info.fit_param_names:
             this_param = fit_info.all_params[name]
             if not isinstance(this_param, _UniformParam):
@@ -249,7 +258,7 @@ class Retriever:
                              log_cloudtop_P=np.inf, log_scatt_factor=0,
                              scatt_slope=4, error_multiple=1, T_star=None,
                              T_spot=None, spot_cov_frac=None,frac_scale_height=1,
-                             log_number_density=0, log_part_size =-6, ri = None):
+                             log_number_density=-np.inf, log_part_size =-6, ri = None):
         '''Get a :class:`.FitInfo` object filled with best guess values.  A few
         parameters are required, but others can be set to default values if you
         do not want to specify them.  All parameters are in SI.

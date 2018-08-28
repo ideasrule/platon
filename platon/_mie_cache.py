@@ -40,8 +40,8 @@ class MieCache:
         self.all_ms = np.append(self.all_ms, np.array([m] * len(xs)))
         if len(self.all_xs) > size_limit:
             to_remove = np.random.choice(
-                range(len(self.all_xs)), len(self.all_xs) - size_limit,
-                replace=True)
+                range(len(self.all_xs)), len(self.all_xs) - size_limit + 1,
+                replace=False)
             
             self.all_xs = np.delete(self.all_xs, to_remove)
             self.all_Qexts = np.delete(self.all_Qexts, to_remove)
@@ -53,5 +53,7 @@ class MieCache:
         self.all_ms = self.all_ms[p]
         
         self.interpolator = scipy.interpolate.interp1d(
-            self.all_xs, self.all_Qexts, assume_sorted=True)
+            self.all_xs[self.all_ms == m],
+            self.all_Qexts[self.all_ms == m],
+            assume_sorted=True)
 

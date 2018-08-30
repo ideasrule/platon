@@ -71,5 +71,24 @@ class TestMie(unittest.TestCase):
         #plt.plot(xs, simple_Qext)
         #plt.show()
 
+    def test_lx_mie_values(self):
+        # Check values reported in Kitzmann & Heng 2017
+        Qexts = mie_multi_x.get_Qext(10 - 10j, [0.001, 0.1, 1, 100, 1000, 2e4, 1e6])
+        expected = [6.0020755e-5, 3.2039088e-2, 2.53299308, 2.07112433, 2.02426046, 2.00361474, 2.00021914]
+        self.assertTrue(np.allclose(Qexts, expected))
+
+        Qexts = mie_multi_x.get_Qext(1.5 - 1j, [1e2, 1e4])
+        expected = [2.09750176, 2.00436771]
+        self.assertTrue(np.allclose(Qexts, expected))
+
+        Qexts = mie_multi_x.get_Qext(1.33 - 1e-5j, [1e2, 1e4])
+        expected = [2.10132071, 2.00408893]
+        self.assertTrue(np.allclose(Qexts, expected))
+
+        Qexts = mie_multi_x.get_Qext(0.75, [10, 1e3, 1e4])
+        expected = [2.23226484, 1.99790818, 2.00125518]
+        self.assertTrue(np.allclose(Qexts, expected))
+        
+
 if __name__ == '__main__':
     unittest.main()

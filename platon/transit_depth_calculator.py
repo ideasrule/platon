@@ -162,7 +162,7 @@ class TransitDepthCalculator:
 
         return absorption_coeff
 
-    def _get_mie_scattering_absorption(self,P_cond,T_cond,ri,part_size,
+    def _get_mie_scattering_absorption(self, max_P, P_cond,T_cond,ri,part_size,
                                        frac_scale_height,number_density,
                                        sigma = 0.5, quadrature_deg = 20):
         eff_cross_section = np.zeros(self.N_lambda)
@@ -183,7 +183,7 @@ class TransitDepthCalculator:
 
         eff_cross_section = np.reshape(eff_cross_section,(self.N_lambda,1,1))
 
-        n_particle = number_density * np.power(self.P_meshgrid[:, P_cond, :][:, :, T_cond] / max(self.P_meshgrid[0,P_cond,0]), 1/frac_scale_height)
+        n_particle = number_density * np.power(self.P_meshgrid[:, P_cond, :][:, :, T_cond] / max_P, 1/frac_scale_height)
         
         absorption_coeff =  n_particle * eff_cross_section
         return absorption_coeff
@@ -431,8 +431,9 @@ class TransitDepthCalculator:
         absorption_coeff = self._get_gas_absorption(abundances, P_cond, T_cond)
         if add_scattering:
             if ri is not None:
-                absorption_coeff += self._get_mie_scattering_absorption(P_cond,
-                        T_cond,ri, part_size, frac_scale_height, number_density)
+                absorption_coeff += self._get_mie_scattering_absorption(
+                    np.max(P_profile), P_cond, T_cond, ri, part_size,
+                    frac_scale_height, number_density)
                 absorption_coeff += self._get_scattering_absorption(abundances,
                 P_cond, T_cond)
             else:

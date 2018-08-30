@@ -58,7 +58,8 @@ def get_Qext(m, xs):
     # Uses algorithm from Kitzmann & Heng 2017 to compute Qext(x) for an array
     # of x's and refractive index m.  This algorithm is stable and does not
     # lead to numerical overflows.  Paper: https://arxiv.org/abs/1710.04946
-    
+
+    xs = np.array(xs)
     num_iterations = get_iterations_required(xs) 
     max_iter = max(num_iterations) 
     

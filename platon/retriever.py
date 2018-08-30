@@ -112,7 +112,7 @@ class Retriever:
         return fit_info._ln_prior(params) + ln_prob
 
     def run_emcee(self, wavelength_bins, depths, errors, fit_info, nwalkers=50,
-                  nsteps=10000, include_condensation=True,
+                  nsteps=1000, include_condensation=True,
                   plot_best=False):
         '''Runs affine-invariant MCMC to retrieve atmospheric parameters.
 

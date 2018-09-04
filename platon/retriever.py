@@ -171,9 +171,8 @@ class Retriever:
 
         best_params_arr = sampler.flatchain[np.argmax(
             sampler.flatlnprobability)]
-        best_params_dict = fit_info._interpret_param_array(best_params_arr)
-        param_name = list(best_params_dict.keys())
-        calcParaEstimates(sampler.flatchain,sampler.flatlnprobability,param_name)
+        
+        calcParaEstimates(sampler.flatchain, sampler.flatlnprobability, fit_info.fit_param_names)
 
         if plot_best:
             self._ln_prob(

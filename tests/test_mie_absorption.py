@@ -1,6 +1,8 @@
 import unittest
 import numpy as np
 import scipy.integrate
+from nose.tools import nottest
+
 from platon import mie_multi_x
 from platon.transit_depth_calculator import TransitDepthCalculator
 
@@ -20,6 +22,7 @@ class TestMieAbsorption(unittest.TestCase):
         result, error = scipy.integrate.quad(integrand, -10, 10)
         return result
 
+    @nottest
     def run_test(self, m, r_mean, sigma, frac_scale_height=2):
         n_0 = 2.3
         calc = TransitDepthCalculator()

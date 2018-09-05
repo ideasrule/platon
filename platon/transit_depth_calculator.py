@@ -164,23 +164,23 @@ class TransitDepthCalculator:
 
     def _get_mie_scattering_absorption(self, P_cond,T_cond,ri,part_size,
                                        frac_scale_height,number_density,
-                                       sigma = 0.5, quadrature_deg = 20):
+                                       sigma = 0.5, max_zscore = 5, num_integral_points = 50):
         eff_cross_section = np.zeros(self.N_lambda)
+        z_scores = np.linspace(-max_zscore, max_zscore, num_integral_points)
+        integrand_values = []
         
-        points, weights = np.polynomial.hermite.hermgauss(quadrature_deg)
-
-        for i in range(quadrature_deg):
-            size = part_size * np.exp(np.sqrt(2) * sigma * points[i])
+        for i, z in enumerate(z_scores):
+            size = part_size * np.exp(z * sigma)
             xs = 2 * np.pi * size / self.lambda_grid
             Qexts = self._mie_cache.get(ri, xs)
             cache_misses = np.isnan(Qexts)
             if np.sum(cache_misses) > 0:
                 Qexts[cache_misses] = mie_multi_x.get_Qext(ri, xs[cache_misses])
                 self._mie_cache.add(ri, xs[cache_misses], Qexts[cache_misses])
-            
-            Cexts = Qexts * np.pi * size**2
-            eff_cross_section += 1.0/np.sqrt(np.pi) * weights[i] * Cexts
+            lognormal_prob = np.exp(-z**2/2) * np.sqrt(1.0/2/np.pi)
+            integrand_values.append(lognormal_prob * Qexts * np.pi * size**2)
 
+        eff_cross_section = np.trapz(np.array(integrand_values), z_scores, axis=0)
         eff_cross_section = np.reshape(eff_cross_section,(self.N_lambda,1,1))
 
         n_particle = number_density * np.power(self.P_meshgrid[:, P_cond, :][:, :, T_cond] / np.max(self.P_grid[P_cond]), 1/frac_scale_height)

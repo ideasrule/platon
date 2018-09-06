@@ -167,7 +167,9 @@ class TransitDepthCalculator:
                                        sigma = 0.5, max_zscore = 5, num_integral_points = 100):
         
         eff_cross_section = np.zeros(self.N_lambda)
-        z_scores = np.linspace(-max_zscore, max_zscore, num_integral_points)
+        z_scores = -np.logspace(np.log10(0.1), np.log10(max_zscore), num_integral_points/2)
+        z_scores = np.append(z_scores[::-1], -z_scores)
+
         probs = np.exp(-z_scores**2/2) / np.sqrt(2 * np.pi)
         radii = part_size * np.exp(z_scores * sigma)
         geometric_cross_section = np.pi * radii**2

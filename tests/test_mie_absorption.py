@@ -37,6 +37,7 @@ class TestMieAbsorption(unittest.TestCase):
         # Calculating the exact solution for all wavelengths would take
         # forever, so we only do a few
         to_include = np.array([1, 200, 1000, 3000, 4600])
+        #to_include = np.array([4600])
         exact_cross_sections = [self.exact_cross_section(
             r_mean, w, m, sigma) for w in calc.lambda_grid[to_include]]
 
@@ -50,6 +51,7 @@ class TestMieAbsorption(unittest.TestCase):
         # absorption at max pressure for n_0=1 should equal cross section
         rough_cross_sections = absorption[:, -1, :].flatten()/n_0
         frac_dev = np.abs(rough_cross_sections[to_include] - exact_cross_sections)/exact_cross_sections
+        #print(frac_dev)
         self.assertTrue(np.max(frac_dev) < 0.01)
 
         for i in range(absorption.shape[1]):
@@ -70,7 +72,7 @@ class TestMieAbsorption(unittest.TestCase):
         self.run_test(1.7, 1e-6, 0.5)
 
         # This test actually fails on the highest wavelength point
-        #self.run_test(1.3, 2e-5, 0.65)
+        self.run_test(1.3, 2e-5, 0.65)
         
 if __name__ == '__main__':
     unittest.main()

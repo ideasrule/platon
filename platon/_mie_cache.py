@@ -3,7 +3,7 @@ from __future__ import print_function
 import numpy as np
 import scipy.interpolate
 
-import mie_multi_x
+from . import mie_multi_x
 
 class MieCache:
     def __init__(self):

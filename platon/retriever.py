@@ -104,10 +104,12 @@ class Retriever:
         if plot:
             plt.errorbar(
                 METRES_TO_UM * wavelengths, measured_depths,
-                yerr=measured_errors, fmt='.')
-            plt.plot(METRES_TO_UM * wavelengths, calculated_depths)
+                yerr=measured_errors, fmt='.',color='k')
+            plt.plot(METRES_TO_UM * wavelengths, calculated_depths, color='b')
             plt.xlabel("Wavelength (um)")
             plt.ylabel("Transit depth")
+            plt.xscale('log')
+            plt.tight_layout()
 
         return fit_info._ln_prior(params) + ln_prob
 

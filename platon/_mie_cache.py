@@ -3,6 +3,8 @@ from __future__ import print_function
 import numpy as np
 import scipy.interpolate
 
+import mie_multi_x
+
 class MieCache:
     def __init__(self):
         self.interpolator = None
@@ -11,7 +13,7 @@ class MieCache:
         self.all_ms = np.array([], dtype=complex)
 
         
-    def get(self, m, xs, max_frac_error=0.01):
+    def get_from_cache(self, m, xs, max_frac_error=0.05):
         result = np.ones(len(xs)) * np.nan
 
         if len(self.all_xs) == 0:
@@ -30,7 +32,17 @@ class MieCache:
         
         return result
         
+    def get_and_update(self, m, xs):
+        # Get from cache if available, from Mie calculations if not. 
+        # Put results of Mie calculations into cache.
+        Qexts = self.get_from_cache(m, xs)
+        cache_misses = np.isnan(Qexts)
+        if np.sum(cache_misses) > 0:
+            Qexts[cache_misses] = mie_multi_x.get_Qext(m, xs[cache_misses])
+            self.add(m, xs[cache_misses], Qexts[cache_misses])
+        return Qexts
 
+    
     def add(self, m, xs, Qexts, size_limit=1000000):
         if len(xs) == 0:
             return

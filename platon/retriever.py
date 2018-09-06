@@ -14,7 +14,7 @@ from .fit_info import FitInfo
 from .constants import METRES_TO_UM
 from ._params import _UniformParam
 from .errors import AtmosphereError
-from .save_best_fit import calcParaEstimates
+from .save_best_fit import write_param_estimates_file
 
 
 class Retriever:
@@ -172,7 +172,11 @@ class Retriever:
         best_params_arr = sampler.flatchain[np.argmax(
             sampler.flatlnprobability)]
         
-        calcParaEstimates(sampler.flatchain, sampler.flatlnprobability, fit_info.fit_param_names)
+        write_param_estimates_file(
+            sampler.flatchain,
+            best_params_arr,
+            np.max(sampler.flatlnprobability),
+            fit_info.fit_param_names)
 
         if plot_best:
             self._ln_prob(
@@ -243,9 +247,12 @@ class Retriever:
             callback=callback, method='multi', **nestle_kwargs)
 
         best_params_arr = result.samples[np.argmax(result.logl)]
-        best_params_dict = fit_info._interpret_param_array(best_params_arr)
-        param_name = list(best_params_dict.keys())
-        calcParaEstimates(result.samples,result.logl,param_name)
+        
+        write_param_estimates_file(
+            nestle.resample_equal(result.samples, result.weights),
+            best_params_arr,
+            np.max(result.logl),
+            fit_info.fit_param_names)
 
         if plot_best:
             self._ln_prob(best_params_arr, calculator, fit_info,

@@ -278,7 +278,7 @@ class TransitDepthCalculator:
             binned_depth = np.average(depths[cond] * correction_factors[cond], weights=stellar_spectrum[cond])
             binned_depths.append(binned_depth)
 
-        return np.array(binned_wavelengths), np.array(binned_depths), stellar_spectrum[cond]
+        return np.array(binned_wavelengths), np.array(binned_depths), stellar_spectrum
 
     def _validate_params(self, temperature, logZ, CO_ratio, cloudtop_pressure):
 
@@ -473,7 +473,8 @@ class TransitDepthCalculator:
                            "P_profile": P_profile,
                            "T_profile": T_profile,
                            "mu_profile": mu_profile,
-                           "atm_abundances": atm_abundances}
+                           "atm_abundances": atm_abundances,
+                           "unbinned_depths": transit_depths}
             return binned_wavelengths, binned_depths, output_dict
 
         return binned_wavelengths, binned_depths

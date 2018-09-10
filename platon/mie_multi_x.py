@@ -61,7 +61,7 @@ def get_Qext(m, xs):
 
     xs = np.array(xs)
     num_iterations = get_iterations_required(xs) 
-    max_iter = max(num_iterations) 
+    max_iter = max(max(num_iterations) , 1)
     
     A_mx = get_As(max_iter, m * xs)
     A_x = get_As(max_iter, xs)

@@ -163,29 +163,33 @@ class TransitDepthCalculator:
         return absorption_coeff
 
     def _get_mie_scattering_absorption(self, P_cond,T_cond,ri,part_size,
-                                       frac_scale_height,number_density,
-                                       sigma = 0.5, max_zscore = 5, num_integral_points = 50):
+                                       frac_scale_height, max_number_density,
+                                       sigma = 0.5, max_zscore = 5, num_integral_points = 100):
+        
         eff_cross_section = np.zeros(self.N_lambda)
-        z_scores = np.linspace(-max_zscore, max_zscore, num_integral_points)
-        integrand_values = []
-        
-        for i, z in enumerate(z_scores):
-            size = part_size * np.exp(z * sigma)
-            xs = 2 * np.pi * size / self.lambda_grid
-            Qexts = self._mie_cache.get(ri, xs)
-            cache_misses = np.isnan(Qexts)
-            if np.sum(cache_misses) > 0:
-                Qexts[cache_misses] = mie_multi_x.get_Qext(ri, xs[cache_misses])
-                self._mie_cache.add(ri, xs[cache_misses], Qexts[cache_misses])
-            lognormal_prob = np.exp(-z**2/2) * np.sqrt(1.0/2/np.pi)
-            integrand_values.append(lognormal_prob * Qexts * np.pi * size**2)
+        z_scores = -np.logspace(np.log10(0.1), np.log10(max_zscore), num_integral_points/2)
+        z_scores = np.append(z_scores[::-1], -z_scores)
 
-        eff_cross_section = np.trapz(np.array(integrand_values), z_scores, axis=0)
-        eff_cross_section = np.reshape(eff_cross_section,(self.N_lambda,1,1))
+        probs = np.exp(-z_scores**2/2) / np.sqrt(2 * np.pi)
+        radii = part_size * np.exp(z_scores * sigma)
+        geometric_cross_section = np.pi * radii**2
 
-        n_particle = number_density * np.power(self.P_meshgrid[:, P_cond, :][:, :, T_cond] / np.max(self.P_grid[P_cond]), 1/frac_scale_height)
+        dense_xs = 2*np.pi*radii[np.newaxis,:] / self.lambda_grid[:,np.newaxis]
+        dense_xs = dense_xs.flatten()
+
+        x_hist = np.histogram(dense_xs, bins='auto')[1]
+        Qext_hist = self._mie_cache.get_and_update(ri, x_hist) #mie_multi_x.get_Qext(ri, x_hist)
+
+        spl = scipy.interpolate.splrep(x_hist, Qext_hist)
+        Qext_intpl = scipy.interpolate.splev(dense_xs, spl)
+        Qext_intpl = np.reshape(Qext_intpl, (self.N_lambda, len(radii)))
+
+        eff_cross_section = np.trapz(probs*geometric_cross_section*Qext_intpl, z_scores)
+        eff_cross_section = np.reshape(eff_cross_section, (self.N_lambda,1,1))
+
+        n = max_number_density * np.power(self.P_meshgrid[:, P_cond, :][:, :, T_cond] / max(self.P_grid[P_cond]), 1.0/frac_scale_height)
+        absorption_coeff = n * eff_cross_section
         
-        absorption_coeff =  n_particle * eff_cross_section
         return absorption_coeff
 
     def _get_above_cloud_r_and_dr(self, P_profile, T_profile, abundances,

@@ -23,6 +23,7 @@ for temperature in np.arange(2000, 12000, 100):
         continue
     wavelengths *= u.Angstrom
     spectrum *= (u.erg/u.cm**2/u.s/u.Angstrom)
+    spectrum *= np.pi
     
     binned_spectrum = []
 
@@ -43,7 +44,7 @@ for temperature in np.arange(2000, 12000, 100):
         binned_spectrum.append(photon_flux.value)
 
     binned_spectrum = np.array(binned_spectrum) * conversion_factor
-    output_spectra[temperature] = np.array(binned_spectrum) * conversion_factor
+    output_spectra[temperature] = np.array(binned_spectrum)
     print temperature, np.min(binned_spectrum), np.max(binned_spectrum)
 
 pickle.dump(output_spectra, open("stellar_spectra.pkl", "wb"), protocol=pickle.HIGHEST_PROTOCOL)

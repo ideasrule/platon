@@ -71,7 +71,7 @@ class TestMieAbsorption(unittest.TestCase):
     def test_real(self):
         self.run_test(1.7, 1e-6, 0.5)
 
-        # This test actually fails on the highest wavelength point
+        # Too slow in Travis CI, so commenting out
         self.run_test(1.3, 2e-5, 0.65)
         
 if __name__ == '__main__':

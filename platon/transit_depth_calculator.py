@@ -322,8 +322,8 @@ class TransitDepthCalculator:
                        add_collisional_absorption=True,
                        cloudtop_pressure=np.inf, custom_abundances=None,
                        custom_T_profile=None, custom_P_profile=None,
-                       T_star=None,T_spot=None,spot_cov_frac=None,
-                       ri = None, frac_scale_height=1,number_density=0,
+                       T_star=None, T_spot=None, spot_cov_frac=None,
+                       ri = None, frac_scale_height=1, number_density=0,
                        part_size = 10**-6, full_output = False):
         '''
         Computes transit depths at a range of wavelengths, assuming an
@@ -468,7 +468,8 @@ class TransitDepthCalculator:
         if full_output:
             output_dict = {"absorption_coeff_atm": absorption_coeff_atm,
                            "tau_los": tau_los,
-                           "stellar_spectrum" : stellar_spectrum,
+                           "stellar_spectrum": stellar_spectrum,
+                           "radii": radii,
                            "P_profile": P_profile,
                            "T_profile": T_profile,
                            "mu_profile": mu_profile,

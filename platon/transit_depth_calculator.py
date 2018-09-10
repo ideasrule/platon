@@ -192,23 +192,26 @@ class TransitDepthCalculator:
         
         return absorption_coeff
 
-    def _get_above_cloud_r_and_dr(self, P_profile, T_profile, abundances,
+    def _get_above_cloud_profiles(self, P_profile, T_profile, abundances,
                                   planet_mass, planet_radius, star_radius,
                                   above_cloud_cond, T_star=None):
         assert(len(P_profile) == len(T_profile))
         # First, get atmospheric weight profile
         mu_profile = np.zeros(len(P_profile))
-
+        atm_abundances = {}
+        
         for species_name in abundances:
             interpolator = RectBivariateSpline(
                 self.P_grid, self.T_grid,
                 abundances[species_name], kx=1, ky=1)
-            atm_abundances = interpolator.ev(P_profile, T_profile)
-            mu_profile += atm_abundances * self.mass_data[species_name]
+            abund = interpolator.ev(P_profile, T_profile)
+            atm_abundances[species_name] = abund
+            mu_profile += abund * self.mass_data[species_name]
 
-        return _hydrostatic_solver._solve(
+        radii, dr = _hydrostatic_solver._solve(
             P_profile, T_profile, self.ref_pressure, mu_profile, planet_mass,
             planet_radius, star_radius, above_cloud_cond, T_star)
+        return radii, dr, atm_abundances, mu_profile
 
     def _get_abundances_array(self, logZ, CO_ratio, custom_abundances):
         if custom_abundances is None:
@@ -236,34 +239,35 @@ class TransitDepthCalculator:
 
     def _get_binned_corrected_depths(self, depths, T_star, T_spot,
                                     spot_cov_frac):
-        if self.wavelength_bins is None:
-            return self.lambda_grid, depths
         if spot_cov_frac is None:
             spot_cov_frac = 0
 
+        if T_spot is None:
+            T_spot = T_star
+
         temperatures = list(self.stellar_spectra.keys())
         if T_star is None:
-            stellar_spectrum = np.ones(len(self.lambda_grid))
+            unspotted_spectrum = np.ones(len(self.lambda_grid))
+            spot_spectrum = np.ones(len(self.lambda_grid))
         elif T_star >= np.min(temperatures) and T_star <= np.max(temperatures):
             interpolator = scipy.interpolate.interp1d(
                 temperatures, list(self.stellar_spectra.values()),
                 axis=0)
-            stellar_spectrum = interpolator(T_star)
-        else:
-            stellar_spectrum = 1.0 / self.lambda_grid**5 / \
-                (np.exp(h * c / self.lambda_grid / k_B / T_star) - 1)
-
-        if T_spot is None or T_spot == T_star:
-            spot_spectrum = np.copy(stellar_spectrum)    #np.ones(len(self.lambda_grid))
-        elif T_spot >= np.min(temperatures) and T_spot <= np.max(temperatures):
-            interpolator = scipy.interpolate.interp1d(
-                temperatures, list(self.stellar_spectra.values()),
-                axis=0)
+            unspotted_spectrum = interpolator(T_star)
             spot_spectrum = interpolator(T_spot)
         else:
+            unspotted_spectrum = 1.0 / self.lambda_grid**5 / \
+                (np.exp(h * c / self.lambda_grid / k_B / T_star) - 1)
             spot_spectrum = 1.0 / self.lambda_grid**5 / \
                 (np.exp(h * c / self.lambda_grid / k_B / T_spot) - 1)
 
+        stellar_spectrum = spot_cov_frac * spot_spectrum + \
+                           (1 - spot_cov_frac) * unspotted_spectrum
+        correction_factors = unspotted_spectrum/stellar_spectrum
+
+        if self.wavelength_bins is None:
+            return self.lambda_grid, depths * correction_factors, stellar_spectrum
+        
         binned_wavelengths = []
         binned_depths = []
         for (start, end) in self.wavelength_bins:
@@ -271,10 +275,10 @@ class TransitDepthCalculator:
                 self.lambda_grid >= start,
                 self.lambda_grid < end)
             binned_wavelengths.append(np.mean(self.lambda_grid[cond]))
-            binned_depth = np.average(depths[cond] / (1 - spot_cov_frac*(1-spot_spectrum[cond]/stellar_spectrum[cond])), weights=stellar_spectrum[cond])
+            binned_depth = np.average(depths[cond] * correction_factors[cond], weights=stellar_spectrum[cond])
             binned_depths.append(binned_depth)
 
-        return np.array(binned_wavelengths), np.array(binned_depths)
+        return np.array(binned_wavelengths), np.array(binned_depths), stellar_spectrum[cond]
 
     def _validate_params(self, temperature, logZ, CO_ratio, cloudtop_pressure):
 
@@ -320,7 +324,7 @@ class TransitDepthCalculator:
                        custom_T_profile=None, custom_P_profile=None,
                        T_star=None,T_spot=None,spot_cov_frac=None,
                        ri = None, frac_scale_height=1,number_density=0,
-                       part_size = 10**-6):
+                       part_size = 10**-6, full_output = False):
         '''
         Computes transit depths at a range of wavelengths, assuming an
         isothermal atmosphere.  To choose bins, call change_wavelength_bins().
@@ -421,7 +425,7 @@ class TransitDepthCalculator:
             logZ, CO_ratio, custom_abundances)
         above_clouds = P_profile < cloudtop_pressure
 
-        radii, dr = self._get_above_cloud_r_and_dr(
+        radii, dr, atm_abundances, mu_profile = self._get_above_cloud_profiles(
             P_profile, T_profile, abundances, planet_mass, planet_radius,
             star_radius, above_clouds, T_star)
 
@@ -458,4 +462,19 @@ class TransitDepthCalculator:
 
         transit_depths = (np.min(radii) / star_radius)**2 \
             + 2 / star_radius**2 * absorption_fraction.dot(radii[1:] * dr)
-        return self._get_binned_corrected_depths(transit_depths, T_star, T_spot, spot_cov_frac)
+
+        binned_wavelengths, binned_depths, stellar_spectrum = self._get_binned_corrected_depths(transit_depths, T_star, T_spot, spot_cov_frac)
+        
+        if full_output:
+            output_dict = {"absorption_coeff_atm": absorption_coeff_atm,
+                           "tau_los": tau_los,
+                           "stellar_spectrum" : stellar_spectrum,
+                           "P_profile": P_profile,
+                           "T_profile": T_profile,
+                           "mu_profile": mu_profile,
+                           "atm_abundances": atm_abundances}
+            return binned_wavelengths, binned_depths, output_dict
+
+        return binned_wavelengths, binned_depths
+        
+        

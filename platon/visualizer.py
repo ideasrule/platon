@@ -13,32 +13,32 @@ from platon.constants import M_jup, R_sun, R_jup, M_earth, R_earth
 # draw_annulus: draws onto canvas
 
 class Visualizer:
-    def __init__(self, min_radius, max_radius, size=1000):
+    def __init__(self, size=1000):
         self.size = size
-        self.min_radius = min_radius
-        self.max_radius = max_radius
-        self.m_per_pix = 2*float(max_radius)/size
         self.canvas = np.zeros((size, size, 3))
 
-        xv, yv = np.meshgrid(range(self.size), range(self.size))
-        self.physical_dists = self.m_per_pix * np.sqrt((xv - 0.5*self.size)**2 + (yv - 0.5*self.size)**2)
+        # Cache pixel_dists for annulus drawing
+        xv, yv = np.meshgrid(range(size), range(size))
+        self.pixel_dists = np.sqrt((xv - 0.5*size)**2 + (yv - 0.5*size)**2)
         
 
-    def draw_annulus(self, r1, r2, color_intensities):
-        in_annulus = np.logical_and(self.physical_dists > r1, self.physical_dists < r2)
+    def draw_annulus(self, r1, r2, color_intensities, min_radius, max_radius):
+        m_per_pix = 2.0 * max_radius / self.size
+        physical_dists = m_per_pix * self.pixel_dists
+        in_annulus = np.logical_and(physical_dists > r1, physical_dists < r2)
         self.canvas[in_annulus] = np.array(color_intensities)
 
-    def draw_layer(self, r1, r2, color_intensities):
-        scale = (self.max_radius - self.min_radius)/self.size
-        min_y = round((r1 - self.min_radius)/scale)
+    def draw_layer(self, r1, r2, color_intensities, min_radius, max_radius):
+        scale = (max_radius - min_radius)/self.size
+        min_y = round((r1 - min_radius)/scale)
         if min_y < 0: min_y = 0
         min_y = int(min_y)
 
-        max_y = round((r2 - self.min_radius)/scale)
+        max_y = round((r2 - min_radius)/scale)
         if max_y > self.size: max_y = self.size
         max_y = int(max_y)
         
-        print(min_y, max_y, scale)
+        #print(min_y, max_y, scale)
         self.canvas[min_y : max_y, :] = np.array(color_intensities)
 
             
@@ -49,9 +49,8 @@ class Visualizer:
 
         radii = np.sort(transit_info["radii"])[::-1]
         lambda_grid = transit_info["unbinned_wavelengths"]
-        absorption_fraction = 1 - np.exp(-transit_info["tau_los"]) 
-        stellar_spectrum = transit_info["stellar_spectrum"]
-
+        absorption_fraction = 1 - np.exp(-transit_info["tau_los"])
+        
         if method == 'disk':
             draw_method = self.draw_annulus
         elif method == 'layers':
@@ -71,19 +70,12 @@ class Visualizer:
                 color_intensities.append(rel_intensity)
             #print(radii[i], radii[i+1], color_intensities)
             color_intensities = np.array(color_intensities) #* np.array(color_mult_factors)
-            print color_intensities
-            draw_method(radii[i+1], radii[i], color_intensities)
+            #print color_intensities
+            draw_method(radii[i+1], radii[i], color_intensities, np.min(radii), np.max(radii))
                 
-        draw_method(radii[0], np.inf, color_mult_factors)
+        draw_method(radii[0], np.inf, color_mult_factors, np.min(radii), np.max(radii))
+        return self.canvas
     
-    def show(self):
-        plt.figure(figsize=(10, 10))
-        img = plt.imshow(self.canvas)
-        np.save("canvas_VM.npy", self.canvas)
-        plt.axis('off')
-        #plt.gca().invert_yaxis()
-        plt.savefig("transit2.png", dpi=100)
-        plt.show()
 
 # All quantities in SI
 
@@ -93,6 +85,7 @@ class Visualizer:
 Rs = 0.947 * R_sun
 Mp = 8.145 * M_earth
 Rp = 1.7823 * R_earth
+
 T = 1970
 logZ = 1.09
 CO_ratio = 1.57
@@ -107,7 +100,8 @@ depth_calculator = TransitDepthCalculator()
 wavelengths, transit_depths, info = depth_calculator.compute_depths(
     Rs, Mp, Rp, T, T_star=5196, logZ=logZ, CO_ratio=CO_ratio, cloudtop_pressure=10.0**log_cloudtop_P, full_output=True)
 
-#plt.plot(wavelengths, transit_depths)
+#plt.plot(1e6*wavelengths, transit_depths)
+#plt.xlim(4, 5)
 #plt.show()
 
 color_bins = 1e-6 * np.array([
@@ -122,12 +116,16 @@ color_bins = 1e-6 * np.array([
 #[1.1, 1.4]])
 
 '''color_bins = 1e-6 * np.array([
-[0.6, 0.7],
-[0.5, 0.6],
-[0.4, 0.5]
+[0.5, 0.7],
+[0.43, 0.67],
+[0.38, 0.55]
 ])'''
 
-visualizer = Visualizer(Rp, 1.5*Rp)
-visualizer.draw(info, color_bins, color_mult_factors=[1, 1, 0.8], method='layers')
-visualizer.show()
+visualizer = Visualizer()
+image = visualizer.draw(info, color_bins, color_mult_factors=[1, 1, 0.9], method='layers')
+
+plt.imshow(image)
+plt.axis('off')
+plt.gca().invert_yaxis()
+plt.show()
     

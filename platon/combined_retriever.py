@@ -15,7 +15,7 @@ from .fit_info import FitInfo
 from .constants import METRES_TO_UM
 from ._params import _UniformParam
 from .errors import AtmosphereError
-from .save_best_fit import write_param_estimates_file
+from .output_writer import write_param_estimates_file
 
 
 class CombinedRetriever:

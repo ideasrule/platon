@@ -24,11 +24,11 @@ class Visualizer:
         self.physical_dists = self.m_per_pix * np.sqrt((xv - 0.5*self.size)**2 + (yv - 0.5*self.size)**2)
         
 
-    '''def draw_annulus(self, r1, r2, color_intensities):
-        in_annulus = np.logical_and(self.physical_dists > r1, self.physical_dists < r2)
-        self.canvas[in_annulus] = np.array(color_intensities)'''
-
     def draw_annulus(self, r1, r2, color_intensities):
+        in_annulus = np.logical_and(self.physical_dists > r1, self.physical_dists < r2)
+        self.canvas[in_annulus] = np.array(color_intensities)
+
+    def draw_layer(self, r1, r2, color_intensities):
         scale = (self.max_radius - self.min_radius)/self.size
         min_y = round((r1 - self.min_radius)/scale)
         if min_y < 0: min_y = 0
@@ -42,14 +42,24 @@ class Visualizer:
         self.canvas[min_y : max_y, :] = np.array(color_intensities)
 
             
-    def draw(self, radii, lambda_grid, absorption_fraction, stellar_spectrum, color_bins,
-             color_mult_factors=[1, 1, 1]):
+    def draw(self, transit_info, color_bins, color_mult_factors=[1, 1, 1], method='disk'):
         #absorption_fraction: Nlambda x Nradii
         #stellar_spectrum: NLambda
         #color_bins: 3x2, specifying (start, end) for RGB
 
+        radii = np.sort(transit_info["radii"])[::-1]
+        lambda_grid = transit_info["unbinned_wavelengths"]
+        absorption_fraction = 1 - np.exp(-transit_info["tau_los"]) 
+        stellar_spectrum = transit_info["stellar_spectrum"]
+
+        if method == 'disk':
+            draw_method = self.draw_annulus
+        elif method == 'layers':
+            draw_method = self.draw_layer
+        else:
+            raise ValueError("Method must be 'disk' or 'layers'")
+                
         for i in range(len(radii) - 1):
-            print(float(i)/len(radii))
             color_intensities = []
             for j, (start, end) in enumerate(color_bins):
                 lambda_cond = np.logical_and(lambda_grid > start, lambda_grid < end)
@@ -62,9 +72,9 @@ class Visualizer:
             #print(radii[i], radii[i+1], color_intensities)
             color_intensities = np.array(color_intensities) #* np.array(color_mult_factors)
             print color_intensities
-            self.draw_annulus(radii[i+1], radii[i], color_intensities)
-       
-        self.draw_annulus(radii[0], np.inf, color_mult_factors)
+            draw_method(radii[i+1], radii[i], color_intensities)
+                
+        draw_method(radii[0], np.inf, color_mult_factors)
     
     def show(self):
         plt.figure(figsize=(10, 10))
@@ -118,8 +128,6 @@ color_bins = 1e-6 * np.array([
 ])'''
 
 visualizer = Visualizer(Rp, 1.5*Rp)
-absorption_fraction = 1 - np.exp(-info["tau_los"])
-visualizer.draw(info["radii"], depth_calculator.lambda_grid, absorption_fraction, info["stellar_spectrum"], 
-                color_bins, color_mult_factors=[1, 1, 0.8])
+visualizer.draw(info, color_bins, color_mult_factors=[1, 1, 0.8], method='layers')
 visualizer.show()
     

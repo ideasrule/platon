@@ -474,7 +474,8 @@ class TransitDepthCalculator:
                            "T_profile": T_profile,
                            "mu_profile": mu_profile,
                            "atm_abundances": atm_abundances,
-                           "unbinned_depths": transit_depths}
+                           "unbinned_depths": transit_depths,
+                           "unbinned_wavelengths": self.lambda_grid}
             return binned_wavelengths, binned_depths, output_dict
 
         return binned_wavelengths, binned_depths

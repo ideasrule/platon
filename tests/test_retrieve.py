@@ -29,7 +29,7 @@ class TestRetriever(unittest.TestCase):
         self.fit_info.add_gaussian_fit_param('Mp', 0.04*M_jup)
 
         if use_guesses:
-            self.fit_info.add_uniform_fit_param('R', 0, np.inf, 9e7, 12e7)
+            self.fit_info.add_uniform_fit_param('Rp', 0, np.inf, 9e7, 12e7)
             self.fit_info.add_uniform_fit_param('T', 300, 3000, 800, 1800)
             self.fit_info.add_uniform_fit_param('logZ', -1, 3, -1, 3)
             self.fit_info.add_uniform_fit_param('CO_ratio', 0.2, 2.0, 0.2, 1.5)
@@ -38,7 +38,7 @@ class TestRetriever(unittest.TestCase):
             self.fit_info.add_uniform_fit_param('scatt_slope', 0, 10, 1, 5)
             self.fit_info.add_uniform_fit_param('error_multiple', 0, np.inf, 0.1, 10)
         else:
-            self.fit_info.add_uniform_fit_param('R', 9e7, 12e7)
+            self.fit_info.add_uniform_fit_param('Rp', 9e7, 12e7)
             self.fit_info.add_uniform_fit_param('T', 800, 1800)
             self.fit_info.add_uniform_fit_param('logZ', -1, 3)
             self.fit_info.add_uniform_fit_param('CO_ratio', 0.2, 1.5)

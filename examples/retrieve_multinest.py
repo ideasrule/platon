@@ -88,7 +88,7 @@ fit_info = retriever.get_default_fit_info(
 fit_info.add_gaussian_fit_param('Rs', 0.02*R_sun)
 fit_info.add_gaussian_fit_param('Mp', 0.04*M_jup)
 
-fit_info.add_uniform_fit_param('R', 0.9*R_guess, 1.1*R_guess)
+fit_info.add_uniform_fit_param('Rp', 0.9*R_guess, 1.1*R_guess)
 fit_info.add_uniform_fit_param('T', 0.5*T_guess, 1.5*T_guess)
 fit_info.add_uniform_fit_param("log_scatt_factor", 0, 1)
 fit_info.add_uniform_fit_param("logZ", -1, 3)

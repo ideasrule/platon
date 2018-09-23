@@ -63,7 +63,7 @@ class Retriever:
             return -np.inf
 
         params_dict = fit_info._interpret_param_array(params)
-        R = params_dict["R"]
+        Rp = params_dict["Rp"]
         T = params_dict["T"]
         logZ = params_dict["logZ"]
         CO_ratio = params_dict["CO_ratio"]
@@ -86,7 +86,7 @@ class Retriever:
 
         try:
             wavelengths, calculated_depths = calculator.compute_depths(
-                Rs, Mp, R, T, logZ, CO_ratio,
+                Rs, Mp, Rp, T, logZ, CO_ratio,
                 scattering_factor=scatt_factor, scattering_slope=scatt_slope,
                 cloudtop_pressure=cloudtop_P, T_star=T_star,
                 T_spot=T_spot, spot_cov_frac=spot_cov_frac,
@@ -316,20 +316,5 @@ class Retriever:
             This object is used to indicate which parameters to fit for, which
             to fix, and what values all parameters should take.'''
 
-        fit_info = FitInfo({'Mp': Mp,
-                            'R': Rp,
-                            'T': T,
-                            'logZ': logZ,
-                            'CO_ratio': CO_ratio,
-                            'log_scatt_factor': log_scatt_factor,
-                            'scatt_slope': scatt_slope,
-                            'log_cloudtop_P': log_cloudtop_P,
-                            'Rs': Rs,
-                            'error_multiple': error_multiple,
-                            'T_star': T_star,
-                            'T_spot': T_spot,
-                            'spot_cov_frac': spot_cov_frac,
-                            'frac_scale_height': frac_scale_height,
-                            'log_number_density': log_number_density,
-                            'log_part_size': log_part_size, 'ri': ri})
+        fit_info = FitInfo(locals().copy())
         return fit_info

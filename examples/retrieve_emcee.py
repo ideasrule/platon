@@ -90,7 +90,7 @@ fit_info.add_gaussian_fit_param('Mp', 0.04*M_jup)
 
 # Here, emcee is initialized with walkers where R is between 0.9*R_guess and
 # 1.1*R_guess.  However, the hard limit on R is from 0 to infinity.
-fit_info.add_uniform_fit_param('R', 0, np.inf, 0.9*R_guess, 1.1*R_guess)
+fit_info.add_uniform_fit_param('Rp', 0, np.inf, 0.9*R_guess, 1.1*R_guess)
 
 fit_info.add_uniform_fit_param('T', 300, 3000, 0.5*T_guess, 1.5*T_guess)
 fit_info.add_uniform_fit_param("log_scatt_factor", 0, 5, 0, 1)

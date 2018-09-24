@@ -13,6 +13,9 @@ Welcome to PLATON's documentation!
    intro
    install
    quickstart
+   mie_scattering
+   eclipse_depths
+   visualizer
    questions_and_answers
    source/modules
 

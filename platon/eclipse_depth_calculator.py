@@ -31,26 +31,19 @@ class EclipseDepthCalculator:
             
         return np.array(binned_wavelengths), np.array(binned_depths)
             
-    def compute_depths(self, alpha, T_0, star_radius, planet_mass,
+    def compute_depths(self, t_p_profile, star_radius, planet_mass,
                          planet_radius, T_star, logZ=0, CO_ratio=0.53,
                          add_scattering=True, scattering_factor=1,
                          scattering_slope=4, scattering_ref_wavelength=1e-6,
                          add_collisional_absorption=True,
                          cloudtop_pressure=np.inf, custom_abundances=None,
-                         custom_T_profile=None, custom_P_profile=None,
                          T_spot=None, spot_cov_frac=None,
                          ri = None, frac_scale_height=1,number_density=0,
                          part_size = 10**-6, num_mu=100, min_mu=1e-3, max_mu=1):
-        
-        if custom_T_profile is not None and custom_P_profile is not None:
-            T_profile = custom_T_profile
-            P_profile = custom_P_profile
-        else:
-            assert(custom_T_profile is None)
-            assert(custom_P_profile is None)
-            P_profile = self.transit_calculator.P_grid
-            T_profile = 1.0/alpha**2 * np.log(P_profile/np.min(P_profile))**2 + T_0
 
+        T_profile = t_p_profile.temperatures
+        P_profile = t_p_profile.pressures
+        
         wavelengths, transit_depths, info_dict = self.transit_calculator.compute_depths(
             star_radius, planet_mass, planet_radius, None, logZ, CO_ratio,
             add_scattering, scattering_factor,

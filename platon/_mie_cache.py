@@ -3,7 +3,7 @@ from __future__ import print_function
 import numpy as np
 import scipy.interpolate
 
-from . import mie_multi_x
+from . import _mie_multi_x
 
 class MieCache:
     def __init__(self):
@@ -38,7 +38,7 @@ class MieCache:
         Qexts = self.get_from_cache(m, xs)
         cache_misses = np.isnan(Qexts)
         if np.sum(cache_misses) > 0:
-            Qexts[cache_misses] = mie_multi_x.get_Qext(m, xs[cache_misses])
+            Qexts[cache_misses] = _mie_multi_x.get_Qext(m, xs[cache_misses])
             self.add(m, xs[cache_misses], Qexts[cache_misses])
         return Qexts
 

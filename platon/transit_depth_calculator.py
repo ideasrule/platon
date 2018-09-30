@@ -22,7 +22,6 @@ from ._get_data import get_data
 from ._mie_cache import MieCache
 
 import pdb, time
-from . import mie_multi_x
 
 class TransitDepthCalculator:
     def __init__(self, include_condensation=True, num_profile_heights=500,
@@ -178,7 +177,7 @@ class TransitDepthCalculator:
         dense_xs = dense_xs.flatten()
 
         x_hist = np.histogram(dense_xs, bins='auto')[1]
-        Qext_hist = self._mie_cache.get_and_update(ri, x_hist) #mie_multi_x.get_Qext(ri, x_hist)
+        Qext_hist = self._mie_cache.get_and_update(ri, x_hist) 
 
         spl = scipy.interpolate.splrep(x_hist, Qext_hist)
         Qext_intpl = scipy.interpolate.splev(dense_xs, spl)
@@ -389,6 +388,23 @@ class TransitDepthCalculator:
         spot_cov_frac : float, optional
             The spot covering fraction of the star by area. This can be used to
             make wavelength dependent correction to the transit depths.
+        ri : complex, optional
+            Complex refractive index n - ik (where k > 0) of the particles
+            responsible for Mie scattering.  If provided, Mie scattering will
+            be computed.  In that case, scattering_factor and scattering_slope
+            must be set to 1 and 4 (the default values) respectively.
+        frac_scale_height : float, optional
+            The number density of Mie scattering particles is proportional to
+            P^(1/frac_scale_height).  This is similar to, but a bit different
+            from, saying that the scale height of the particles is
+            frac_scale_height times that of the gas.
+        number_density: float, optional
+            The number density (in m^-3) of Mie scattering particles
+        part_size : float, optional
+            The mean radius of Mie scattering particles.  The distribution is
+            assumed to be log-normal, with a standard deviation of 0.5.
+        full_output : bool, optional
+            If True, returns info_dict as a third return value.
 
         Raises
         ------
@@ -401,6 +417,11 @@ class TransitDepthCalculator:
             Central wavelengths, in metres
         transit_depths : array of float
             Transit depths at `wavelengths`
+        info_dict : dict
+            Returned if full_output is True, containing intermediate quantities
+            calculated by the method.  These are: absorption_coeff_atm, tau_los,
+            stellar_spectrum, radii, P_profile, T_profile, mu_profile,
+            atm_abundances, unbinned_depths, unbinned_wavelengths
        '''
         self._validate_params(temperature, logZ, CO_ratio, cloudtop_pressure)
         if custom_P_profile is not None:
@@ -439,11 +460,15 @@ class TransitDepthCalculator:
         absorption_coeff = self._get_gas_absorption(abundances, P_cond, T_cond)
         if add_scattering:
             if ri is not None:
+                if scattering_factor != 1 or scattering_slope != 4:
+                    raise ValueError("Cannot use both parametric and Mie scattering at the same time")
+                
                 absorption_coeff += self._get_mie_scattering_absorption(
                     P_cond, T_cond, ri, part_size,
                     frac_scale_height, number_density)
                 absorption_coeff += self._get_scattering_absorption(abundances,
                 P_cond, T_cond)
+                
             else:
                 absorption_coeff += self._get_scattering_absorption(abundances,
                 P_cond, T_cond, scattering_factor, scattering_slope,

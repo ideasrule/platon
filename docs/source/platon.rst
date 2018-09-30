@@ -4,10 +4,26 @@ platon package
 Submodules
 ----------
 
-platon.abundance_getter module
-------------------------------
+platon.TP\_profile module
+-------------------------
+
+.. automodule:: platon.TP_profile
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+platon.abundance\_getter module
+-------------------------------
 
 .. automodule:: platon.abundance_getter
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+platon.combined\_retriever module
+---------------------------------
+
+.. automodule:: platon.combined_retriever
     :members:
     :undoc-members:
     :show-inheritance:
@@ -20,8 +36,24 @@ platon.constants module
     :undoc-members:
     :show-inheritance:
 
-platon.fit_info module
-----------------------
+platon.eclipse\_depth\_calculator module
+----------------------------------------
+
+.. automodule:: platon.eclipse_depth_calculator
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+platon.errors module
+--------------------
+
+.. automodule:: platon.errors
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+platon.fit\_info module
+-----------------------
 
 .. automodule:: platon.fit_info
     :members:
@@ -36,14 +68,21 @@ platon.retriever module
     :undoc-members:
     :show-inheritance:
 
-platon.transit_depth_calculator module
---------------------------------------
+platon.transit\_depth\_calculator module
+----------------------------------------
 
 .. automodule:: platon.transit_depth_calculator
     :members:
     :undoc-members:
     :show-inheritance:
-    :special-members: __init__
+
+platon.visualizer module
+------------------------
+
+.. automodule:: platon.visualizer
+    :members:
+    :undoc-members:
+    :show-inheritance:
 
 
 Module contents

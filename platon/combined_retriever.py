@@ -16,7 +16,7 @@ from .constants import METRES_TO_UM
 from ._params import _UniformParam
 from .errors import AtmosphereError
 from .output_writer import write_param_estimates_file
-
+from .TP_profile import Profile
 
 class CombinedRetriever:
     def _validate_params(self, fit_info, calculator):
@@ -31,8 +31,8 @@ class CombinedRetriever:
             if fit_info.all_params["log_number_density"].best_guess != -np.inf:
                 raise ValueError("log number density must be -inf if not using Mie scattering")            
         else:
-            if fit_info.all_params["log_scatt_factor"].best_guess != -np.inf:
-                raise ValueError("log scattering factor must be -inf if using Mie scattering")           
+            if fit_info.all_params["log_scatt_factor"].best_guess != 0:
+                raise ValueError("log scattering factor must be 0 if using Mie scattering")           
             
         
         for name in fit_info.fit_param_names:
@@ -109,9 +109,13 @@ class CombinedRetriever:
                     plt.xscale('log')
                     plt.tight_layout()
 
-            if measured_eclipse_depths is not None:                
+            if measured_eclipse_depths is not None:
+                t_p_profile = Profile()
+                t_p_profile.set_parametric(
+                    params_dict["T0"], params_dict["P1"], params_dict["alpha1"],
+                    params_dict["alpha2"], params_dict["P3"], params_dict["T3"])
                 eclipse_wavelengths, calculated_eclipse_depths = eclipse_calc.compute_depths(
-                    params_dict["alpha"], params_dict["T_0"], Rs, Mp, Rp, T_star, logZ, CO_ratio,
+                    t_p_profile, Rs, Mp, Rp, T_star, logZ, CO_ratio,
                     scattering_factor=scatt_factor, scattering_slope=scatt_slope,
                     cloudtop_pressure=cloudtop_P,
                     T_spot=T_spot, spot_cov_frac=spot_cov_frac,
@@ -300,8 +304,7 @@ class CombinedRetriever:
                              log_cloudtop_P=np.inf, log_scatt_factor=0,
                              scatt_slope=4, error_multiple=1, T_star=None,
                              T_spot=None, spot_cov_frac=None,frac_scale_height=1,
-                             log_number_density=-np.inf, log_part_size =-6, ri = None,
-                             alpha=0.4, T_0=None):
+                             log_number_density=-np.inf, log_part_size =-6, ri = None, T0=None, P1=None, alpha1=None, alpha2=None, P3=None, T3=None):
         '''Get a :class:`.FitInfo` object filled with best guess values.  A few
         parameters are required, but others can be set to default values if you
         do not want to specify them.  All parameters are in SI.

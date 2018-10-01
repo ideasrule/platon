@@ -199,13 +199,13 @@ class TransitDepthCalculator:
     def _get_above_cloud_profiles(self, P_profile, T_profile, abundances,
                                   planet_mass, planet_radius, star_radius,
                                   above_cloud_cond, T_star=None):
+        
         assert(len(P_profile) == len(T_profile))
         # First, get atmospheric weight profile
         mu_profile = np.zeros(len(P_profile))
         atm_abundances = {}
         
         for species_name in abundances:
-            assert(np.min(abundances[species_name][~np.isnan(abundances[species_name])]) > 0)
             interpolator = RectBivariateSpline(
                 np.log10(self.P_grid), self.T_grid,
                 np.log10(abundances[species_name]), kx=1, ky=1)
@@ -333,7 +333,8 @@ class TransitDepthCalculator:
                        custom_T_profile=None, custom_P_profile=None,
                        T_star=None, T_spot=None, spot_cov_frac=None,
                        ri = None, frac_scale_height=1, number_density=0,
-                       part_size = 10**-6, full_output = False):
+                       part_size = 10**-6, full_output = False,
+                       min_abundance=1e-99):
         '''
         Computes transit depths at a range of wavelengths, assuming an
         isothermal atmosphere.  To choose bins, call change_wavelength_bins().
@@ -454,6 +455,11 @@ class TransitDepthCalculator:
 
         abundances = self._get_abundances_array(
             logZ, CO_ratio, custom_abundances)
+        
+        for name in abundances:
+            low_abundances = abundances[name] < min_abundance
+            abundances[name][low_abundances] = min_abundance
+            
         above_clouds = P_profile < cloudtop_pressure
 
         radii, dr, atm_abundances, mu_profile = self._get_above_cloud_profiles(

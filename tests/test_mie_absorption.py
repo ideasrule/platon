@@ -4,7 +4,7 @@ import scipy.integrate
 from nose.tools import nottest
 import matplotlib.pyplot as plt
 
-from platon import mie_multi_x
+from platon import _mie_multi_x
 from platon.transit_depth_calculator import TransitDepthCalculator
 
 class TestMieAbsorption(unittest.TestCase):
@@ -24,7 +24,7 @@ class TestMieAbsorption(unittest.TestCase):
                 # Optimization needed, or else code takes forever
                 Qext = 2
             else:
-                Qext = mie_multi_x.get_Qext(ri, [x])[0]                    
+                Qext = _mie_multi_x.get_Qext(ri, [x])[0]                    
             return np.exp(-y**2) * np.sqrt(np.pi) * r_mean**2 * np.exp(2*np.sqrt(2)*sigma*y) * Qext
 
         result, error = scipy.integrate.quad(integrand, -5, 5, epsrel=1e-3, epsabs=0, limit=100)

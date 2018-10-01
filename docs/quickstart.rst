@@ -24,11 +24,16 @@ To compute transit depths, look at transit_depth_example.py, then go to
   calculator = TransitDepthCalculator()
 
   # compute_depths is fast once data files are loaded
-  calculator.compute_depths(Rs, Mp, Rp, T, logZ=0, CO_ratio=0.53)
+  wavelengths, depths, info_dict = calculator.compute_depths(Rs, Mp, Rp, T, logZ=0, CO_ratio=0.53, full_output=True)
 
 You can adjust a variety of parameters, including the metallicity (Z) and C/O
 ratio. By default, logZ = 0 and C/O = 0.53. Any other value for
 logZ and C/O in the range -1 < logZ < 3 and 0.2 < C/O < 2 can also be used.
+full_output=True indicates you'd like extra information about the atmosphere,
+which is returned in info_dict.  info_dict includes parameters like the
+temperatures, pressures, radii, abundances, and molecular weights of each
+atmospheric layer, and the line of sight optical depth (tau_los) through each
+layer.
 
 You can also specify custom abundances, such as by providing the filename or
 one of the abundance files included in the package (from ExoTransmit). The

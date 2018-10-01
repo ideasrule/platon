@@ -39,7 +39,7 @@ class TransitDepthCalculator:
         ref_pressure : float
             The planetary radius is defined as the radius at this pressure
         '''
-
+        self.arguments = locals()
         if not os.path.isdir(resource_filename(__name__, "data/")):
             get_data(resource_filename(__name__, "./"))
 
@@ -85,7 +85,8 @@ class TransitDepthCalculator:
         ----------
         bins : array_like, shape (N,2)
             Wavelength bins, where bins[i][0] is the start wavelength and
-            bins[i][1] is the end wavelength for bin i.
+            bins[i][1] is the end wavelength for bin i. If bins is None, resets
+            the calculator to its unbinned state.
 
         Raises
         ------
@@ -94,8 +95,11 @@ class TransitDepthCalculator:
             which is not supported.
         """
         if self.wavelength_rebinned:
-            raise NotImplementedError("Multiple re-binnings not yet supported")
-
+            self.__init__(self.arguments)
+            
+        if bins is None:
+            return
+        
         self.wavelength_rebinned = True
         self.wavelength_bins = bins
 

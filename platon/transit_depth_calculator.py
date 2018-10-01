@@ -205,10 +205,11 @@ class TransitDepthCalculator:
         atm_abundances = {}
         
         for species_name in abundances:
+            assert(np.min(abundances[species_name][~np.isnan(abundances[species_name])]) > 0)
             interpolator = RectBivariateSpline(
-                self.P_grid, self.T_grid,
-                abundances[species_name], kx=1, ky=1)
-            abund = interpolator.ev(P_profile, T_profile)
+                np.log10(self.P_grid), self.T_grid,
+                np.log10(abundances[species_name]), kx=1, ky=1)
+            abund = 10**interpolator.ev(np.log10(P_profile), T_profile)
             atm_abundances[species_name] = abund
             mu_profile += abund * self.mass_data[species_name]
 

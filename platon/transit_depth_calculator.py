@@ -210,6 +210,10 @@ class TransitDepthCalculator:
         radii, dr = _hydrostatic_solver._solve(
             P_profile, T_profile, self.ref_pressure, mu_profile, planet_mass,
             planet_radius, star_radius, above_cloud_cond, T_star)
+        
+        for key in atm_abundances:
+            atm_abundances[key] = atm_abundances[key][above_cloud_cond]
+            
         return radii, dr, atm_abundances, mu_profile
 
     def _get_abundances_array(self, logZ, CO_ratio, custom_abundances):

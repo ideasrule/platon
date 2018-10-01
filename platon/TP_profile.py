@@ -8,9 +8,13 @@ from pkg_resources import resource_filename
 from .constants import h, c
 
 class Profile:
-    def __init__(self):
-        self.pressures = np.load(
+    def __init__(self, num_profile_heights=500):        
+        pressures = np.load(
             resource_filename(__name__, "data/pressures.npy"))
+        self.pressures = np.logspace(
+                np.log10(pressures[0]),
+                np.log10(pressures[-1]),
+                num_profile_heights)
 
     def set_from_arrays(self, P_profile, T_profile):        
         interpolator = interp1d(np.log10(P_profile), T_profile)

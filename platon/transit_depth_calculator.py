@@ -96,6 +96,7 @@ class TransitDepthCalculator:
         """
         if self.wavelength_rebinned:
             self.__init__(self.arguments)
+            self.wavelength_rebinned = False
             
         if bins is None:
             return

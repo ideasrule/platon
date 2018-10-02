@@ -2,6 +2,8 @@
 
 [![codecov](https://codecov.io/gh/ideasrule/platon/branch/devel/graph/badge.svg)](https://codecov.io/gh/ideasrule/platon)
 
+**NEW (October 1): Version 2 is out, with a huge number of changes! Make sure to\
+ check out the release notes, and upgrade.**
 
 # PLanetary Atmospheric Transmission for Observer Noobs (PLATON)
 

@@ -46,9 +46,11 @@ class Profile:
         d_lambda = np.diff(wavelengths)
         d_lambda = np.append(d_lambda[0], d_lambda)
 
-        # Convert stellar spectrum from photons/s to energy/s/meter
-        stellar_spectrum = info_dict["stellar_spectrum"] * h * c / wavelengths / d_lambda
-        planet_spectrum = info_dict["planet_spectrum"]
+        # Convert stellar spectrum from photons/time to energy/time
+        stellar_spectrum = info_dict["stellar_spectrum"] * h * c / wavelengths
+
+        # Convert planetary spectrum from energy/time/wavelength to energy/time
+        planet_spectrum = info_dict["planet_spectrum"] * d_lambda
         absorption_coeffs = info_dict["absorption_coeff_atm"]
         radii = info_dict["radii"]
 

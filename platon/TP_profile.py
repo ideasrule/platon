@@ -5,7 +5,7 @@ import numpy as np
 
 from pkg_resources import resource_filename
 
-from .constants import h, c
+from .constants import h, c, k_B, AMU
 
 class Profile:
     def __init__(self, num_profile_heights=500):
@@ -43,21 +43,36 @@ class Profile:
 
     def set_from_opacity(self, Tirr, info_dict, visible_cutoff=0.8e-6, Tint=100):
         wavelengths = info_dict["unbinned_wavelengths"]
-        stellar_spectrum = info_dict["stellar_spectrum"] * h * c / wavelengths
-        planet_spectrum = info_dict["planet_spectrum"] * h * c / wavelengths
+        d_lambda = np.diff(wavelengths)
+        d_lambda = np.append(d_lambda[0], d_lambda)
+
+        # Convert stellar spectrum from photons/s to energy/s/meter
+        stellar_spectrum = info_dict["stellar_spectrum"] * h * c / wavelengths / d_lambda
+        planet_spectrum = info_dict["planet_spectrum"]
         absorption_coeffs = info_dict["absorption_coeff_atm"]
         radii = info_dict["radii"]
 
         # Equation 49 here: https://arxiv.org/pdf/1006.4702.pdf
         visible = wavelengths < visible_cutoff
         thermal = wavelengths >= visible_cutoff
-        intermediate_coeffs = 0.5 * (absorption_coeffs[:, 0:-1] + absorption_coeffs[:, 1:])
-        k_v = np.average(intermediate_coeffs[visible], axis=0, weights=stellar_spectrum[visible])
-        k_th = np.average(intermediate_coeffs[thermal], axis=0, weights=planet_spectrum[thermal])
-        gamma = k_v / k_th
+        n = info_dict["P_profile"]/k_B/info_dict["T_profile"]
+        intermediate_n = (n[0:-1] + n[1:])/2.0
+        sigmas = absorption_coeffs / n 
+        sigma_v = np.median(np.average(sigmas[visible], axis=0, weights=stellar_spectrum[visible]))
+        sigma_th = np.median(np.average(sigmas[thermal], axis=0, weights=planet_spectrum[thermal]))
+
+        gamma = sigma_v / sigma_th
+
+        # For debugging purposes: can get opacities too
+        #molecular_weights = AMU * info_dict["mu_profile"]
+        #kappa_v = (sigmas/molecular_weights)[visible]
+        #kappa_th = (sigmas/molecular_weights)[thermal]
+        
+        print sigma_v, sigma_th, gamma
         dr = -np.diff(radii)
-        d_taus = k_th * dr
+        d_taus = sigma_th * intermediate_n * dr
         taus = np.cumsum(d_taus)
+
         e2 = scipy.special.expn(2, gamma*taus)
         T4 = 3.0/4 * Tint**4 * (2.0/3 + taus) + 3.0/4 * Tirr**4 * (2.0/3 + 2.0/3/gamma * (1 + (gamma*taus/2 - 1)*np.exp(-gamma * taus)) + 2.0*gamma/3 * (1 - taus**2/2) * e2)
         T = T4 ** 0.25

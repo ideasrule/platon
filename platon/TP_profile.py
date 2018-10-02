@@ -59,7 +59,7 @@ class Profile:
         thermal = wavelengths >= visible_cutoff
         n = info_dict["P_profile"]/k_B/info_dict["T_profile"]
         intermediate_n = (n[0:-1] + n[1:])/2.0
-        sigmas = absorption_coeffs / n 
+        sigmas = absorption_coeffs / n
         sigma_v = np.median(np.average(sigmas[visible], axis=0, weights=stellar_spectrum[visible]))
         sigma_th = np.median(np.average(sigmas[thermal], axis=0, weights=planet_spectrum[thermal]))
 
@@ -69,8 +69,8 @@ class Profile:
         #molecular_weights = AMU * info_dict["mu_profile"]
         #kappa_v = (sigmas/molecular_weights)[visible]
         #kappa_th = (sigmas/molecular_weights)[thermal]
-        
-        print sigma_v, sigma_th, gamma
+
+        #print sigma_v, sigma_th, gamma
         dr = -np.diff(radii)
         d_taus = sigma_th * intermediate_n * dr
         taus = np.cumsum(d_taus)
@@ -79,3 +79,22 @@ class Profile:
         T4 = 3.0/4 * Tint**4 * (2.0/3 + taus) + 3.0/4 * Tirr**4 * (2.0/3 + 2.0/3/gamma * (1 + (gamma*taus/2 - 1)*np.exp(-gamma * taus)) + 2.0*gamma/3 * (1 - taus**2/2) * e2)
         T = T4 ** 0.25
         self.temperatures = np.append(T[0], T)
+
+    def radiative_solution(self, Tstar, Rstar, a, g, beta, k_th, gamma, gamma2 = None, alpha = 1, Tint=100):
+        #from Line et al. 2013: http://adsabs.harvard.edu/abs/2013ApJ...775..137L
+        #Equation 13 - 16
+        
+        Tirr = beta * np.sqrt(Rstar/(2*a)) * Tstar
+        taus = k_th * self.pressures / g
+
+        def incoming_stream_contribution(gamma):
+            return 3.0/4 * Tirr**4 * (2.0/3 + 2.0/3/gamma * (1 + (gamma*taus/2 - 1)*np.exp(-gamma * taus)) + 2.0*gamma/3 * (1 - taus**2/2) * scipy.special.expn(2, gamma*taus))
+
+        e1 = incoming_stream_contribution(gamma)
+        T4 = 3.0/4 * Tint**4 * (2.0/3 + taus) + alpha * e1
+
+        if gamma2 is not None:
+            e2 = incoming_stream_contribution(gamma2)
+            T4 += (1-alpha) * e2
+
+        self.temperatures = T4 ** 0.25

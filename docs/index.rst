@@ -6,6 +6,8 @@
 Welcome to PLATON's documentation!
 ==================================
 
+**October 1, 2018: PLATON v2.0 is out! Please check the release notes for the list of new features, and upgrade.**
+
 .. toctree::
    :maxdepth: 2	      
    :caption: Contents

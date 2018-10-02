@@ -2,10 +2,10 @@
 
 [![codecov](https://codecov.io/gh/ideasrule/platon/branch/devel/graph/badge.svg)](https://codecov.io/gh/ideasrule/platon)
 
+# PLanetary Atmospheric Transmission for Observer Noobs (PLATON)
+
 **NEW (October 1): Version 2 is out, with a huge number of changes! Make sure to\
  check out the release notes, and upgrade.**
-
-# PLanetary Atmospheric Transmission for Observer Noobs (PLATON)
 
 PLATON is a fast and easy to use forward modelling and retrieval tool for
 exoplanet atmospheres. It was written by Michael Zhang and Yayaati Chachan, and

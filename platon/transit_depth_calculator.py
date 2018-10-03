@@ -166,7 +166,7 @@ class TransitDepthCalculator:
 
         return absorption_coeff
 
-    def _get_mie_scattering_absorption(self, P_cond,T_cond,ri,part_size,
+    def _get_mie_scattering_absorption(self, P_cond, T_cond, ri, part_size,
                                        frac_scale_height, max_number_density,
                                        sigma = 0.5, max_zscore = 5, num_integral_points = 100):
         
@@ -332,9 +332,9 @@ class TransitDepthCalculator:
                        cloudtop_pressure=np.inf, custom_abundances=None,
                        custom_T_profile=None, custom_P_profile=None,
                        T_star=None, T_spot=None, spot_cov_frac=None,
-                       ri = None, frac_scale_height=1, number_density=0,
-                       part_size = 10**-6, full_output = False,
-                       min_abundance=1e-99):
+                       ri=None, frac_scale_height=1, number_density=0,
+                       part_size=1e-6, part_size_std=0.5,
+                       full_output=False, min_abundance=1e-99):
         '''
         Computes transit depths at a range of wavelengths, assuming an
         isothermal atmosphere.  To choose bins, call change_wavelength_bins().
@@ -413,7 +413,10 @@ class TransitDepthCalculator:
             The number density (in m^-3) of Mie scattering particles
         part_size : float, optional
             The mean radius of Mie scattering particles.  The distribution is
-            assumed to be log-normal, with a standard deviation of 0.5.
+            assumed to be log-normal, with a standard deviation of part_size_std
+        part_size_std : float, optional
+            The geometric standard deviation of particle radii. We recommend
+            leaving this at the default value of 0.5.
         full_output : bool, optional
             If True, returns info_dict as a third return value.
 
@@ -481,7 +484,7 @@ class TransitDepthCalculator:
                 
                 absorption_coeff += self._get_mie_scattering_absorption(
                     P_cond, T_cond, ri, part_size,
-                    frac_scale_height, number_density)
+                    frac_scale_height, number_density, sigma=part_size_std)
                 absorption_coeff += self._get_scattering_absorption(abundances,
                 P_cond, T_cond)
                 

@@ -20,7 +20,7 @@ plt.xlabel("Temperature (K)")
 plt.ylabel("Pressure (Pa)")
 plt.figure()
 
-plt.loglog(1e6*wavelengths, info_dict["planet_spectrum"])
+plt.loglog(1e6*wavelengths, 1e6*depths)
 plt.xlabel("Wavelength ($\mu m$)")
 plt.ylabel("Eclipse depth (ppm)")
 plt.show()

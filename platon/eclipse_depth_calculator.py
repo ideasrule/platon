@@ -9,6 +9,7 @@ from .transit_depth_calculator import TransitDepthCalculator
 try:
     import gnumpy as gnp
 except ImportError:
+    gnp = None
     print("Failed to import gnumpy; not using GPU")
 
 

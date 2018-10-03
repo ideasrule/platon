@@ -30,8 +30,8 @@ class Retriever:
             if fit_info.all_params["log_number_density"].best_guess != -np.inf:
                 raise ValueError("log number density must be -inf if not using Mie scattering")            
         else:
-            if fit_info.all_params["log_scatt_factor"].best_guess != -np.inf:
-                raise ValueError("log scattering factor must be -inf if using Mie scattering")           
+            if fit_info.all_params["log_scatt_factor"].best_guess != 0:
+                raise ValueError("log scattering factor must be 0 if using Mie scattering")           
             
         
         for name in fit_info.fit_param_names:
@@ -79,6 +79,7 @@ class Retriever:
         frac_scale_height = params_dict["frac_scale_height"]
         number_density = 10.0**params_dict["log_number_density"]
         part_size = 10.0**params_dict["log_part_size"]
+        part_size_std = params_dict["part_size_std"]
         ri = params_dict["ri"]
 
         if Rs <= 0 or Mp <= 0:
@@ -91,7 +92,7 @@ class Retriever:
                 cloudtop_pressure=cloudtop_P, T_star=T_star,
                 T_spot=T_spot, spot_cov_frac=spot_cov_frac,
                 frac_scale_height=frac_scale_height, number_density=number_density,
-                part_size = part_size, ri = ri)
+                part_size = part_size, part_size_std = part_size_std, ri = ri)
         except AtmosphereError as e:
             print(e)
             return -np.inf
@@ -266,7 +267,8 @@ class Retriever:
                              log_cloudtop_P=np.inf, log_scatt_factor=0,
                              scatt_slope=4, error_multiple=1, T_star=None,
                              T_spot=None, spot_cov_frac=None,frac_scale_height=1,
-                             log_number_density=-np.inf, log_part_size =-6, ri = None):
+                             log_number_density=-np.inf, log_part_size =-6,
+                             part_size_std = 0.5, ri = None):
         '''Get a :class:`.FitInfo` object filled with best guess values.  A few
         parameters are required, but others can be set to default values if you
         do not want to specify them.  All parameters are in SI.

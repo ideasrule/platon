@@ -6,6 +6,12 @@ import numexpr as ne
 from .constants import h, c, k_B, R_jup, M_jup, R_sun
 from .transit_depth_calculator import TransitDepthCalculator
 
+try:
+    import gnumpy as gnp
+except ImportError:
+    print("Failed to import gnumpy; not using GPU")
+
+
 class EclipseDepthCalculator:
     def __init__(self):
         self.transit_calculator = TransitDepthCalculator()
@@ -64,16 +70,27 @@ class EclipseDepthCalculator:
 
         mu_grid = np.linspace(min_mu, max_mu, num_mu)
         d_mu = (max_mu - min_mu)/(num_mu - 1)
+
         lambda_grid = self.transit_calculator.lambda_grid
-        reshaped_lambda_grid = lambda_grid.reshape((-1, 1))
-        planck_function = ne.evaluate("2*h*c**2/reshaped_lambda_grid**5/exp(h*c/reshaped_lambda_grid/k_B/intermediate_T - 1)")
-
-        reshaped_taus = taus[:,:,np.newaxis]
-        reshaped_planck = planck_function[:,:,np.newaxis]
-        reshaped_d_taus = d_taus[:,:,np.newaxis]
-        integrands = ne.evaluate("exp(-reshaped_taus/mu_grid) * reshaped_planck * reshaped_d_taus")
-
-        fluxes = 2 * np.pi * np.sum(integrands, axis=(1, 2)) * d_mu
+        
+        if gnp is not None:
+            reshaped_lambda_grid = gnp.garray(lambda_grid.reshape((-1, 1)))
+            planck_function = 2*h*c**2/reshaped_lambda_grid**5/gnp.exp(h*c/reshaped_lambda_grid/k_B/gnp.garray(intermediate_T) - 1)        
+            reshaped_taus = gnp.garray(taus[:,:,np.newaxis])
+            reshaped_planck = planck_function[:,:,np.newaxis]
+            reshaped_d_taus = gnp.garray(d_taus[:,:,np.newaxis])            
+            integrands = gnp.exp(-reshaped_taus/gnp.garray(mu_grid)) * reshaped_planck * reshaped_d_taus 
+            fluxes = integrands.sum(axis=1)
+            fluxes = 2 * np.pi * d_mu * fluxes.sum(axis=1)
+            fluxes = fluxes.asarray()
+        else:
+            reshaped_lambda_grid = lambda_grid.reshape((-1, 1))
+            planck_function = ne.evaluate("2*h*c**2/reshaped_lambda_grid**5/exp(h*c/reshaped_lambda_grid/k_B/intermediate_T - 1)")
+            reshaped_taus = taus[:,:,np.newaxis]
+            reshaped_planck = planck_function[:,:,np.newaxis]
+            reshaped_d_taus = d_taus[:,:,np.newaxis]
+            integrands = ne.evaluate("exp(-reshaped_taus/mu_grid) * reshaped_planck * reshaped_d_taus")
+            fluxes = 2 * np.pi * np.sum(integrands, axis=(1, 2)) * d_mu
 
         stellar_photon_fluxes = info_dict["stellar_spectrum"]
         

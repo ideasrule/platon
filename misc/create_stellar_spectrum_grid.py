@@ -23,7 +23,6 @@ for temperature in np.arange(2000, 12000, 100):
         continue
     wavelengths *= u.Angstrom
     spectrum *= (u.erg/u.cm**2/u.s/u.Angstrom)
-    spectrum *= np.pi
     
     binned_spectrum = []
 

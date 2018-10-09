@@ -66,7 +66,7 @@ class EclipseDepthCalculator:
         d_mu = (max_mu - min_mu)/(num_mu - 1)
         lambda_grid = self.transit_calculator.lambda_grid
         reshaped_lambda_grid = lambda_grid.reshape((-1, 1))
-        planck_function = ne.evaluate("2*h*c**2/reshaped_lambda_grid**5/exp(h*c/reshaped_lambda_grid/k_B/intermediate_T - 1)")
+        planck_function = ne.evaluate("2*h*c**2/reshaped_lambda_grid**5/(exp(h*c/reshaped_lambda_grid/k_B/intermediate_T) - 1)")
 
         reshaped_taus = taus[:,:,np.newaxis]
         reshaped_planck = planck_function[:,:,np.newaxis]
@@ -80,7 +80,7 @@ class EclipseDepthCalculator:
         d_lambda = np.diff(lambda_grid)
         d_lambda = np.append(d_lambda, d_lambda[-1])
         photon_fluxes = fluxes * d_lambda / (h * c / lambda_grid)
-        eclipse_depths = photon_fluxes / stellar_photon_fluxes * info_dict["unbinned_depths"]
+        eclipse_depths = photon_fluxes / stellar_photon_fluxes * (planet_radius/star_radius)**2
 
         binned_wavelengths, binned_depths = self._get_binned_depths(eclipse_depths, stellar_photon_fluxes)
         

@@ -51,7 +51,6 @@ class EclipseDepthCalculator:
 
         T_profile = t_p_profile.temperatures
         P_profile = t_p_profile.pressures
-        
         wavelengths, transit_depths, info_dict = self.transit_calculator.compute_depths(
             star_radius, planet_mass, planet_radius, None, logZ, CO_ratio,
             add_scattering, scattering_factor,
@@ -97,6 +96,7 @@ class EclipseDepthCalculator:
         d_lambda = np.diff(lambda_grid)
         d_lambda = np.append(d_lambda, d_lambda[-1])
         photon_fluxes = fluxes * d_lambda / (h * c / lambda_grid)
+
         eclipse_depths = photon_fluxes / stellar_photon_fluxes * (planet_radius/star_radius)**2
 
         binned_wavelengths, binned_depths = self._get_binned_depths(eclipse_depths, stellar_photon_fluxes)

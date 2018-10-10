@@ -59,7 +59,7 @@ class CombinedRetriever:
 
     def _ln_prob(self, params, transit_calc, eclipse_calc, fit_info, measured_transit_depths,
                  measured_transit_errors, measured_eclipse_depths,
-                 measured_eclipse_errors, plot=False):
+                 measured_eclipse_errors, plot=False, min_temp=300):
 
         if not fit_info._within_limits(params):
             return -np.inf
@@ -112,8 +112,14 @@ class CombinedRetriever:
             if measured_eclipse_depths is not None:
                 t_p_profile = Profile()
                 t_p_profile.set_parametric(
-                    params_dict["T0"], params_dict["P1"], params_dict["alpha1"],
-                    params_dict["alpha2"], params_dict["P3"], params_dict["T3"])
+                    params_dict["T0"], 10**params_dict["log_P1"], params_dict["alpha1"],
+                    params_dict["alpha2"], 10**params_dict["log_P3"], params_dict["T3"])
+                print (params_dict["T0"], params_dict["log_P1"], params_dict["alpha1"],
+                    params_dict["alpha2"], params_dict["log_P3"], params_dict["T3"])
+                #print(t_p_profile.temperatures)
+                if np.any(np.isnan(t_p_profile.temperatures)) or np.any(t_p_profile.temperatures < min_temp):
+                    raise AtmosphereError("Invalid T/P profile")
+                
                 eclipse_wavelengths, calculated_eclipse_depths = eclipse_calc.compute_depths(
                     t_p_profile, Rs, Mp, Rp, T_star, logZ, CO_ratio,
                     scattering_factor=scatt_factor, scattering_slope=scatt_slope,
@@ -300,11 +306,11 @@ class CombinedRetriever:
         return result
 
     @staticmethod
-    def get_default_fit_info(Rs, Mp, Rp, T, logZ=0, CO_ratio=0.53,
+    def get_default_fit_info(Rs, Mp, Rp, T=None, logZ=0, CO_ratio=0.53,
                              log_cloudtop_P=np.inf, log_scatt_factor=0,
                              scatt_slope=4, error_multiple=1, T_star=None,
                              T_spot=None, spot_cov_frac=None,frac_scale_height=1,
-                             log_number_density=-np.inf, log_part_size =-6, ri = None, T0=None, P1=None, alpha1=None, alpha2=None, P3=None, T3=None):
+                             log_number_density=-np.inf, log_part_size =-6, ri = None, T0=None, log_P1=None, alpha1=None, alpha2=None, log_P3=None, T3=None):
         '''Get a :class:`.FitInfo` object filled with best guess values.  A few
         parameters are required, but others can be set to default values if you
         do not want to specify them.  All parameters are in SI.

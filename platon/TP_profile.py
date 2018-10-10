@@ -60,19 +60,25 @@ class Profile:
         n = info_dict["P_profile"]/k_B/info_dict["T_profile"]
         intermediate_n = (n[0:-1] + n[1:])/2.0
         sigmas = absorption_coeffs / n
-        sigma_v = np.median(np.average(sigmas[visible], axis=0, weights=stellar_spectrum[visible]))
-        sigma_th = np.median(np.average(sigmas[thermal], axis=0, weights=planet_spectrum[thermal]))
+        sigma_v = np.average(sigmas[visible], axis=0, weights=stellar_spectrum[visible])
+        sigma_th = np.average(sigmas[thermal], axis=0, weights=planet_spectrum[thermal])
 
-        gamma = sigma_v / sigma_th
-
-        # For debugging purposes: can get opacities too
-        #molecular_weights = AMU * info_dict["mu_profile"]
-        #kappa_v = (sigmas/molecular_weights)[visible]
-        #kappa_th = (sigmas/molecular_weights)[thermal]
-
-        #print sigma_v, sigma_th, gamma
         dr = -np.diff(radii)
-        d_taus = sigma_th * intermediate_n * dr
+        d_taus = sigma_th[1:] * intermediate_n * dr
+        taus = np.cumsum(d_taus)
+        diff_from_one = np.abs(taus - 1)
+        photosphere_index = np.argmin(diff_from_one)
+        photosphere_index = 275
+        print photosphere_index
+
+        avg_sigma_th = sigma_th[photosphere_index]
+        avg_sigma_v = sigma_v[photosphere_index]
+        #print taus
+
+        gamma = avg_sigma_v / avg_sigma_th
+
+        print avg_sigma_v, avg_sigma_th, gamma
+        d_taus = avg_sigma_th * intermediate_n * dr
         taus = np.cumsum(d_taus)
 
         e2 = scipy.special.expn(2, gamma*taus)

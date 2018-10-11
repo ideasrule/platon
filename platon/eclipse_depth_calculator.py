@@ -10,6 +10,7 @@ class EclipseDepthCalculator:
     def __init__(self):
         self.transit_calculator = TransitDepthCalculator()
         self.wavelength_bins = None
+        self.d_ln_lambda = np.median(np.diff(np.log(self.transit_calculator.lambda_grid)))
 
     def change_wavelength_bins(self, bins):
         self.transit_calculator.change_wavelength_bins(bins)
@@ -76,9 +77,7 @@ class EclipseDepthCalculator:
         fluxes = 2 * np.pi * np.sum(integrands, axis=(1, 2)) * d_mu
 
         stellar_photon_fluxes = info_dict["stellar_spectrum"]
-        
-        d_lambda = np.diff(lambda_grid)
-        d_lambda = np.append(d_lambda, d_lambda[-1])
+        d_lambda = self.d_ln_lambda * lambda_grid
         photon_fluxes = fluxes * d_lambda / (h * c / lambda_grid)
         eclipse_depths = photon_fluxes / stellar_photon_fluxes * (planet_radius/star_radius)**2
 

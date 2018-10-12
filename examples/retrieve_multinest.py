@@ -80,8 +80,7 @@ retriever = Retriever()
 fit_info = retriever.get_default_fit_info(
     Rs=1.19 * R_sun, Mp=0.73 * M_jup, Rp=R_guess, T=T_guess,
     logZ=0, CO_ratio=0.53, log_cloudtop_P=4,
-    log_scatt_factor=0, scatt_slope=4, error_multiple=1, T_star=6091,
-    part_size_std=0.6, ri=1.72)
+    log_scatt_factor=0, scatt_slope=4, error_multiple=1, T_star=6091)
 
 #Add fitting parameters - this specifies which parameters you want to fit
 #e.g. since we have not included cloudtop_P, it will be fixed at the value specified in the constructor
@@ -91,12 +90,10 @@ fit_info.add_gaussian_fit_param('Mp', 0.04*M_jup)
 
 fit_info.add_uniform_fit_param('Rp', 0.9*R_guess, 1.1*R_guess)
 fit_info.add_uniform_fit_param('T', 0.5*T_guess, 1.5*T_guess)
-#fit_info.add_uniform_fit_param("log_scatt_factor", 0, 1)
+fit_info.add_uniform_fit_param("log_scatt_factor", 0, 1)
 fit_info.add_uniform_fit_param("logZ", -1, 3)
 fit_info.add_uniform_fit_param("log_cloudtop_P", -0.99, 5)
 fit_info.add_uniform_fit_param("error_multiple", 0.5, 5)
-
-fit_info.add_uniform_fit_param('part_size_std', 0.4, 0.6)
 
 #Use Nested Sampling to do the fitting
 result = retriever.run_multinest(bins, depths, errors, fit_info, plot_best=True)

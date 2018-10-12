@@ -111,12 +111,8 @@ class CombinedRetriever:
 
             if measured_eclipse_depths is not None:
                 t_p_profile = Profile()
-                t_p_profile.set_parametric(
-                    params_dict["T0"], 10**params_dict["log_P1"], params_dict["alpha1"],
-                    params_dict["alpha2"], 10**params_dict["log_P3"], params_dict["T3"])
-                print (params_dict["T0"], params_dict["log_P1"], params_dict["alpha1"],
-                    params_dict["alpha2"], params_dict["log_P3"], params_dict["T3"])
-                #print(t_p_profile.temperatures)
+                t_p_profile.set_from_params_dict(params_dict["profile_type"], params_dict)
+
                 if np.any(np.isnan(t_p_profile.temperatures)) or np.any(t_p_profile.temperatures < min_temp):
                     raise AtmosphereError("Invalid T/P profile")
                 
@@ -310,7 +306,8 @@ class CombinedRetriever:
                              log_cloudtop_P=np.inf, log_scatt_factor=0,
                              scatt_slope=4, error_multiple=1, T_star=None,
                              T_spot=None, spot_cov_frac=None,frac_scale_height=1,
-                             log_number_density=-np.inf, log_part_size =-6, ri = None, T0=None, log_P1=None, alpha1=None, alpha2=None, log_P3=None, T3=None):
+                             log_number_density=-np.inf, log_part_size =-6, ri = None,
+                             profile_type = 'isothermal', **profile_kwargs):
         '''Get a :class:`.FitInfo` object filled with best guess values.  A few
         parameters are required, but others can be set to default values if you
         do not want to specify them.  All parameters are in SI.
@@ -359,6 +356,9 @@ class CombinedRetriever:
         fit_info : :class:`.FitInfo` object
             This object is used to indicate which parameters to fit for, which
             to fix, and what values all parameters should take.'''
-
-        fit_info = FitInfo(locals().copy())
+        all_variables = locals().copy()
+        del all_variables["profile_kwargs"]
+        all_variables.update(profile_kwargs)
+        
+        fit_info = FitInfo(all_variables)
         return fit_info

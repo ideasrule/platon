@@ -16,15 +16,6 @@ class Profile:
                 np.log10(pressures[-1]),
                 num_profile_heights)
 
-    def set_from_params_dict(self, profile_type, params_dict):
-        if profile_type == "isothermal":
-            self.set_isothermal(params_dict["T"])
-        elif profile_type == "parametric":
-            self.set_parametric(params_dict["T0"], 10**params_dict["log_P1"], params_dict["alpha1"], params_dict["alpha2"], 10**params_dict["log_P3"], params_dict["T3"])
-        else:
-            assert(False)
-            
-        
     def set_from_arrays(self, P_profile, T_profile):
         interpolator = interp1d(np.log10(P_profile), T_profile)
         self.temperatures = interpolator(self.pressures)
@@ -48,9 +39,8 @@ class Profile:
             elif P < P3:
                 self.temperatures[i] = T2 + np.log(P/P2)**2 / alpha2**2
             else:
-                self.temperatures[i] = T3   
+                self.temperatures[i] = T3
 
-                
     def set_from_opacity(self, Tirr, info_dict, visible_cutoff=0.8e-6, Tint=100):
         wavelengths = info_dict["unbinned_wavelengths"]
         d_lambda = np.diff(wavelengths)
@@ -70,25 +60,14 @@ class Profile:
         n = info_dict["P_profile"]/k_B/info_dict["T_profile"]
         intermediate_n = (n[0:-1] + n[1:])/2.0
         sigmas = absorption_coeffs / n
-        sigma_v = np.average(sigmas[visible], axis=0, weights=stellar_spectrum[visible])
-        sigma_th = np.average(sigmas[thermal], axis=0, weights=planet_spectrum[thermal])
+        sigma_v = np.median(np.average(sigmas[visible], axis=0, weights=stellar_spectrum[visible]))
+        sigma_th = np.median(np.average(sigmas[thermal], axis=0, weights=planet_spectrum[thermal]))
 
+        gamma = sigma_v / sigma_th
+
+        print sigma_v, sigma_th, gamma
         dr = -np.diff(radii)
-        d_taus = sigma_th[1:] * intermediate_n * dr
-        taus = np.cumsum(d_taus)
-        diff_from_one = np.abs(taus - 1)
-        photosphere_index = np.argmin(diff_from_one)
-        photosphere_index = 275
-        print photosphere_index
-
-        avg_sigma_th = sigma_th[photosphere_index]
-        avg_sigma_v = sigma_v[photosphere_index]
-        #print taus
-
-        gamma = avg_sigma_v / avg_sigma_th
-
-        print avg_sigma_v, avg_sigma_th, gamma
-        d_taus = avg_sigma_th * intermediate_n * dr
+        d_taus = sigma_th * intermediate_n * dr
         taus = np.cumsum(d_taus)
 
         e2 = scipy.special.expn(2, gamma*taus)

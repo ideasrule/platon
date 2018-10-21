@@ -65,7 +65,6 @@ class Profile:
 
         gamma = sigma_v / sigma_th
 
-        print sigma_v, sigma_th, gamma
         dr = -np.diff(radii)
         d_taus = sigma_th * intermediate_n * dr
         taus = np.cumsum(d_taus)

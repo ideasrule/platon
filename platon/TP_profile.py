@@ -15,7 +15,16 @@ class Profile:
                 np.log10(pressures[0]),
                 np.log10(pressures[-1]),
                 num_profile_heights)
-
+        
+    def set_from_params_dict(self, profile_type, params_dict):
+        if profile_type == "isothermal":
+            self.set_isothermal(params_dict["T"])
+        elif profile_type == "parametric":
+            self.set_parametric(params_dict["T0"], 10**params_dict["log_P1"], params_dict["alpha1"], params_dict["alpha2"], 10**params_dict["log_P3"], params_dict["T3"])
+        else:
+            assert(False)
+                                        
+        
     def set_from_arrays(self, P_profile, T_profile):
         interpolator = interp1d(np.log10(P_profile), T_profile)
         self.temperatures = interpolator(self.pressures)

@@ -34,8 +34,8 @@ class Profile:
         interpolator = interp1d(np.log10(P_profile), T_profile)
         self.temperatures = interpolator(self.pressures)
 
-    def set_isothermal(self, T):
-        self.temperatures = np.ones(len(self.pressures)) * T
+    def set_isothermal(self, T_day):
+        self.temperatures = np.ones(len(self.pressures)) * T_day
 
     def set_parametric(self, T0, P1, alpha1, alpha2, P3, T3):
         # Parametric model from https://arxiv.org/pdf/0910.1347.pdf

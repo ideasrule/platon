@@ -5,7 +5,7 @@ import numpy as np
 
 from pkg_resources import resource_filename
 
-from .constants import h, c, k_B, AMU
+from .constants import h, c, k_B, AMU, G
 
 class Profile:
     def __init__(self, num_profile_heights=500):
@@ -20,7 +20,12 @@ class Profile:
         if profile_type == "isothermal":
             self.set_isothermal(params_dict["T"])
         elif profile_type == "parametric":
-            self.set_parametric(params_dict["T0"], 10**params_dict["log_P1"], params_dict["alpha1"], params_dict["alpha2"], 10**params_dict["log_P3"], params_dict["T3"])
+            self.set_parametric(
+                params_dict["T0"], 10**params_dict["log_P1"],
+                params_dict["alpha1"], params_dict["alpha2"],
+                10**params_dict["log_P3"], params_dict["T3"])
+        elif profile_type == "radiative_solution":
+            self.set_from_radiative_solution(**params_dict)
         else:
             assert(False)
                                         
@@ -49,8 +54,9 @@ class Profile:
                 self.temperatures[i] = T2 + np.log(P/P2)**2 / alpha2**2
             else:
                 self.temperatures[i] = T3
+        return P2, T2
 
-    def set_from_opacity(self, Tirr, info_dict, visible_cutoff=0.8e-6, Tint=100):
+    def set_from_opacity(self, T_irr, info_dict, visible_cutoff=0.8e-6, T_int=100):
         wavelengths = info_dict["unbinned_wavelengths"]
         d_lambda = np.diff(wavelengths)
         d_lambda = np.append(d_lambda[0], d_lambda)
@@ -79,22 +85,23 @@ class Profile:
         taus = np.cumsum(d_taus)
 
         e2 = scipy.special.expn(2, gamma*taus)
-        T4 = 3.0/4 * Tint**4 * (2.0/3 + taus) + 3.0/4 * Tirr**4 * (2.0/3 + 2.0/3/gamma * (1 + (gamma*taus/2 - 1)*np.exp(-gamma * taus)) + 2.0*gamma/3 * (1 - taus**2/2) * e2)
+        T4 = 3.0/4 * T_int**4 * (2.0/3 + taus) + 3.0/4 * T_irr**4 * (2.0/3 + 2.0/3/gamma * (1 + (gamma*taus/2 - 1)*np.exp(-gamma * taus)) + 2.0*gamma/3 * (1 - taus**2/2) * e2)
         T = T4 ** 0.25
         self.temperatures = np.append(T[0], T)
 
-    def radiative_solution(self, Tstar, Rstar, a, g, beta, k_th, gamma, gamma2 = None, alpha = 1, Tint=100):
+    def set_from_radiative_solution(self, T_star, Rs, a, Mp, Rp, beta, k_th, gamma, gamma2=None, alpha=1, T_int=100, **ignored_kwargs):
         #from Line et al. 2013: http://adsabs.harvard.edu/abs/2013ApJ...775..137L
         #Equation 13 - 16
-        
-        Tirr = beta * np.sqrt(Rstar/(2*a)) * Tstar
+
+        g = G * Mp / Rp**2
+        T_irr = beta * np.sqrt(Rs/(2*a)) * T_star
         taus = k_th * self.pressures / g
 
         def incoming_stream_contribution(gamma):
-            return 3.0/4 * Tirr**4 * (2.0/3 + 2.0/3/gamma * (1 + (gamma*taus/2 - 1)*np.exp(-gamma * taus)) + 2.0*gamma/3 * (1 - taus**2/2) * scipy.special.expn(2, gamma*taus))
+            return 3.0/4 * T_irr**4 * (2.0/3 + 2.0/3/gamma * (1 + (gamma*taus/2 - 1)*np.exp(-gamma * taus)) + 2.0*gamma/3 * (1 - taus**2/2) * scipy.special.expn(2, gamma*taus))
 
         e1 = incoming_stream_contribution(gamma)
-        T4 = 3.0/4 * Tint**4 * (2.0/3 + taus) + alpha * e1
+        T4 = 3.0/4 * T_int**4 * (2.0/3 + taus) + alpha * e1
 
         if gamma2 is not None:
             e2 = incoming_stream_contribution(gamma2)

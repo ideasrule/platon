@@ -152,14 +152,22 @@ class CombinedRetriever:
 
         Parameters
         ----------
-        wavelength_bins : array_like, shape (N,2)
+        transit_bins : array_like, shape (N,2)
             Wavelength bins, where wavelength_bins[i][0] is the start
             wavelength and wavelength_bins[i][1] is the end wavelength for
             bin i.
-        depths : array_like, length N
+        transit_depths : array_like, length N
             Measured transit depths for the specified wavelength bins
-        errors : array_like, length N
+        transit_errors : array_like, length N
             Errors on the aforementioned transit depths
+        eclipse_bins : array_like, shape (N,2)
+            Wavelength bins, where wavelength_bins[i][0] is the start
+            wavelength and wavelength_bins[i][1] is the end wavelength for
+            bin i.
+        eclipse_depths : array_like, length N
+            Measured eclipse depths for the specified wavelength bins
+        eclipse_errors : array_like, length N
+            Errors on the aforementioned eclipse depths
         fit_info : :class:`.FitInfo` object
             Tells the method what parameters to
             freely vary, and in what range those parameters can vary. Also
@@ -232,14 +240,22 @@ class CombinedRetriever:
 
         Parameters
         ----------
-        wavelength_bins : array_like, shape (N,2)
+        transit_bins : array_like, shape (N,2)
             Wavelength bins, where wavelength_bins[i][0] is the start
             wavelength and wavelength_bins[i][1] is the end wavelength for
             bin i.
-        depths : array_like, length N
+        transit_depths : array_like, length N
             Measured transit depths for the specified wavelength bins
-        errors : array_like, length N
+        transit_errors : array_like, length N
             Errors on the aforementioned transit depths
+        eclipse_bins : array_like, shape (N,2)
+            Wavelength bins, where wavelength_bins[i][0] is the start
+            wavelength and wavelength_bins[i][1] is the end wavelength for
+            bin i.
+        eclipse_depths : array_like, length N
+            Measured eclipse depths for the specified wavelength bins
+        eclipse_errors : array_like, length N
+            Errors on the aforementioned eclipse depths
         fit_info : :class:`.FitInfo` object
             Tells us what parameters to
             freely vary, and in what range those parameters can vary. Also

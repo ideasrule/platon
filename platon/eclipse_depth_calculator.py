@@ -47,8 +47,8 @@ class EclipseDepthCalculator:
                        cloudtop_pressure=np.inf, custom_abundances=None,
                        T_spot=None, spot_cov_frac=None,
                        ri = None, frac_scale_height=1,number_density=0,
-                       part_size = 10**-6, num_mu=100, min_mu=1e-3, max_mu=1,
-                       full_output = False):
+                       part_size=1e-6, num_mu=50, min_mu=1e-2, max_mu=1,
+                       full_output=False):
 
         T_profile = t_p_profile.temperatures
         P_profile = t_p_profile.pressures
@@ -69,8 +69,9 @@ class EclipseDepthCalculator:
         d_taus = intermediate_coeff * dr
         taus = np.cumsum(d_taus, axis=1)
 
-        mu_grid = np.linspace(min_mu, max_mu, num_mu)
-        d_mu = (max_mu - min_mu)/(num_mu - 1)
+        mu_grid = np.logspace(np.log10(min_mu), np.log10(max_mu), num_mu)
+        d_mus = np.diff(mu_grid)
+        d_mus = np.append(d_mus[0], d_mus)
         lambda_grid = self.transit_calculator.lambda_grid
         
         if gnp is not None:
@@ -78,20 +79,20 @@ class EclipseDepthCalculator:
             planck_function = 2*h*c**2/reshaped_lambda_grid**5/(gnp.exp(h*c/reshaped_lambda_grid/k_B/gnp.garray(intermediate_T)) - 1)
             reshaped_taus = gnp.garray(taus[:,:,np.newaxis])
             reshaped_planck = planck_function[:,:,np.newaxis]
-            reshaped_d_taus = gnp.garray(d_taus[:,:,np.newaxis])            
-            integrands = gnp.exp(-reshaped_taus/gnp.garray(mu_grid)) * reshaped_planck * reshaped_d_taus 
-            fluxes = integrands.sum(axis=1)
-            fluxes = 2 * np.pi * d_mu * fluxes.sum(axis=1)
-            fluxes = fluxes.asarray()
+            reshaped_d_taus = gnp.garray(d_taus[:,:,np.newaxis])
+            integrands = gnp.exp(-reshaped_taus/gnp.garray(mu_grid)) * reshaped_planck * reshaped_d_taus
+            fluxes = integrands.sum(axis=1).asarray()
         else:
             reshaped_lambda_grid = lambda_grid.reshape((-1, 1))
             planck_function = ne.evaluate("2*h*c**2/reshaped_lambda_grid**5/(exp(h*c/reshaped_lambda_grid/k_B/intermediate_T) - 1)")
             reshaped_taus = taus[:,:,np.newaxis]
             reshaped_planck = planck_function[:,:,np.newaxis]
             reshaped_d_taus = d_taus[:,:,np.newaxis]
+            reshaped_d_mus = d_mus[np.newaxis, np.newaxis, :]
             integrands = ne.evaluate("exp(-reshaped_taus/mu_grid) * reshaped_planck * reshaped_d_taus")
-            fluxes = 2 * np.pi * np.sum(integrands, axis=(1, 2)) * d_mu
+            fluxes = integrands.sum(axis=1)
 
+        fluxes = 2 * np.pi * np.sum(fluxes * d_mus, axis=1)
         stellar_photon_fluxes = info_dict["stellar_spectrum"]
         d_lambda = self.d_ln_lambda * lambda_grid
         photon_fluxes = fluxes * d_lambda / (h * c / lambda_grid)
@@ -99,7 +100,7 @@ class EclipseDepthCalculator:
         eclipse_depths = photon_fluxes / stellar_photon_fluxes * (planet_radius/star_radius)**2
 
         binned_wavelengths, binned_depths = self._get_binned_depths(eclipse_depths, stellar_photon_fluxes)
-        
+
         if full_output:
             output_dict = dict(info_dict)
             output_dict["planet_spectrum"] = fluxes

@@ -24,8 +24,9 @@ class TestEclipseDepthCalculator(unittest.TestCase):
 
         rel_diffs = (info_dict["planet_spectrum"] - blackbody)/blackbody
         # Should be exact, but in practice isn't, due to our discretization
-        self.assertLess(np.percentile(np.abs(rel_diffs), 50), 0.05)
-        self.assertLess(np.percentile(np.abs(rel_diffs), 99), 0.1)
+        self.assertLess(np.percentile(np.abs(rel_diffs), 50), 0.02)
+        self.assertLess(np.percentile(np.abs(rel_diffs), 99), 0.05)
+        self.assertLess(np.max(np.abs(rel_diffs)), 0.1)
 
         blackbody_star = np.pi * 2*h*c**2/wavelengths**5/(np.exp(h*c/wavelengths/k_B/Ts) - 1)        
         approximate_depths = blackbody / blackbody_star * (R_jup/R_sun)**2

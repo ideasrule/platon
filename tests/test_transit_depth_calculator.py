@@ -43,15 +43,16 @@ class TestTransitDepthCalculator(unittest.TestCase):
         custom_abundances = AbundanceGetter.from_file("tests/testing_data/abund_1Xsolar_cond.dat")
         custom_abundances["SH"] *= 0
         frac_dev = self.get_frac_dev(None, None, custom_abundances)
-        self.assertTrue(np.all(frac_dev < 0.02))
+
+        self.assertLess(np.percentile(frac_dev, 95), 0.03)
+        self.assertLess(np.max(frac_dev),  0.07)
 
     def test_ggchem(self):
         frac_dev = self.get_frac_dev(0, 0.53, None)
 
         #Some, but very few, individual lines are highly discrepant
-        self.assertLess(np.percentile(frac_dev, 95), 0.02)
-
-        self.assertLess(np.max(frac_dev), 0.03)
+        self.assertLess(np.percentile(frac_dev, 95), 0.03)
+        self.assertLess(np.max(frac_dev), 0.07)
 
     def test_unbound_atmosphere(self):
         Rp = 6.378e6

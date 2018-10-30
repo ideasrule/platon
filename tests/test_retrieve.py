@@ -96,17 +96,17 @@ class TestRetriever(unittest.TestCase):
                                     self.errors, fit_info, nsteps=10)
 
         # All of these are invalid inputs
-        run_both("T", 299, 1000, 2999)
+        run_both("T", 199, 1000, 2999)
         run_both("T", 3000, 1000, 300)
         
-        run_both("T", 301, 1000, 3001)        
-        run_both("T", 301, 1000, 999)
+        run_both("T", 201, 1000, 3001)        
+        run_both("T", 201, 1000, 999)
 
         run_both("logZ", -1.1, 0, 3)
         run_both("logZ", -1, 2, 3.1)        
 
-        run_both("CO_ratio", 0.19, 0.53, 10)
-        run_both("CO_ratio", 0.2, 0.53, 10.1)
+        run_both("CO_ratio", 0.04, 0.53, 10)
+        run_both("CO_ratio", 0.1, 0.53, 10.1)
 
         run_both("log_cloudtop_P", -4.1, 0, 5)
         run_both("log_cloudtop_P", -4, 2, 5.1) 

@@ -19,9 +19,7 @@ class AbundanceGetter:
         self.logZs = np.linspace(float(properties["min_logZ"]),
                                  float(properties["max_logZ"]),
                                  int(properties["num_logZ"]))
-        self.CO_ratios = np.linspace(float(properties["min_CO"]),
-                                     float(properties["max_CO"]),
-                                     int(properties["num_CO"]))
+        self.CO_ratios = eval(properties["CO_ratios"])
         self.included_species = eval(properties["included_species"])
 
         if include_condensation:

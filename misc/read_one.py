@@ -62,8 +62,8 @@ def read_ggchem_file(filename, species_info_file):
 
             fake_cols = np.ones((N_P, 2)) * np.nan
             abund_dict[h] = np.append(fake_cols, abund_dict[h], axis=1)
-        elif N_T == 28: #T in 50K increments, with 300K min
-            fake_cols = np.ones((N_P, 2)) * np.nan
+        elif N_T == 29: #T in 10K increments, with 300K min
+            fake_cols = np.ones((N_P, 1)) * np.nan
             abund_dict[h] = np.append(fake_cols, abund_dict[h], axis=1)
         elif N_T != 30:
             assert(False)

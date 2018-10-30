@@ -94,7 +94,7 @@ class TestTransitDepthCalculator(unittest.TestCase):
         calculator = TransitDepthCalculator()
         
         with self.assertRaises(ValueError):
-            calculator.compute_depths(Rs, Mp, Rp, 299, logZ=logZ, CO_ratio=CO_ratio)
+            calculator.compute_depths(Rs, Mp, Rp, 199, logZ=logZ, CO_ratio=CO_ratio)
         with self.assertRaises(ValueError):
             calculator.compute_depths(Rs, Mp, Rp, 3001, logZ=logZ, CO_ratio=CO_ratio)
         with self.assertRaises(ValueError):
@@ -102,7 +102,7 @@ class TestTransitDepthCalculator(unittest.TestCase):
         with self.assertRaises(ValueError):
             calculator.compute_depths(Rs, Mp, Rp, T, logZ=3.1, CO_ratio=CO_ratio)
         with self.assertRaises(ValueError):
-            calculator.compute_depths(Rs, Mp, Rp, T, logZ=logZ, CO_ratio=0.19)
+            calculator.compute_depths(Rs, Mp, Rp, T, logZ=logZ, CO_ratio=0.01)
             
         with self.assertRaises(ValueError):
             calculator.compute_depths(Rs, Mp, Rp, T, logZ=logZ, CO_ratio=11)

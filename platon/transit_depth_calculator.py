@@ -326,6 +326,7 @@ class TransitDepthCalculator:
 
     def compute_depths(self, star_radius, planet_mass, planet_radius,
                        temperature, logZ=0, CO_ratio=0.53,
+                       add_gas_absorption=True,
                        add_scattering=True, scattering_factor=1,
                        scattering_slope=4, scattering_ref_wavelength=1e-6,
                        add_collisional_absorption=True,
@@ -353,6 +354,8 @@ class TransitDepthCalculator:
             Base-10 logarithm of the metallicity, in solar units
         CO_ratio : float, optional
             C/O atomic ratio in the atmosphere.  The solar value is 0.53.
+        add_gas_absorption: float, optional
+            Whether gas absorption is accounted for
         add_scattering : bool, optional
             whether Rayleigh scattering is taken into account
         scattering_factor : float, optional
@@ -475,8 +478,9 @@ class TransitDepthCalculator:
         T_cond = _interpolator_3D.get_condition_array(T_profile, self.T_grid)
         P_cond = _interpolator_3D.get_condition_array(
             P_profile, self.P_grid, cloudtop_pressure)
-
-        absorption_coeff = self._get_gas_absorption(abundances, P_cond, T_cond)
+        absorption_coeff = np.zeros((len(self.lambda_grid), np.sum(P_cond), np.sum(T_cond)))
+        if add_gas_absorption:
+            absorption_coeff += self._get_gas_absorption(abundances, P_cond, T_cond)
         if add_scattering:
             if ri is not None:
                 if scattering_factor != 1 or scattering_slope != 4:

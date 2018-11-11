@@ -41,6 +41,7 @@ class EclipseDepthCalculator:
             
     def compute_depths(self, t_p_profile, star_radius, planet_mass,
                        planet_radius, T_star, logZ=0, CO_ratio=0.53,
+                       add_gas_absorption=True,
                        add_scattering=True, scattering_factor=1,
                        scattering_slope=4, scattering_ref_wavelength=1e-6,
                        add_collisional_absorption=True,
@@ -54,6 +55,7 @@ class EclipseDepthCalculator:
         P_profile = t_p_profile.pressures
         wavelengths, transit_depths, info_dict = self.transit_calculator.compute_depths(
             star_radius, planet_mass, planet_radius, None, logZ, CO_ratio,
+            add_gas_absorption,
             add_scattering, scattering_factor,
             scattering_slope, scattering_ref_wavelength,
             add_collisional_absorption, cloudtop_pressure, custom_abundances,

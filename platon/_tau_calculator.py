@@ -22,7 +22,6 @@ def get_line_of_sight_tau(absorption_coeff, radii):
 
     assert(np.allclose(radii, np.sort(radii)[::-1]))
     intermediate_coeff = 0.5 * \
-        (absorption_coeff[:, 0:-1] + absorption_coeff[:, 1:])
-
+        (absorption_coeff[0:-1] + absorption_coeff[1:])
     dl = get_dl(radii)
-    return np.dot(intermediate_coeff, dl)
+    return np.dot(intermediate_coeff.T, dl)

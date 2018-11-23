@@ -65,10 +65,10 @@ class EclipseDepthCalculator:
             ri, frac_scale_height, number_density, part_size, full_output=True)
 
         absorption_coeff = info_dict["absorption_coeff_atm"]
-        intermediate_coeff = 0.5 * (absorption_coeff[:, 0:-1] + absorption_coeff[:, 1:])
+        intermediate_coeff = 0.5 * (absorption_coeff[0:-1] + absorption_coeff[1:])
         intermediate_T = 0.5 * (info_dict["T_profile"][0:-1] + info_dict["T_profile"][1:])
         dr = -np.diff(info_dict["radii"])
-        d_taus = intermediate_coeff * dr
+        d_taus = intermediate_coeff.T * dr
         taus = np.cumsum(d_taus, axis=1)
 
         mu_grid = np.logspace(np.log10(min_mu), np.log10(max_mu), num_mu)

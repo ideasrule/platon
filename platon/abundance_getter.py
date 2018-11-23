@@ -56,7 +56,8 @@ class AbundanceGetter:
 
         abund_dict = {}
         for i, s in enumerate(self.included_species):
-            abund_dict[s] = interp_log_abund[:, :, i]
+            abund_dict[s] = interp_log_abund[:, :, i].T
+            #abund_dict[s] = abund_dict[s].transpose(
 
         return abund_dict
 
@@ -108,7 +109,7 @@ class AbundanceGetter:
         N_pressures = len(np.unique(pressures))
 
         for i in range(len(species)):
-            c = compositions[:, i].reshape((N_pressures, N_temperatures))
+            c = compositions[:, i].reshape((N_pressures, N_temperatures)).T
             # This file has decreasing temperatures and pressures; we want
             # increasing temperatures and pressures
             c = c[::-1, ::-1]

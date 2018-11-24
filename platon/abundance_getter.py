@@ -6,7 +6,6 @@ import time
 import configparser
 from pkg_resources import resource_filename
 
-from ._interpolator_3D import fast_interpolate
 from ._compatible_loader import load_dict_from_pickle
 
 
@@ -31,6 +30,7 @@ class AbundanceGetter:
 
         self.log_abundances = np.log10(np.load(
             resource_filename(__name__, abundances_path)))
+        self.log_abundances = self.log_abundances.transpose((4, 3, 2, 1, 0))
 
         
     def get(self, logZ, CO_ratio=0.53):
@@ -46,18 +46,15 @@ class AbundanceGetter:
             the number fraction of the species at a certain temperature and
             pressure.'''
 
-        N_P, N_T, N_species, N_CO, N_Z = self.log_abundances.shape
-
-        reshaped_log_abund = self.log_abundances.reshape((-1, N_CO, N_Z))
-        interp_log_abund = 10 ** fast_interpolate(
-            reshaped_log_abund, self.logZs, np.log10(self.CO_ratios),
-            logZ, np.log10(CO_ratio))
-        interp_log_abund = interp_log_abund.reshape((N_P, N_T, N_species))
-
+        N_Z, N_CO, N_species, N_T, N_P = self.log_abundances.shape
+        interp_log_abund = 10 ** scipy.interpolate.interpn(
+            (self.logZs, np.log10(self.CO_ratios)),
+            self.log_abundances,
+            [logZ, np.log10(CO_ratio)])[0]
+        
         abund_dict = {}
         for i, s in enumerate(self.included_species):
-            abund_dict[s] = interp_log_abund[:, :, i].T
-            #abund_dict[s] = abund_dict[s].transpose(
+            abund_dict[s] = interp_log_abund[i]
 
         return abund_dict
 

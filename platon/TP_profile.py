@@ -74,9 +74,9 @@ class Profile:
         thermal = wavelengths >= visible_cutoff
         n = info_dict["P_profile"]/k_B/info_dict["T_profile"]
         intermediate_n = (n[0:-1] + n[1:])/2.0
-        sigmas = absorption_coeffs / n
-        sigma_v = np.median(np.average(sigmas[visible], axis=0, weights=stellar_spectrum[visible]))
-        sigma_th = np.median(np.average(sigmas[thermal], axis=0, weights=planet_spectrum[thermal]))
+        sigmas = absorption_coeffs / n[:, np.newaxis]
+        sigma_v = np.median(np.average(sigmas[:, visible], axis=1, weights=stellar_spectrum[visible]))
+        sigma_th = np.median(np.average(sigmas[:, thermal], axis=1, weights=planet_spectrum[thermal]))
 
         gamma = sigma_v / sigma_th
 

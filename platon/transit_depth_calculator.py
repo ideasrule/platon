@@ -77,12 +77,6 @@ class TransitDepthCalculator:
         self.ref_pressure = ref_pressure
         self._mie_cache = MieCache()
         
-        for key in self.collisional_absorption_data:
-            self.collisional_absorption_data[key] = self.collisional_absorption_data[key].transpose((1,0))
-            
-        for key in self.absorption_data:
-            self.absorption_data[key] = self.absorption_data[key].transpose((2, 1, 0))
-
 
     def change_wavelength_bins(self, bins):
         """Specify wavelength bins, instead of using the full wavelength grid

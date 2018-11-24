@@ -30,7 +30,6 @@ class AbundanceGetter:
 
         self.log_abundances = np.log10(np.load(
             resource_filename(__name__, abundances_path)))
-        self.log_abundances = self.log_abundances.transpose((4, 3, 2, 1, 0))
 
         
     def get(self, logZ, CO_ratio=0.53):

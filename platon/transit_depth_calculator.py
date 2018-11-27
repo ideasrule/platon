@@ -24,7 +24,7 @@ from .errors import AtmosphereError
 
 
 class TransitDepthCalculator:
-    def __init__(self, include_condensation=True, num_profile_heights=500,
+    def __init__(self, include_condensation=True, num_profile_heights=250,
                  ref_pressure=1e5):
         '''
         All physical parameters are in SI.
@@ -299,7 +299,7 @@ class TransitDepthCalculator:
             if temperature < self.min_temperature or temperature > self.max_temperature:
                 raise ValueError(
                     "Temperature {} K is out of bounds ({} to {} K)".format(
-                        temperature, minimum, maximum))
+                        temperature, self.min_temperature, self.max_temperature))
 
         if custom_T_profile is not None:
             if np.min(custom_T_profile) < self.min_temperature or\

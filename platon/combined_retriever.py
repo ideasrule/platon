@@ -80,13 +80,14 @@ class CombinedRetriever:
                 this_param.best_guess = lim
                 calculator._validate_params(
                     fit_info._get("T"),
+                    None,
                     fit_info._get("logZ"),
                     fit_info._get("CO_ratio"),
                     10**fit_info._get("log_cloudtop_P"))
 
     def _ln_prob(self, params, transit_calc, eclipse_calc, fit_info, measured_transit_depths,
                  measured_transit_errors, measured_eclipse_depths,
-                 measured_eclipse_errors, plot=False, min_temp=300):
+                 measured_eclipse_errors, plot=False):
 
         if not fit_info._within_limits(params):
             return -np.inf
@@ -141,7 +142,7 @@ class CombinedRetriever:
                 t_p_profile = Profile()
                 t_p_profile.set_from_params_dict(params_dict["profile_type"], params_dict)
 
-                if np.any(np.isnan(t_p_profile.temperatures)) or np.any(t_p_profile.temperatures < min_temp):
+                if np.any(np.isnan(t_p_profile.temperatures)):
                     raise AtmosphereError("Invalid T/P profile")
                 
                 eclipse_wavelengths, calculated_eclipse_depths = eclipse_calc.compute_depths(

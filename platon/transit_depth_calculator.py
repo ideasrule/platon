@@ -20,8 +20,8 @@ from ._tau_calculator import get_line_of_sight_tau
 from .constants import k_B, AMU, M_sun, Teff_sun, G, h, c
 from ._get_data import get_data
 from ._mie_cache import MieCache
+from .errors import AtmosphereError
 
-import pdb, time
 
 class TransitDepthCalculator:
     def __init__(self, include_condensation=True, num_profile_heights=500,
@@ -72,11 +72,13 @@ class TransitDepthCalculator:
         self.wavelength_bins = None
 
         self.abundance_getter = AbundanceGetter(include_condensation)
+        self.min_temperature = max(np.min(self.T_grid), self.abundance_getter.min_temperature)
+        self.max_temperature = np.max(self.T_grid)
 
         self.num_profile_heights = num_profile_heights
         self.ref_pressure = ref_pressure
         self._mie_cache = MieCache()
-        
+
 
     def change_wavelength_bins(self, bins):
         """Specify wavelength bins, instead of using the full wavelength grid
@@ -292,18 +294,18 @@ class TransitDepthCalculator:
 
         return np.array(binned_wavelengths), np.array(binned_depths), stellar_spectrum
 
-    def _validate_params(self, temperature, logZ, CO_ratio, cloudtop_pressure):
-
+    def _validate_params(self, temperature, custom_T_profile, logZ, CO_ratio, cloudtop_pressure):
         if temperature is not None:
-            minimum = max(np.min(self.T_grid),
-                          self.abundance_getter.min_temperature)
-            maximum = np.max(self.T_grid)
-
-            if temperature < minimum or temperature > maximum:
+            if temperature < self.min_temperature or temperature > self.max_temperature:
                 raise ValueError(
                     "Temperature {} K is out of bounds ({} to {} K)".format(
                         temperature, minimum, maximum))
 
+        if custom_T_profile is not None:
+            if np.min(custom_T_profile) < self.min_temperature or\
+               np.max(custom_T_profile) > self.max_temperature:
+                raise AtmosphereError("Invalid temperatures in T/P profile")
+            
         if logZ is not None:
             minimum = np.min(self.abundance_getter.logZs)
             maximum = np.max(self.abundance_getter.logZs)
@@ -386,8 +388,8 @@ class TransitDepthCalculator:
             EOS files.  It is also possible, though highly discouraged, to
             specify a dictionary mapping species names to numpy arrays, so that
             custom_abundances['Na'][3,4] would mean the fractional number
-            abundance of Na at a pressure of self.P_grid[3] and temperature of
-            self.T_grid[4].
+            abundance of Na at a temperature of self.T_grid[3] and pressure of
+            self.P_grid[4].
         custom_T_profile : array-like, optional
             If specified and custom_P_profile is also specified, divides the
             atmosphere into user-specified P/T points, instead of assuming an
@@ -443,7 +445,7 @@ class TransitDepthCalculator:
             stellar_spectrum, radii, P_profile, T_profile, mu_profile,
             atm_abundances, unbinned_depths, unbinned_wavelengths
        '''
-        self._validate_params(temperature, logZ, CO_ratio, cloudtop_pressure)
+        self._validate_params(temperature, custom_T_profile, logZ, CO_ratio, cloudtop_pressure)
         if custom_P_profile is not None:
             if custom_T_profile is None or len(
                     custom_P_profile) != len(custom_T_profile):
@@ -453,6 +455,7 @@ class TransitDepthCalculator:
             if temperature is not None:
                 raise ValueError(
                     "Cannot specify both temperature and custom T profile")
+            
             P_profile = custom_P_profile
             T_profile = custom_T_profile
         else:

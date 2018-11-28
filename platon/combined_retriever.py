@@ -117,7 +117,9 @@ class CombinedRetriever:
 
         ln_likelihood = 0
         try:
-            if measured_transit_depths is not None:                
+            if measured_transit_depths is not None:
+                if T is None:
+                    raise ValueError("Must fit for T if using transit depths")
                 transit_wavelengths, calculated_transit_depths = transit_calc.compute_depths(
                     Rs, Mp, Rp, T, logZ, CO_ratio,
                     scattering_factor=scatt_factor, scattering_slope=scatt_slope,

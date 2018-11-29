@@ -101,10 +101,17 @@ class TransitDepthCalculator:
         """
         if self.wavelength_rebinned:
             self.__init__(self.arguments)
-            self.wavelength_rebinned = False
+            self.wavelength_rebinned = False        
             
         if bins is None:
             return
+
+        for start, end in bins:
+            if start < np.min(self.lambda_grid) \
+               or start > np.max(self.lambda_grid) \
+               or end < np.min(self.lambda_grid) \
+               or end > np.max(self.lambda_grid):
+                raise ValueError("Invalid wavelength bin: {}-{} meters".format(start, end))
         
         self.wavelength_rebinned = True
         self.wavelength_bins = bins

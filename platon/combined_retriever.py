@@ -118,21 +118,23 @@ class CombinedRetriever:
         ln_likelihood = 0
         try:
             if measured_transit_depths is not None:                
-                transit_wavelengths, calculated_transit_depths = transit_calc.compute_depths(
+                transit_wavelengths, calculated_transit_depths, info_dict = transit_calc.compute_depths(
                     Rs, Mp, Rp, T, logZ, CO_ratio,
                     scattering_factor=scatt_factor, scattering_slope=scatt_slope,
                     cloudtop_pressure=cloudtop_P, T_star=T_star,
                     T_spot=T_spot, spot_cov_frac=spot_cov_frac,
                     frac_scale_height=frac_scale_height, number_density=number_density,
-                    part_size = part_size, ri = ri)
+                    part_size=part_size, ri=ri, full_output=True)
                 residuals = calculated_transit_depths - measured_transit_depths
                 scaled_errors = error_multiple * measured_transit_errors
                 ln_likelihood += -0.5 * np.sum(residuals**2 / scaled_errors**2 + np.log(2 * np.pi * scaled_errors**2))
+                
                 if plot:
                     plt.figure(1)
+                    plt.plot(METRES_TO_UM * info_dict["unbinned_wavelengths"], info_dict["unbinned_depths"], color='b', label="Calculated (unbinned)")
                     plt.errorbar(METRES_TO_UM * transit_wavelengths, measured_transit_depths,
-                                 yerr = measured_transit_errors, fmt='.', color='k')
-                    plt.plot(METRES_TO_UM * transit_wavelengths, calculated_transit_depths, color='b')
+                                 yerr = measured_transit_errors, fmt='.', color='k', label="Observed")
+                    plt.scatter(METRES_TO_UM * transit_wavelengths, calculated_transit_depths, color='r', label="Calculated (binned)")
                     plt.xlabel("Wavelength ($\mu m$)")
                     plt.ylabel("Transit depth")
                     plt.xscale('log')
@@ -145,21 +147,24 @@ class CombinedRetriever:
                 if np.any(np.isnan(t_p_profile.temperatures)):
                     raise AtmosphereError("Invalid T/P profile")
                 
-                eclipse_wavelengths, calculated_eclipse_depths = eclipse_calc.compute_depths(
+                eclipse_wavelengths, calculated_eclipse_depths, info_dict = eclipse_calc.compute_depths(
                     t_p_profile, Rs, Mp, Rp, T_star, logZ, CO_ratio,
                     scattering_factor=scatt_factor, scattering_slope=scatt_slope,
                     cloudtop_pressure=cloudtop_P,
                     T_spot=T_spot, spot_cov_frac=spot_cov_frac,
                     frac_scale_height=frac_scale_height, number_density=number_density,
-                    part_size = part_size, ri = ri)
+                    part_size = part_size, ri = ri, full_output=True)
                 residuals = calculated_eclipse_depths - measured_eclipse_depths
                 scaled_errors = error_multiple * measured_eclipse_errors
                 ln_likelihood += -0.5 * np.sum(residuals**2 / scaled_errors**2 + np.log(2 * np.pi * scaled_errors**2))
+                
                 if plot:
                     plt.figure(2)
+                    plt.plot(METRES_TO_UM * info_dict["unbinned_wavelengths"], info_dict["unbinned_eclipse_depths"], color='b', label="Calculated (unbinned)")
                     plt.errorbar(METRES_TO_UM * eclipse_wavelengths, measured_eclipse_depths,
-                                 yerr = measured_eclipse_errors, fmt='.', color='k')
-                    plt.plot(METRES_TO_UM * eclipse_wavelengths, calculated_eclipse_depths, color='b')
+                                 yerr = measured_eclipse_errors, fmt='.', color='k', label="Observed")
+                    plt.scatter(METRES_TO_UM * eclipse_wavelengths, calculated_eclipse_depths, color='r', label="Calculated (binned)")
+                    plt.legend()
                     plt.xlabel("Wavelength ($\mu m$)")
                     plt.ylabel("Eclipse depth")
                     plt.xscale('log')

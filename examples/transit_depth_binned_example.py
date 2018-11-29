@@ -14,7 +14,7 @@ from platon.constants import R_sun, R_jup, M_jup
 from platon.transit_depth_calculator import TransitDepthCalculator
 
 def stis_bins():
-    wave_bins = [[293,347], [348,402], [403,457], [458,512], [512,567], [532,629], [629,726], [727,824], [825,922], [922,1019]]
+    wave_bins = [[300.1,347], [348,402], [403,457], [458,512], [512,567], [532,629], [629,726], [727,824], [825,922], [922,1019]]
     wave_bins = 1e-9 * np.array(wave_bins)
     return wave_bins
 

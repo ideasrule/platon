@@ -106,6 +106,7 @@ class EclipseDepthCalculator:
         if full_output:
             output_dict = dict(info_dict)
             output_dict["planet_spectrum"] = fluxes
+            output_dict["unbinned_eclipse_depths"] = eclipse_depths
             return binned_wavelengths, binned_depths, output_dict
 
         return binned_wavelengths, binned_depths

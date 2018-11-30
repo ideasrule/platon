@@ -123,3 +123,24 @@ in that order.
   that are unstable on very short timescales.  We have therefore decided not
   to support retrieving on individual abundances.
   
+* **PLATON is still too slow!  How do I make it faster?**
+
+  If you didn't follow the installation instructions, go back and re-read them.
+  Make sure you have OpenBLAS, MKL, or another basic linear algebra library
+  (BLAS) installed
+  and linked to numpy.  If you intend to use the eclipse depth calculator and
+  have a CUDA-capable GPU, install CUDA, cudamat, and gnumpy; the eclipse
+  depth calculator should detect gnumpy and use the GPU.
+
+  If PLATON is still too slow, try decreasing num_profile_heights in
+  transit_depth_calculator.py (for transit depths) or
+  TP_profile (for eclipse depths).  Of course, this comes at the expense of
+  accuracy.  You can also delete some of the files in data/Absorption that
+  correspond to molecules which contribute negligible opacity.  This has the
+  effect of setting their absorption cross section to 0.
+  
+  We have experienced cases where the nested sampling retrieval seemingly gets
+  stuck, and doesn't finish even after many weeks.  In these cases, try MCMC
+  instead, as that is guaranteed to terminate in the number of steps you
+  specify.
+  

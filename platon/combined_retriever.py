@@ -12,13 +12,40 @@ import copy
 from .transit_depth_calculator import TransitDepthCalculator
 from .eclipse_depth_calculator import EclipseDepthCalculator
 from .fit_info import FitInfo
-from .constants import METRES_TO_UM
+from .constants import METRES_TO_UM, M_jup, R_jup, R_sun
 from ._params import _UniformParam
 from .errors import AtmosphereError
 from ._output_writer import write_param_estimates_file
 from .TP_profile import Profile
 
 class CombinedRetriever:
+    def pretty_print(self, fit_info):
+        line = "ln_prob={:.2e}\t".format(self.last_lnprob)
+        for i, name in enumerate(fit_info.fit_param_names):            
+            value = self.last_params[i]
+            unit = ""
+            if name == "Rs":
+                value /= R_sun
+                unit = "R_sun"
+            if name == "Mp":
+                value /= M_jup
+                unit = "M_jup"
+            if name == "Rp":
+                value /= R_jup
+                unit = "R_jup"
+            if name == "T":
+                unit = "K"
+
+            if name == "T":
+                format_str = "{:4.0f}"                
+            elif abs(value) < 1e4: format_str = "{:.2f}"
+            else: format_str = "{:.2e}"
+                
+            format_str = "{}=" + format_str + " " + unit + "\t"
+            line += format_str.format(name, value)
+            
+        return line
+    
     def _validate_params(self, fit_info, calculator):
         # This assumes that the valid parameter space is rectangular, so that
         # the bounds for each parameter can be treated separately. Unfortunately
@@ -53,6 +80,7 @@ class CombinedRetriever:
                 this_param.best_guess = lim
                 calculator._validate_params(
                     fit_info._get("T"),
+                    None,
                     fit_info._get("logZ"),
                     fit_info._get("CO_ratio"),
                     10**fit_info._get("log_cloudtop_P"))
@@ -65,6 +93,7 @@ class CombinedRetriever:
             return -np.inf
 
         params_dict = fit_info._interpret_param_array(params)
+        
         Rp = params_dict["Rp"]
         T = params_dict["T"]
         logZ = params_dict["logZ"]
@@ -88,22 +117,27 @@ class CombinedRetriever:
 
         ln_likelihood = 0
         try:
-            if measured_transit_depths is not None:                
-                transit_wavelengths, calculated_transit_depths = transit_calc.compute_depths(
+            if measured_transit_depths is not None:
+                if T is None:
+                    raise ValueError("Must fit for T if using transit depths")
+                
+                transit_wavelengths, calculated_transit_depths, info_dict = transit_calc.compute_depths(
                     Rs, Mp, Rp, T, logZ, CO_ratio,
                     scattering_factor=scatt_factor, scattering_slope=scatt_slope,
                     cloudtop_pressure=cloudtop_P, T_star=T_star,
                     T_spot=T_spot, spot_cov_frac=spot_cov_frac,
                     frac_scale_height=frac_scale_height, number_density=number_density,
-                    part_size = part_size, ri = ri)
+                    part_size=part_size, ri=ri, full_output=True)
                 residuals = calculated_transit_depths - measured_transit_depths
                 scaled_errors = error_multiple * measured_transit_errors
                 ln_likelihood += -0.5 * np.sum(residuals**2 / scaled_errors**2 + np.log(2 * np.pi * scaled_errors**2))
+                
                 if plot:
                     plt.figure(1)
+                    plt.plot(METRES_TO_UM * info_dict["unbinned_wavelengths"], info_dict["unbinned_depths"], color='b', label="Calculated (unbinned)")
                     plt.errorbar(METRES_TO_UM * transit_wavelengths, measured_transit_depths,
-                                 yerr = measured_transit_errors, fmt='.', color='k')
-                    plt.plot(METRES_TO_UM * transit_wavelengths, calculated_transit_depths, color='b')
+                                 yerr = measured_transit_errors, fmt='.', color='k', label="Observed")
+                    plt.scatter(METRES_TO_UM * transit_wavelengths, calculated_transit_depths, color='r', label="Calculated (binned)")
                     plt.xlabel("Wavelength ($\mu m$)")
                     plt.ylabel("Transit depth")
                     plt.xscale('log')
@@ -111,24 +145,29 @@ class CombinedRetriever:
 
             if measured_eclipse_depths is not None:
                 t_p_profile = Profile()
-                t_p_profile.set_parametric(
-                    params_dict["T0"], params_dict["P1"], params_dict["alpha1"],
-                    params_dict["alpha2"], params_dict["P3"], params_dict["T3"])
-                eclipse_wavelengths, calculated_eclipse_depths = eclipse_calc.compute_depths(
+                t_p_profile.set_from_params_dict(params_dict["profile_type"], params_dict)
+
+                if np.any(np.isnan(t_p_profile.temperatures)):
+                    raise AtmosphereError("Invalid T/P profile")
+                
+                eclipse_wavelengths, calculated_eclipse_depths, info_dict = eclipse_calc.compute_depths(
                     t_p_profile, Rs, Mp, Rp, T_star, logZ, CO_ratio,
                     scattering_factor=scatt_factor, scattering_slope=scatt_slope,
                     cloudtop_pressure=cloudtop_P,
                     T_spot=T_spot, spot_cov_frac=spot_cov_frac,
                     frac_scale_height=frac_scale_height, number_density=number_density,
-                    part_size = part_size, ri = ri)
+                    part_size = part_size, ri = ri, full_output=True)
                 residuals = calculated_eclipse_depths - measured_eclipse_depths
                 scaled_errors = error_multiple * measured_eclipse_errors
                 ln_likelihood += -0.5 * np.sum(residuals**2 / scaled_errors**2 + np.log(2 * np.pi * scaled_errors**2))
+                
                 if plot:
                     plt.figure(2)
+                    plt.plot(METRES_TO_UM * info_dict["unbinned_wavelengths"], info_dict["unbinned_eclipse_depths"], color='b', label="Calculated (unbinned)")
                     plt.errorbar(METRES_TO_UM * eclipse_wavelengths, measured_eclipse_depths,
-                                 yerr = measured_eclipse_errors, fmt='.', color='k')
-                    plt.plot(METRES_TO_UM * eclipse_wavelengths, calculated_eclipse_depths, color='b')
+                                 yerr = measured_eclipse_errors, fmt='.', color='k', label="Observed")
+                    plt.scatter(METRES_TO_UM * eclipse_wavelengths, calculated_eclipse_depths, color='r', label="Calculated (binned)")
+                    plt.legend()
                     plt.xlabel("Wavelength ($\mu m$)")
                     plt.ylabel("Eclipse depth")
                     plt.xscale('log')
@@ -138,7 +177,10 @@ class CombinedRetriever:
             print(e)
             return -np.inf
 
-        return fit_info._ln_prior(params) + ln_likelihood
+        lnprob = fit_info._ln_prior(params) + ln_likelihood
+        self.last_params = params
+        self.last_lnprob = lnprob
+        return lnprob 
 
     
     def run_emcee(self, transit_bins, transit_depths, transit_errors,
@@ -150,14 +192,22 @@ class CombinedRetriever:
 
         Parameters
         ----------
-        wavelength_bins : array_like, shape (N,2)
+        transit_bins : array_like, shape (N,2)
             Wavelength bins, where wavelength_bins[i][0] is the start
             wavelength and wavelength_bins[i][1] is the end wavelength for
             bin i.
-        depths : array_like, length N
+        transit_depths : array_like, length N
             Measured transit depths for the specified wavelength bins
-        errors : array_like, length N
+        transit_errors : array_like, length N
             Errors on the aforementioned transit depths
+        eclipse_bins : array_like, shape (N,2)
+            Wavelength bins, where wavelength_bins[i][0] is the start
+            wavelength and wavelength_bins[i][1] is the end wavelength for
+            bin i.
+        eclipse_depths : array_like, length N
+            Measured eclipse depths for the specified wavelength bins
+        eclipse_errors : array_like, length N
+            Errors on the aforementioned eclipse depths
         fit_info : :class:`.FitInfo` object
             Tells the method what parameters to
             freely vary, and in what range those parameters can vary. Also
@@ -202,8 +252,7 @@ class CombinedRetriever:
         for i, result in enumerate(sampler.sample(
                 initial_positions, iterations=nsteps)):
             if (i + 1) % 10 == 0:
-                print(str(i + 1) + "/" + str(nsteps),
-                      sampler.lnprobability[0, i], sampler.chain[0, i])
+                print("Step {}: {}".format(i + 1, self.pretty_print(fit_info)))
 
         best_params_arr = sampler.flatchain[np.argmax(
             sampler.flatlnprobability)]
@@ -230,14 +279,22 @@ class CombinedRetriever:
 
         Parameters
         ----------
-        wavelength_bins : array_like, shape (N,2)
+        transit_bins : array_like, shape (N,2)
             Wavelength bins, where wavelength_bins[i][0] is the start
             wavelength and wavelength_bins[i][1] is the end wavelength for
             bin i.
-        depths : array_like, length N
+        transit_depths : array_like, length N
             Measured transit depths for the specified wavelength bins
-        errors : array_like, length N
+        transit_errors : array_like, length N
             Errors on the aforementioned transit depths
+        eclipse_bins : array_like, shape (N,2)
+            Wavelength bins, where wavelength_bins[i][0] is the start
+            wavelength and wavelength_bins[i][1] is the end wavelength for
+            bin i.
+        eclipse_depths : array_like, length N
+            Measured eclipse depths for the specified wavelength bins
+        eclipse_errors : array_like, length N
+            Errors on the aforementioned eclipse depths
         fit_info : :class:`.FitInfo` object
             Tells us what parameters to
             freely vary, and in what range those parameters can vary. Also
@@ -278,8 +335,8 @@ class CombinedRetriever:
                                  eclipse_depths, eclipse_errors)
 
         def callback(callback_info):
-            print(callback_info["it"], callback_info["logz"],
-                  transform_prior(callback_info["active_u"][0]))
+            print("Iteration {}: {}".format(
+                callback_info["it"], self.pretty_print(fit_info)))
 
         result = nestle.sample(
             multinest_ln_prob, transform_prior, fit_info._get_num_fit_params(),
@@ -300,11 +357,12 @@ class CombinedRetriever:
         return result
 
     @staticmethod
-    def get_default_fit_info(Rs, Mp, Rp, T, logZ=0, CO_ratio=0.53,
+    def get_default_fit_info(Rs, Mp, Rp, T=None, logZ=0, CO_ratio=0.53,
                              log_cloudtop_P=np.inf, log_scatt_factor=0,
                              scatt_slope=4, error_multiple=1, T_star=None,
                              T_spot=None, spot_cov_frac=None,frac_scale_height=1,
-                             log_number_density=-np.inf, log_part_size =-6, ri = None, T0=None, P1=None, alpha1=None, alpha2=None, P3=None, T3=None):
+                             log_number_density=-np.inf, log_part_size =-6, ri = None,
+                             profile_type = 'isothermal', **profile_kwargs):
         '''Get a :class:`.FitInfo` object filled with best guess values.  A few
         parameters are required, but others can be set to default values if you
         do not want to specify them.  All parameters are in SI.
@@ -353,6 +411,9 @@ class CombinedRetriever:
         fit_info : :class:`.FitInfo` object
             This object is used to indicate which parameters to fit for, which
             to fix, and what values all parameters should take.'''
-
-        fit_info = FitInfo(locals().copy())
+        all_variables = locals().copy()
+        del all_variables["profile_kwargs"]
+        all_variables.update(profile_kwargs)
+        
+        fit_info = FitInfo(all_variables)
         return fit_info

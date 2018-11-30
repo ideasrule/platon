@@ -6,7 +6,6 @@ import time
 import configparser
 from pkg_resources import resource_filename
 
-from ._interpolator_3D import fast_interpolate
 from ._compatible_loader import load_dict_from_pickle
 
 
@@ -19,9 +18,7 @@ class AbundanceGetter:
         self.logZs = np.linspace(float(properties["min_logZ"]),
                                  float(properties["max_logZ"]),
                                  int(properties["num_logZ"]))
-        self.CO_ratios = np.linspace(float(properties["min_CO"]),
-                                     float(properties["max_CO"]),
-                                     int(properties["num_CO"]))
+        self.CO_ratios = eval(properties["CO_ratios"])
         self.included_species = eval(properties["included_species"])
 
         if include_condensation:
@@ -48,17 +45,15 @@ class AbundanceGetter:
             the number fraction of the species at a certain temperature and
             pressure.'''
 
-        N_P, N_T, N_species, N_CO, N_Z = self.log_abundances.shape
-
-        reshaped_log_abund = self.log_abundances.reshape((-1, N_CO, N_Z))
-        interp_log_abund = 10 ** fast_interpolate(
-            reshaped_log_abund, self.logZs, np.log10(self.CO_ratios),
-            logZ, np.log10(CO_ratio))
-        interp_log_abund = interp_log_abund.reshape((N_P, N_T, N_species))
-
+        N_Z, N_CO, N_species, N_T, N_P = self.log_abundances.shape
+        interp_log_abund = 10 ** scipy.interpolate.interpn(
+            (self.logZs, np.log10(self.CO_ratios)),
+            self.log_abundances,
+            [logZ, np.log10(CO_ratio)])[0]
+        
         abund_dict = {}
         for i, s in enumerate(self.included_species):
-            abund_dict[s] = interp_log_abund[:, :, i]
+            abund_dict[s] = interp_log_abund[i]
 
         return abund_dict
 
@@ -110,7 +105,7 @@ class AbundanceGetter:
         N_pressures = len(np.unique(pressures))
 
         for i in range(len(species)):
-            c = compositions[:, i].reshape((N_pressures, N_temperatures))
+            c = compositions[:, i].reshape((N_pressures, N_temperatures)).T
             # This file has decreasing temperatures and pressures; we want
             # increasing temperatures and pressures
             c = c[::-1, ::-1]

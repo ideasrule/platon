@@ -32,7 +32,7 @@ class TestTauLOS(unittest.TestCase):
 
 
     def test_analytic_simple(self):
-        absorption_coeff = np.ones((12,100))
+        absorption_coeff = np.ones((100, 12))
         Rp = 1000
         radii = Rp + np.linspace(0, 50, 100)
         radii = radii[::-1]
@@ -42,14 +42,14 @@ class TestTauLOS(unittest.TestCase):
             np.allclose(t, expected_tau)
 
     def test_analytic_exponential(self):
-        absorption_coeff = np.ones((1, 1000))
+        absorption_coeff = np.ones((1000, 1))
         Rp = 2000
         scale_height = 100
         radii = Rp + np.linspace(0, 1000, 1000)
         radii = radii[::-1]
         analytic_tau = []
         for i, r in enumerate(radii[1:]):
-            absorption_coeff[:,i] *= np.exp(-(r-Rp)/scale_height)
+            absorption_coeff[i] *= np.exp(-(r-Rp)/scale_height)
             analytic_tau.append(2*scipy.integrate.quad(lambda x: np.exp(-(x-Rp)/scale_height)*x/np.sqrt(x**2 - r**2), r, radii[0])[0])
         tau = _tau_calculator.get_line_of_sight_tau(absorption_coeff, radii)
         analytic_tau = np.array(analytic_tau)

@@ -6,6 +6,8 @@
 Welcome to PLATON's documentation!
 ==================================
 
+**November 29, 2018: PLATON v3.0 is out!  Please check the release notes on GitHub for the list of new features.  Our paper actually describes v2.1, but v3 has a substantial number of improvements, and we strongly recommend everyone use it.**
+
 **October 1, 2018: PLATON v2.0 is out! Please check the release notes for the list of new features, and upgrade.**
 
 .. toctree::

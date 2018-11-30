@@ -32,3 +32,6 @@ R_earth = 6.3781e6
 
 R_sun = 6.957e8
 '''Solar radius'''
+
+AU = 1.495978707e11
+'''Astronomical unit'''

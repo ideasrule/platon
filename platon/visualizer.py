@@ -1,60 +1,101 @@
 import numpy as np
-import matplotlib.pyplot as plt
-
-from platon.transit_depth_calculator import TransitDepthCalculator
-from platon.constants import M_jup, R_sun, R_jup, M_earth, R_earth
-
-
-# Structure
-
-# Class: Visualizer
-  #Initialize: scale, center, size; set up blank canvas
-# draw: take data and 3 wavelength ranges to draw
-# draw_annulus: draws onto canvas
+import scipy.ndimage
 
 class Visualizer:
     def __init__(self, size=1000):
+        '''Initializes the visualizer.
+        
+        Parameters
+        ----------
+        size : int
+            size x size is the size of the image to draw
+        '''
+        
         self.size = size
-        self.canvas = np.zeros((size, size, 3))
 
         # Cache pixel_dists for annulus drawing
         xv, yv = np.meshgrid(range(size), range(size))
         self.pixel_dists = np.sqrt((xv - 0.5*size)**2 + (yv - 0.5*size)**2)
         
 
-    def draw_annulus(self, r1, r2, color_intensities, min_radius, max_radius):
-        m_per_pix = 2.0 * max_radius / self.size
-        physical_dists = m_per_pix * self.pixel_dists
+    def _draw_annulus(self, r1, r2, color_intensities, min_radius, max_radius):
+        physical_dists = self.m_per_pix * self.pixel_dists
         in_annulus = np.logical_and(physical_dists > r1, physical_dists < r2)
         self.canvas[in_annulus] = np.array(color_intensities)
 
-    def draw_layer(self, r1, r2, color_intensities, min_radius, max_radius):
-        scale = (max_radius - min_radius)/self.size
-        min_y = round((r1 - min_radius)/scale)
+    def _draw_layer(self, r1, r2, color_intensities, min_radius, max_radius):
+        min_y = round((r1 - min_radius)/self.m_per_pix)
         if min_y < 0: min_y = 0
         min_y = int(min_y)
 
-        max_y = round((r2 - min_radius)/scale)
+        max_y = round((r2 - min_radius)/self.m_per_pix)
         if max_y > self.size: max_y = self.size
         max_y = int(max_y)
         
-        #print(min_y, max_y, scale)
         self.canvas[min_y : max_y, :] = np.array(color_intensities)
 
+    def _draw_star(self, Rstar, max_radius, star_color, margin=0.3):
+        Rstar_pix = Rstar/self.m_per_pix
+        x_center = (Rstar + margin*max_radius)/self.m_per_pix
+        y_center = self.size/2
+        xv, yv = np.meshgrid(range(self.size), range(self.size))
+        pixel_dists = np.sqrt((xv - x_center)**2 + (yv - y_center)**2)
+        self.canvas[pixel_dists > Rstar_pix - 1] = 0
+        edge = np.logical_and(pixel_dists > Rstar_pix - 1, pixel_dists < Rstar_pix)
+        self.canvas[edge] = (Rstar_pix - pixel_dists[edge])[:, np.newaxis] * np.array(star_color)
             
-    def draw(self, transit_info, color_bins, color_mult_factors=[1, 1, 1], method='disk'):
-        #absorption_fraction: Nlambda x Nradii
-        #stellar_spectrum: NLambda
-        #color_bins: 3x2, specifying (start, end) for RGB
+    def draw(self, transit_info, color_bins, star_color=[1, 1, 1],
+             method='disk', star_radius=None, star_margin=0.5,
+             max_dist=None, blur_std=1):
+        '''
+        Draws an image of a transiting exoplanet.
 
+        Parameters
+        ----------
+        transit_info : dict
+            the dictionary returned by compute_depths in TransitDepthCalculator
+            when full_output = True
+        color_bins : array-like, shape (3,2)
+            Wavelength bins to use for the R, G, B channels.  For example, if
+            color_bins[0] is [3e-6, 4e-6], the red channel will reflect all
+            light transmitted through the atmosphere between 3 and 4 microns.
+        star_color : array-like, length 3, optional
+            R, G, B values of the star light, with [1,1,1] being white
+        method : str, optional
+            Either 'disk' to draw the entire planetary disk with atmosphere, or
+            'layers' to draw a 1D atmospheric profile--essentially an extreme
+            zoom-in on the disk.            
+        star_radius : float, optional
+            Stellar radius, in meters.  If given, the stellar limb will be drawn
+        star_margin : float, optional
+            Distance from left side of canvas to stellar limb is star_margin * max_dist
+        max_dist : float, optional
+            Maximum distance from planet center to draw, in meters
+        blur_std : float, optional
+            STD of Gaussian blur to apply, in pixels
+
+        Returns
+        -------
+        canvas : array, shape (self.size, self.size, 3)
+            The image of the planet.  Can be displayed with plt.imshow()
+        '''
+
+        self.canvas = np.zeros((self.size, self.size, 3))
         radii = np.sort(transit_info["radii"])[::-1]
+        if max_dist is None:
+            max_dist = np.max(radii)
+            
         lambda_grid = transit_info["unbinned_wavelengths"]
         absorption_fraction = 1 - np.exp(-transit_info["tau_los"])
         
         if method == 'disk':
-            draw_method = self.draw_annulus
+            draw_method = self._draw_annulus
+            self.m_per_pix = 2.0 * max_dist / self.size
         elif method == 'layers':
-            draw_method = self.draw_layer
+            draw_method = self._draw_layer
+            self.m_per_pix = (max_dist - min(radii))/self.size
+            if star_radius is not None:
+                raise ValueError("Cannot draw star when using layers")
         else:
             raise ValueError("Method must be 'disk' or 'layers'")
                 
@@ -63,69 +104,17 @@ class Visualizer:
             for j, (start, end) in enumerate(color_bins):
                 lambda_cond = np.logical_and(lambda_grid > start, lambda_grid < end)
                 transmitted_light = 1 - absorption_fraction[:,i][lambda_cond]
-                #if j == 2:
-                #    transmitted_light = 1.5*transmitted_light**0.5/(0.5 + transmitted_light**0.5)
-                rel_intensity = np.mean(transmitted_light * color_mult_factors[j])
-                
+                rel_intensity = np.mean(transmitted_light)
                 color_intensities.append(rel_intensity)
-            #print(radii[i], radii[i+1], color_intensities)
-            color_intensities = np.array(color_intensities) #* np.array(color_mult_factors)
-            #print color_intensities
-            draw_method(radii[i+1], radii[i], color_intensities, np.min(radii), np.max(radii))
+
+            color_intensities = star_color * np.array(color_intensities)
+            draw_method(radii[i+1], radii[i], color_intensities, min(radii), max_dist)
                 
-        draw_method(radii[0], np.inf, color_mult_factors, np.min(radii), np.max(radii))
-        return self.canvas
-    
+        draw_method(max(radii), np.inf, star_color, min(radii), max_dist)
 
-# All quantities in SI
-
-#samples = np.load("samples.npy")
-#logl = np.load("logl.npy")
-
-Rs = 0.947 * R_sun
-Mp = 8.145 * M_earth
-Rp = 1.7823 * R_earth
-
-T = 1970
-logZ = 1.09
-CO_ratio = 1.57
-log_cloudtop_P = 4.875
-
-#Rs, Mp, Rp, T, logZ, CO_ratio, log_cloudtop_P, error_multiple = samples[np.argmax(logl)]
-
-print Rs/R_sun, Mp/M_earth, Rp/R_earth, T, logZ, CO_ratio, log_cloudtop_P
-
-#create a TransitDepthCalculator object and compute wavelength dependent transit depths
-depth_calculator = TransitDepthCalculator()
-wavelengths, transit_depths, info = depth_calculator.compute_depths(
-    Rs, Mp, Rp, T, T_star=5196, logZ=logZ, CO_ratio=CO_ratio, cloudtop_pressure=10.0**log_cloudtop_P, full_output=True)
-
-#plt.plot(1e6*wavelengths, transit_depths)
-#plt.xlim(4, 5)
-#plt.show()
-
-color_bins = 1e-6 * np.array([
-    [4, 5],
-    [3.2, 4],
-    [1.1, 1.7],
-])
-
-#color_bins = 1e-6 * np.array([
-#[1.5, 1.7],
-#[1.4, 1.5],
-#[1.1, 1.4]])
-
-'''color_bins = 1e-6 * np.array([
-[0.5, 0.7],
-[0.43, 0.67],
-[0.38, 0.55]
-])'''
-
-visualizer = Visualizer()
-image = visualizer.draw(info, color_bins, color_mult_factors=[1, 1, 0.9], method='layers')
-
-plt.imshow(image)
-plt.axis('off')
-plt.gca().invert_yaxis()
-plt.show()
+        if star_radius is not None:
+            self._draw_star(star_radius, max_dist, star_color, margin=star_margin)
+        self.canvas = scipy.ndimage.gaussian_filter(
+            self.canvas, [blur_std, blur_std, 0])
+        return self.canvas, self.m_per_pix
     

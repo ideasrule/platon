@@ -4,8 +4,7 @@
 
 # PLanetary Atmospheric Transmission for Observer Noobs (PLATON)
 
-**November 29, 2018: PLATON v3.0 is out!  Please check the release notes on GitHub for the list of new features.  Our paper actually describes v2.1, but v3 has a substantial number of improvements, and w\
-e strongly recommend everyone use it.**
+**November 29, 2018: PLATON v3.0 is out!  Please check the release notes on GitHub for the list of new features.  Our paper actually describes v2.1, but v3 has a substantial number of improvements, and we strongly recommend everyone use it.**
 
 **NEW (October 1): Version 2 is out, with a huge number of changes! Make sure to\
  check out the release notes, and upgrade.**

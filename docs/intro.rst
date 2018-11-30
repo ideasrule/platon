@@ -23,7 +23,7 @@ consumer computer.  The user can instead specify bins which are
 directly relevant to matching observational data, in which case the
 code avoids computing depths for irrelevant wavelengths and is many
 times faster.  The user can also download higher resolution data (R=2000
-or R=10,000) from `here <http://astro.caltech.edu/~mz/absorption.html/>`_
+or R=10,000) from `here <http://astro.caltech.edu/~mz/absorption.html>`_
 and drop them into PLATON's data folder; the runtime is roughly proportional
 to the resolution.
 

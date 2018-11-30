@@ -31,7 +31,7 @@ That's it!  Because PyPI has a size limit on packages, this will not install
 the data files.  The data files will be automatically downloaded when PLATON is
 first run.  The default data files have a wavelength resolution of R=1000, but
 if you want higher resolution, you can download R=2000 and R=10,000 data from
-`this webpage <http://astro.caltech.edu/~mz/absorption.html/>`_
+`this webpage <http://astro.caltech.edu/~mz/absorption.html>`_
 
 Another option is to install from source::
 

@@ -44,7 +44,7 @@ In this case, you can run unit tests to make sure everything works::
   nosetests -v 
 
 The unit tests should also give you a good idea of how fast the code will be.
-On a decent Ubuntu machine with OpenBLAS, it takes 2 minutes.
+On a decent Ubuntu machine with OpenBLAS, it takes 3 minutes.
 
 If you have a CUDA-capable GPU and plan to use the eclipse depth calculator,
 you can take advantage of GPU acceleration.  Install CUDA, cudamat, and gnumpy,

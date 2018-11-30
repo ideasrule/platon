@@ -2,8 +2,8 @@ Quick start
 ***********
 
 The fastest way to get started is to look at the examples/ directory, which
-has examples on how to compute transit depths from planetary parameters, and
-on how to retrieve planetary parameters from transit depths.  This page is
+has examples on how to compute transit/eclipse depths from planetary parameters, and
+on how to retrieve planetary parameters from transit/eclipse depths.  This page is
 a short summary of the more detailed examples.
 
 To compute transit depths, look at transit_depth_example.py, then go to
@@ -28,14 +28,14 @@ To compute transit depths, look at transit_depth_example.py, then go to
 
 You can adjust a variety of parameters, including the metallicity (Z) and C/O
 ratio. By default, logZ = 0 and C/O = 0.53. Any other value for
-logZ and C/O in the range -1 < logZ < 3 and 0.2 < C/O < 2 can also be used.
+logZ and C/O in the range -1 < logZ < 3 and 0.05 < C/O < 2 can also be used.
 full_output=True indicates you'd like extra information about the atmosphere,
 which is returned in info_dict.  info_dict includes parameters like the
 temperatures, pressures, radii, abundances, and molecular weights of each
 atmospheric layer, and the line of sight optical depth (tau_los) through each
 layer.
 
-You can also specify custom abundances, such as by providing the filename or
+You can also specify custom abundances, such as by providing the filename of
 one of the abundance files included in the package (from ExoTransmit). The
 custom abundance files specified by the user must be compatible with the
 ExoTransmit format::
@@ -77,14 +77,14 @@ of N errors on those transit depths.  `plot_best=True` indicates that the best
 fit solution should be plotted, along with the measured transit depths and
 their errors.
 
-The example above retrieves the planetary radius (at a base pressures
+The example above retrieves the planetary radius (at a reference pressure
 of 100,000 Pa), the temperature of the isothermal atmosphere, and the
 metallicity.  Other parameters you can retrieve for are the stellar radius,
 the planetary mass, C/O ratio,
 the cloudtop pressure, the scattering factor, the scattering slope,
 and the error multiple--which multiplies all errors by a constant.  We recommend
 either fixing the stellar radius and planetary mass to the measured values, or
-only allowing them to vary 2 standard deviations aw
+setting Gaussian priors on them to account for measurement errors.
 
 Once you get the `result` object, you can make a corner plot::
 
@@ -103,7 +103,7 @@ of a termination point::
   result = retriever.run_emcee(bins, depths, errors, fit_info)
 
 For MCMC, the number of walkers and iterations/steps can also be specified. The
-`result` object returned by run_emcee is slighly different from that returned
+`result` object returned by run_emcee is different from that returned
 by run_multinest. To make a corner plot with the result of run_emcee::
 
   fig = corner.corner(result.flatchain, range=[0.99] * result.flatchain.shape[1],

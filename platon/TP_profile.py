@@ -38,7 +38,7 @@ class Profile:
         self.temperatures = np.ones(len(self.pressures)) * T_day
 
     def set_parametric(self, T0, P1, alpha1, alpha2, P3, T3):
-        # Parametric model from https://arxiv.org/pdf/0910.1347.pdf
+        '''Parametric model from https://arxiv.org/pdf/0910.1347.pdf'''
         P0 = np.min(self.pressures)
 
         ln_P2 = alpha2**2*(T0+np.log(P1/P0)**2/alpha1**2 - T3) - np.log(P1)**2 + np.log(P3)**2
@@ -90,8 +90,7 @@ class Profile:
         self.temperatures = np.append(T[0], T)
 
     def set_from_radiative_solution(self, T_star, Rs, a, Mp, Rp, beta, k_th, gamma, gamma2=None, alpha=1, T_int=100, **ignored_kwargs):
-        #from Line et al. 2013: http://adsabs.harvard.edu/abs/2013ApJ...775..137L
-        #Equation 13 - 16
+        '''From Line et al. 2013: http://adsabs.harvard.edu/abs/2013ApJ...775..137L, Equation 13 - 16'''
 
         g = G * Mp / Rp**2
         T_irr = beta * np.sqrt(Rs/(2*a)) * T_star

@@ -20,6 +20,7 @@ class EclipseDepthCalculator:
         self.d_ln_lambda = np.median(np.diff(np.log(self.transit_calculator.lambda_grid)))
 
     def change_wavelength_bins(self, bins):
+        '''Same functionality as :func:`~platon.transit_depth_calculator.TransitDepthCalculator.change_wavelength_bins`'''
         self.transit_calculator.change_wavelength_bins(bins)
         self.wavelength_bins = bins
 
@@ -50,7 +51,19 @@ class EclipseDepthCalculator:
                        ri = None, frac_scale_height=1,number_density=0,
                        part_size=1e-6, num_mu=50, min_mu=1e-2, max_mu=1,
                        full_output=False):
+        '''Most parameters are explained in :func:`~platon.transit_depth_calculator.TransitDepthCalculator.compute_depths`
 
+        Parameters
+        ----------
+        t_p_profile : Profile
+            A Profile object from TP_profile
+        num_mu : int, optional
+            Number of viewing angles used to calculate emergent flux
+        min_mu : float, optional
+            Minimum value of mu=cos(theta)
+        max_mu : float, optional
+            Maximum value of mu=cos(theta)
+        '''
         T_profile = t_p_profile.temperatures
         P_profile = t_p_profile.pressures
         wavelengths, transit_depths, info_dict = self.transit_calculator.compute_depths(

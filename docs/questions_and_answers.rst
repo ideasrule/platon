@@ -14,7 +14,7 @@ in that order.
   The abundances of these species were calculated using GGchem for a
   grid of metallicity, C/O ratio, temperature, and pressure, assuming
   equilibrium chemistry.  Metallicity ranges from 0.1-1000x solar, C/O
-  ratio from 0.2 to 2, temperature from 300 to 3000 K, and pressure
+  ratio from 0.05 to 2, temperature from 300 to 3000 K, and pressure
   from 10^-4 to 10^8 Pa.  If you wander outside these limits, PLATON
   will throw a ValueError.
   
@@ -59,9 +59,10 @@ in that order.
 * **Should I use run_multinest, or run_emcee?**
   
   That depends on whether you like nested sampling or MCMC!  You should try
-  both and compare the results.  Nestled sampling is faster and has
+  both and compare the results.  Nestled sampling is usually faster and has
   an automatically determined stopping point, so we recommend starting with
-  that.
+  that.  However, we have encountered cases where nested sampling stalls and
+  does not finish even after many weeks.  In such cases, use MCMC.
    
 * **My corner plots look ugly.  What do I do?**
   
@@ -71,23 +72,13 @@ in that order.
     # By default, npoints is 100
     result = retriever.run_multinest(bins, depths, errors, fit_info, npoints=1000)
     
-  If you're using MCMC, increase nsteps.  However, we should note that the
-  default of 10,000 should be enough to generate a good corner plot for almost
-  all cases.  In fact, it should be overkill.
+  If you're using MCMC, increase nsteps from the default of 1000 to 10,000.
 
-* **How do I get statistics from the nestled sampling result?**
+* **How do I get statistics from the retrieval?**
+
+  Look at BestFit.txt.  It'll have the 16th, 50th, and 84th percentiles of
+  all parameters, as well as the best fit values.
   
-  The easiest way is to resample and get final samples with equal weights.  You
-  can then take the mean, median, 16th and 84th percentiles, and any other
-  statistics you normally do: ::
-
-    import nestle
-    equal_samples = nestle.resample_equal(result.samples, result.weights)
-
-    # Your first column is not necessarily radii
-    radii = equal_samples[:,0]
-    print(np.percentile(radii, 16), np.median(radii), np.percentile(radii, 84))
-    
 * **How do I do check what effect a species has on the transit spectrum?**
   You can tweak the atmospheric abundances and see what happens.  First, get
   baseline abundances: ::

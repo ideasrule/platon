@@ -39,7 +39,12 @@ class EclipseDepthCalculator:
             binned_depths.append(binned_depth)
             
         return np.array(binned_wavelengths), np.array(binned_depths)
-            
+
+    def _get_photosphere_radii(self, taus, radii):
+        intermediate_radii = 0.5 * (radii[0:-1] + radii[1:])
+        photosphere_radii = np.array([np.interp(1, t, intermediate_radii) for t in taus])
+        return photosphere_radii
+    
     def compute_depths(self, t_p_profile, star_radius, planet_mass,
                        planet_radius, T_star, logZ=0, CO_ratio=0.53,
                        add_gas_absorption=True,
@@ -112,6 +117,7 @@ class EclipseDepthCalculator:
         d_lambda = self.d_ln_lambda * lambda_grid
         photon_fluxes = fluxes * d_lambda / (h * c / lambda_grid)
 
+        photosphere_radii = self._get_photosphere_radii(taus, info_dict["radii"])
         eclipse_depths = photon_fluxes / stellar_photon_fluxes * (planet_radius/star_radius)**2
 
         binned_wavelengths, binned_depths = self._get_binned_depths(eclipse_depths, stellar_photon_fluxes)
@@ -120,6 +126,7 @@ class EclipseDepthCalculator:
             output_dict = dict(info_dict)
             output_dict["planet_spectrum"] = fluxes
             output_dict["unbinned_eclipse_depths"] = eclipse_depths
+            output_dict["taus"] = taus
             return binned_wavelengths, binned_depths, output_dict
 
         return binned_wavelengths, binned_depths

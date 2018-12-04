@@ -4,6 +4,7 @@ import shutil
 
 import numpy as np
 import matplotlib.pyplot as plt
+import scipy.special
 
 import platon
 from platon.abundance_getter import AbundanceGetter
@@ -95,10 +96,10 @@ class TestTransitDepthCalculator(unittest.TestCase):
             abundances[key] *= 0
         abundances["H2"] += 1
         depth_calculator = TransitDepthCalculator()
-        wavelengths, transit_depths = depth_calculator.compute_depths(
+        wavelengths, transit_depths, info_dict = depth_calculator.compute_depths(
             Rs, Mp, Rp, T, logZ=None, CO_ratio=None, cloudtop_pressure=np.inf,
             custom_abundances = abundances,
-            add_gas_absorption=False, add_collisional_absorption=False)
+            add_gas_absorption=False, add_collisional_absorption=False, full_output=True)
                 
         g = G * Mp / Rp**2
         H = k_B * T / (2 * AMU * g)
@@ -106,9 +107,14 @@ class TestTransitDepthCalculator(unittest.TestCase):
         polarizability = 0.8059e-30
         sigma = 128. * np.pi**5/3 * polarizability**2 / depth_calculator.lambda_grid**4
         kappa = sigma / (2 * AMU)
-        P0 = 1e5        
-        analytic_R = Rp + H * (gamma + np.log(P0/g * np.sqrt(2*np.pi*Rp/H) * kappa))
+
+        P_surface = 1e8
+        R_surface = info_dict["radii"][-1]
+        tau_surface = P_surface/g * np.sqrt(2*np.pi*R_surface/H) * kappa
+        analytic_R = R_surface + H*(gamma + np.log(tau_surface) + scipy.special.expn(1, tau_surface))
+        
         analytic_depths = analytic_R**2 / Rs**2
+        
         ratios = analytic_depths / transit_depths
         relative_diffs = np.abs(ratios - 1)
         self.assertTrue(np.all(relative_diffs[wavelengths < 1e-6] < 0.001))

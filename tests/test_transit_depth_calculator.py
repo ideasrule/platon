@@ -117,7 +117,7 @@ class TestTransitDepthCalculator(unittest.TestCase):
         
         ratios = analytic_depths / transit_depths
         relative_diffs = np.abs(ratios - 1)
-        self.assertTrue(np.all(relative_diffs[wavelengths < 1e-6] < 0.001))
+        self.assertTrue(np.all(relative_diffs < 0.001))
 
         
     def test_bounds_checking(self):

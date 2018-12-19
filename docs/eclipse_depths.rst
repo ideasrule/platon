@@ -11,7 +11,7 @@ profile::
   p = Profile()
   p.set_parametric(1200, 500, 0.5, 0.6, 1e6, 1900)
 
-This creates a parametric T-P profile according to `Madhusudhan & Seager 2018 <https://arxiv.org/pdf/0910.1347.pdf>`_.  The parameters are: T\ :sub:`0`\, P\ :sub:`1`\, α\ :sub:`1`\, α\ :sub:`2`\, P\ :sub:`3`\, T\ :sub:`3`\.  P\ :sub:`0` \ is set to 10\ :sup:`-4` \ Pa, while P\ :sub:`2` \ and T\ :sub:`2` \ are derived from the six specified parameters.
+This creates a parametric T-P profile according to `Madhusudhan & Seager 2009 <https://arxiv.org/pdf/0910.1347.pdf>`_.  The parameters are: T\ :sub:`0`\, P\ :sub:`1`\, α\ :sub:`1`\, α\ :sub:`2`\, P\ :sub:`3`\, T\ :sub:`3`\.  P\ :sub:`0` \ is set to 10\ :sup:`-4` \ Pa, while P\ :sub:`2` \ and T\ :sub:`2` \ are derived from the six specified parameters.
 
 Then, call the eclipse depth calculator::
 

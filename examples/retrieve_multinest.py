@@ -101,7 +101,8 @@ plt.savefig("best_fit.png")
 
 np.save("samples.npy", result.samples)
 np.save("weights.npy", result.weights)
-np.save("logl.npy", result.logl)
+np.save("ln_likelihood.npy", result.logl)
+np.save("ln_probability.npy", result.logp)
 
 fig = corner.corner(result.samples, weights=result.weights,
                     range=[0.99] * result.samples.shape[1],

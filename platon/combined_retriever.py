@@ -85,7 +85,7 @@ class CombinedRetriever:
                     fit_info._get("CO_ratio"),
                     10**fit_info._get("log_cloudtop_P"))
 
-    def _ln_prob(self, params, transit_calc, eclipse_calc, fit_info, measured_transit_depths,
+    def _ln_like(self, params, transit_calc, eclipse_calc, fit_info, measured_transit_depths,
                  measured_transit_errors, measured_eclipse_depths,
                  measured_eclipse_errors, plot=False):
 
@@ -176,12 +176,22 @@ class CombinedRetriever:
         except AtmosphereError as e:
             print(e)
             return -np.inf
-
-        lnprob = fit_info._ln_prior(params) + ln_likelihood
+        
         self.last_params = params
-        self.last_lnprob = lnprob
-        return lnprob 
+        self.last_lnprob = fit_info._ln_prior(params) + ln_likelihood
+        return ln_likelihood
 
+
+    def _ln_prob(self, params, transit_calc, eclipse_calc, fit_info, measured_transit_depths,
+                 measured_transit_errors, measured_eclipse_depths,
+                 measured_eclipse_errors, plot=False):
+        
+        ln_like = self._ln_like(params, transit_calc, eclipse_calc, fit_info, measured_transit_depths,
+                                measured_transit_errors, measured_eclipse_depths,
+                                measured_eclipse_errors, plot=plot)
+        return fit_info._ln_prior(params) + ln_like
+
+    
     
     def run_emcee(self, transit_bins, transit_depths, transit_errors,
                   eclipse_bins, eclipse_depths, eclipse_errors,
@@ -309,11 +319,13 @@ class CombinedRetriever:
         Returns
         -------
         result : Result object
-            This returns the object returned by nestle.sample  The object is
+            This returns the object returned by nestle.sample, slightly
+            modified.  The object is
             dictionary-like and has many useful items.  For example,
             result.samples (or alternatively, result["samples"]) are the
             parameter values of each sample, result.weights contains the
-            weights, and result.logl contains the log likelihoods.  result.logz
+            weights, result.logl contains the ln likelihoods, and result.logp
+            contains the ln posteriors (this is added by PLATON).  result.logz
             is the natural logarithm of the evidence.
         '''
         transit_calc = TransitDepthCalculator(
@@ -330,8 +342,8 @@ class CombinedRetriever:
                 new_cube[i] = fit_info._from_unit_interval(i, cube[i])
             return new_cube
 
-        def multinest_ln_prob(cube):
-            return self._ln_prob(cube, transit_calc, eclipse_calc, fit_info, transit_depths, transit_errors,
+        def multinest_ln_like(cube):
+            return self._ln_like(cube, transit_calc, eclipse_calc, fit_info, transit_depths, transit_errors,
                                  eclipse_depths, eclipse_errors)
 
         def callback(callback_info):
@@ -339,15 +351,16 @@ class CombinedRetriever:
                 callback_info["it"], self.pretty_print(fit_info)))
 
         result = nestle.sample(
-            multinest_ln_prob, transform_prior, fit_info._get_num_fit_params(),
+            multinest_ln_like, transform_prior, fit_info._get_num_fit_params(),
             callback=callback, method='multi', **nestle_kwargs)
 
-        best_params_arr = result.samples[np.argmax(result.logl)]
+        result.logp = result.logl + np.array([fit_info._ln_prior(params) for params in result.samples])
+        best_params_arr = result.samples[np.argmax(result.logp)]
         
         write_param_estimates_file(
             nestle.resample_equal(result.samples, result.weights),
             best_params_arr,
-            np.max(result.logl),
+            np.max(result.logp),
             fit_info.fit_param_names)
 
         if plot_best:

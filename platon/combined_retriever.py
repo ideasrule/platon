@@ -134,7 +134,7 @@ class CombinedRetriever:
                 
                 if plot:
                     plt.figure(1)
-                    plt.plot(METRES_TO_UM * info_dict["unbinned_wavelengths"], info_dict["unbinned_depths"], color='b', label="Calculated (unbinned)")
+                    plt.plot(METRES_TO_UM * info_dict["unbinned_wavelengths"], info_dict["unbinned_depths"], alpha=0.2, color='b', label="Calculated (unbinned)")
                     plt.errorbar(METRES_TO_UM * transit_wavelengths, measured_transit_depths,
                                  yerr = measured_transit_errors, fmt='.', color='k', label="Observed")
                     plt.scatter(METRES_TO_UM * transit_wavelengths, calculated_transit_depths, color='r', label="Calculated (binned)")
@@ -142,6 +142,7 @@ class CombinedRetriever:
                     plt.ylabel("Transit depth")
                     plt.xscale('log')
                     plt.tight_layout()
+                    plt.legend()
 
             if measured_eclipse_depths is not None:
                 t_p_profile = Profile()
@@ -163,7 +164,7 @@ class CombinedRetriever:
                 
                 if plot:
                     plt.figure(2)
-                    plt.plot(METRES_TO_UM * info_dict["unbinned_wavelengths"], info_dict["unbinned_eclipse_depths"], color='b', label="Calculated (unbinned)")
+                    plt.plot(METRES_TO_UM * info_dict["unbinned_wavelengths"], info_dict["unbinned_eclipse_depths"], alpha=0.2, color='b', label="Calculated (unbinned)")
                     plt.errorbar(METRES_TO_UM * eclipse_wavelengths, measured_eclipse_depths,
                                  yerr = measured_eclipse_errors, fmt='.', color='k', label="Observed")
                     plt.scatter(METRES_TO_UM * eclipse_wavelengths, calculated_eclipse_depths, color='r', label="Calculated (binned)")
@@ -172,6 +173,7 @@ class CombinedRetriever:
                     plt.ylabel("Eclipse depth")
                     plt.xscale('log')
                     plt.tight_layout()
+                    plt.legend()
                 
         except AtmosphereError as e:
             print(e)

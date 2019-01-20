@@ -89,13 +89,9 @@ class Profile:
         T = T4 ** 0.25
         self.temperatures = np.append(T[0], T)
 
-    def set_from_radiative_solution(self, T_star, Rs, a, Mp, Rp, beta, log_k_th, log_gamma, log_gamma2=None, alpha=1, T_int=100, **ignored_kwargs):
+    def set_from_radiative_solution(self, T_star, Rs, a, Mp, Rp, beta, k_th, gamma, gamma2=None, alpha=1, T_int=100, **ignored_kwargs):
         '''From Line et al. 2013: http://adsabs.harvard.edu/abs/2013ApJ...775..137L, Equation 13 - 16'''
 
-        k_th = 10.0**log_k_th
-        gamma = 10.0**log_gamma
-        gamma2 = 10.0**log_gamma2
-        
         g = G * Mp / Rp**2
         T_irr = beta * np.sqrt(Rs/(2*a)) * T_star
         taus = k_th * self.pressures / g

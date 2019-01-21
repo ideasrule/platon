@@ -48,7 +48,7 @@ class TestTPProfile(unittest.TestCase):
         p = Profile()
 
         # Parameters from Table 1 of http://iopscience.iop.org/article/10.1088/0004-637X/775/2/137/pdf
-        p.set_from_radiative_solution(5040, 0.756*R_sun, 0.031 * AU, 0.885*M_jup, R_jup, 1, 3e-3, 1.58e-1, 1.58e-1, 0.5, 100)
+        p.set_from_radiative_solution(5040, 0.756*R_sun, 0.031 * AU, 0.885*M_jup, R_jup, 1, np.log10(3e-3), np.log10(1.58e-1), np.log10(1.58e-1), 0.5, 100)
 
         # Compare to Figure 2 of aforementioned paper
         is_upper_atm = np.logical_and(p.pressures > 0.1, p.pressures < 1e3)

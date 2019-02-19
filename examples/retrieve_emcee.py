@@ -5,8 +5,6 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.interpolate
-import emcee
-import nestle
 import corner
 
 from platon.fit_info import FitInfo

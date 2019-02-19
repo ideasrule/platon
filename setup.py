@@ -23,8 +23,8 @@ setuptools.setup(
     include_package_data = True,
     zip_safe = False,
     install_requires = [
-        "numpy", "scipy < 1.2", "emcee", "nestle",
+        "numpy", "scipy", "emcee", "dynesty",
         "future", "nose", "setuptools", "configparser",
         'matplotlib < 3;python_version < "3.5"',
-        'matplotlib;python_version >= "3.5"', "numexpr"]
+        'matplotlib;python_version >= "3.5"']
 )

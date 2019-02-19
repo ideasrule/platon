@@ -2,8 +2,8 @@ import unittest
 import numpy as np
 import copy
 import emcee
-import nestle
 import matplotlib
+import dynesty
 
 from platon.retriever import Retriever
 from platon.fit_info import FitInfo
@@ -71,12 +71,12 @@ class TestRetriever(unittest.TestCase):
         retriever = Retriever()
         result = retriever.run_multinest(self.wavelength_bins, self.depths, self.errors, self.fit_info, maxcall=200, include_condensation=False, plot_best=True)
         
-        self.assertTrue(isinstance(result, nestle.Result))
+        self.assertTrue(isinstance(result, dynesty.utils.Results))
         self.assertEqual(result.samples.shape[1], len(self.fit_info.fit_param_names))
 
         retriever = Retriever()
         retriever.run_multinest(self.wavelength_bins, self.depths, self.errors, self.fit_info, maxiter=20, include_condensation=True)
-        self.assertTrue(isinstance(result, nestle.Result))
+        self.assertTrue(isinstance(result, dynesty.utils.Results))
         self.assertEqual(result.samples.shape[1], len(self.fit_info.fit_param_names))
 
 

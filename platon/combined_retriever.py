@@ -6,7 +6,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy.interpolate
 import emcee
-import nestle
+from dynesty import NestedSampler
+import dynesty.utils
 import copy
 
 from .transit_depth_calculator import TransitDepthCalculator
@@ -286,7 +287,8 @@ class CombinedRetriever:
                       eclipse_bins, eclipse_depths, eclipse_errors,
                       fit_info,
                       include_condensation=True, plot_best=False,
-                      **nestle_kwargs):
+                      maxiter=None, maxcall=None,
+                      **dynesty_kwargs):
         '''Runs nested sampling to retrieve atmospheric parameters.
 
         Parameters
@@ -316,17 +318,17 @@ class CombinedRetriever:
             condensation.
         plot_best : bool, optional
             If True, plots the best fit model with the data
-        **nestle_kwargs : keyword arguments to pass to nestle's sample method
+        **dynesty_kwargs : keyword arguments to pass to dynesty's NestedSampler
 
         Returns
         -------
         result : Result object
-            This returns the object returned by nestle.sample, slightly
+            This returns dynesty's NestedSampler 'results' field, slightly
             modified.  The object is
             dictionary-like and has many useful items.  For example,
             result.samples (or alternatively, result["samples"]) are the
-            parameter values of each sample, result.weights contains the
-            weights, result.logl contains the ln likelihoods, and result.logp
+            parameter values of each sample, result.logwt contains the
+            log(weights), result.logl contains the ln likelihoods, and result.logp
             contains the ln posteriors (this is added by PLATON).  result.logz
             is the natural logarithm of the evidence.
         '''
@@ -352,15 +354,20 @@ class CombinedRetriever:
             print("Iteration {}: {}".format(
                 callback_info["it"], self.pretty_print(fit_info)))
 
-        result = nestle.sample(
-            multinest_ln_like, transform_prior, fit_info._get_num_fit_params(),
-            callback=callback, method='multi', **nestle_kwargs)
-
+        num_dim = fit_info._get_num_fit_params()
+        sampler = NestedSampler(multinest_ln_like, transform_prior, num_dim, bound='multi', sample='rwalk',
+                                update_interval=float(num_dim), **dynesty_kwargs)
+        #sampler = NestedSampler(multinest_ln_like, transform_prior, num_dim, bound='multi', sample='unif', nlive=100)
+        sampler.run_nested(maxiter=maxiter, maxcall=maxcall)
+        result = sampler.results
+        
         result.logp = result.logl + np.array([fit_info._ln_prior(params) for params in result.samples])
         best_params_arr = result.samples[np.argmax(result.logp)]
-        
+
+        normalized_weights = np.exp(result.logwt)/np.sum(np.exp(result.logwt))
+
         write_param_estimates_file(
-            nestle.resample_equal(result.samples, result.weights),
+            dynesty.utils.resample_equal(result.samples, normalized_weights),
             best_params_arr,
             np.max(result.logp),
             fit_info.fit_param_names)

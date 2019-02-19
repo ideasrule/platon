@@ -6,7 +6,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy.interpolate
 import emcee
-import nestle
 import corner
 
 from platon.fit_info import FitInfo
@@ -91,10 +90,10 @@ result = retriever.run_multinest(None, None, None,
 plt.savefig("best_fit.png")
 
 np.save("samples.npy", result.samples)
-np.save("weights.npy", result.weights)
-np.save("logl.npy", result.logl)
+np.save("weights.npy", np.exp(result.logwt))
+np.save("logp.npy", result.logp)
 
-fig = corner.corner(result.samples, weights=result.weights,
+fig = corner.corner(result.samples, weights=np.exp(result.logwt),
                     range=[0.99] * result.samples.shape[1],
                     labels=fit_info.fit_param_names)
 fig.savefig("multinest_corner.png")

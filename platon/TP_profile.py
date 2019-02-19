@@ -8,7 +8,7 @@ from pkg_resources import resource_filename
 from .constants import h, c, k_B, AMU, G
 
 class Profile:
-    def __init__(self, num_profile_heights=500):
+    def __init__(self, num_profile_heights=250):
         pressures = np.load(
             resource_filename(__name__, "data/pressures.npy"))
         self.pressures = np.logspace(

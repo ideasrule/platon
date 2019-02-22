@@ -166,15 +166,15 @@ class TransitDepthCalculator:
     def _get_collisional_absorption(self, abundances, P_cond, T_cond):
         absorption_coeff = np.zeros(
             (np.sum(T_cond), np.sum(P_cond), self.N_lambda))
-        n = self.P_meshgrid[T_cond][:, P_cond] / (k_B * self.T_meshgrid[T_cond][:, P_cond])
+        n = self.P_grid[np.newaxis, P_cond] / (k_B * self.T_grid[T_cond, np.newaxis])
 
         for s1, s2 in self.collisional_absorption_data:
             if s1 in abundances and s2 in abundances:
-                n1 = (abundances[s1][T_cond, :][:, P_cond, np.newaxis] * n)
-                n2 = (abundances[s2][T_cond, :][:, P_cond, np.newaxis] * n)
+                n1 = (abundances[s1][T_cond, :][:, P_cond] * n)
+                n2 = (abundances[s2][T_cond, :][:, P_cond] * n)
                 abs_data = self.collisional_absorption_data[(s1, s2)].reshape(
                     (self.N_T, 1, self.N_lambda))[T_cond]
-                absorption_coeff += abs_data * n1 * n2
+                absorption_coeff += abs_data * (n1 * n2)[:, :, np.newaxis]
 
         return absorption_coeff
 

@@ -287,7 +287,7 @@ class CombinedRetriever:
                       eclipse_bins, eclipse_depths, eclipse_errors,
                       fit_info,
                       include_condensation=True, plot_best=False,
-                      maxiter=None, maxcall=None,
+                      maxiter=None, maxcall=None, nlive=100,
                       **dynesty_kwargs):
         '''Runs nested sampling to retrieve atmospheric parameters.
 
@@ -318,6 +318,8 @@ class CombinedRetriever:
             condensation.
         plot_best : bool, optional
             If True, plots the best fit model with the data
+        nlive : int
+            Number of live points to use for nested sampling
         **dynesty_kwargs : keyword arguments to pass to dynesty's NestedSampler
 
         Returns
@@ -328,7 +330,9 @@ class CombinedRetriever:
             dictionary-like and has many useful items.  For example,
             result.samples (or alternatively, result["samples"]) are the
             parameter values of each sample, result.logwt contains the
-            log(weights), result.logl contains the ln likelihoods, and result.logp
+            log(weights), result.weights contains the normalized weights 
+            (this is added by PLATON), 
+            result.logl contains the ln likelihoods, and result.logp
             contains the ln posteriors (this is added by PLATON).  result.logz
             is the natural logarithm of the evidence.
         '''
@@ -347,17 +351,15 @@ class CombinedRetriever:
             return new_cube
 
         def multinest_ln_like(cube):
-            return self._ln_like(cube, transit_calc, eclipse_calc, fit_info, transit_depths, transit_errors,
+            ln_like = self._ln_like(cube, transit_calc, eclipse_calc, fit_info, transit_depths, transit_errors,
                                  eclipse_depths, eclipse_errors)
-
-        def callback(callback_info):
-            print("Iteration {}: {}".format(
-                callback_info["it"], self.pretty_print(fit_info)))
+            if np.random.randint(100) == 0:
+                print("\nEvaluated params: {}".format(self.pretty_print(fit_info)))
+            return ln_like
 
         num_dim = fit_info._get_num_fit_params()
         sampler = NestedSampler(multinest_ln_like, transform_prior, num_dim, bound='multi', sample='rwalk',
-                                update_interval=float(num_dim), **dynesty_kwargs)
-        #sampler = NestedSampler(multinest_ln_like, transform_prior, num_dim, bound='multi', sample='unif', nlive=100)
+                                update_interval=float(num_dim), nlive=nlive, **dynesty_kwargs)
         sampler.run_nested(maxiter=maxiter, maxcall=maxcall)
         result = sampler.results
         
@@ -365,7 +367,8 @@ class CombinedRetriever:
         best_params_arr = result.samples[np.argmax(result.logp)]
 
         normalized_weights = np.exp(result.logwt)/np.sum(np.exp(result.logwt))
-
+        result.weights = normalized_weights
+        
         write_param_estimates_file(
             dynesty.utils.resample_equal(result.samples, normalized_weights),
             best_params_arr,

@@ -68,7 +68,7 @@ class Retriever:
 
     def run_multinest(self, wavelength_bins, depths, errors, fit_info,
                       include_condensation=True, plot_best=False,
-                      maxiter=None, maxcall=None,
+                      maxiter=None, maxcall=None, nlive=100,
                       **dynesty_kwargs):
         '''Runs nested sampling to retrieve atmospheric parameters.
 
@@ -91,6 +91,8 @@ class Retriever:
             condensation.
         plot_best : bool, optional
             If True, plots the best fit model with the data
+        nlive : int
+            Number of live points to use for nested sampling
         **dynesty_kwargs : keyword arguments to pass to dynesty's NestedSampler
 
         Returns

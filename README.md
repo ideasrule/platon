@@ -2,9 +2,7 @@
 <img src="logo.png" height="315">
 
 [![Build Status](https://travis-ci.com/ideasrule/platon.svg?token=CWfZwAJHKDPous7mJixf&branch=master)](https://travis-ci.com/ideasrule/platon) 
-
  [![codecov](https://codecov.io/gh/ideasrule/platon/branch/devel/graph/badge.svg)](https://codecov.io/gh/ideasrule/platon) 
-
 [![arXiv](http://img.shields.io/badge/arXiv-1811.11761-orange.svg)](https://arxiv.org/abs/1811.11761)
 
 **November 29, 2018: PLATON v3.0 is out!  Please check the release notes on GitHub for the list of new features.  Our paper actually describes v2.1, but v3 has a substantial number of improvements, and we strongly recommend everyone use it.**

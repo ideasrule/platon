@@ -54,6 +54,8 @@ class TransitDepthCalculator:
         
         self.lambda_grid = np.load(
             resource_filename(__name__, "data/wavelengths.npy"))
+        self.d_ln_lambda = np.median(np.diff(np.log(self.lambda_grid)))
+        
         self.P_grid = np.load(
             resource_filename(__name__, "data/pressures.npy"))
         self.T_grid = np.load(
@@ -277,10 +279,11 @@ class TransitDepthCalculator:
             unspotted_spectrum = interpolator(T_star)
             spot_spectrum = interpolator(T_spot)
         else:
-            unspotted_spectrum = 1.0 / self.lambda_grid**5 / \
-                (np.exp(h * c / self.lambda_grid / k_B / T_star) - 1)
-            spot_spectrum = 1.0 / self.lambda_grid**5 / \
-                (np.exp(h * c / self.lambda_grid / k_B / T_spot) - 1)
+            d_lambda = self.d_ln_lambda * self.lambda_grid
+            unspotted_spectrum = 2 * c * np.pi / self.lambda_grid**4 / \
+                (np.exp(h * c / self.lambda_grid / k_B / T_star) - 1) * d_lambda
+            spot_spectrum = 2 * c * np.pi / self.lambda_grid**4 / \
+                (np.exp(h * c / self.lambda_grid / k_B / T_spot) - 1) * d_lambda
 
         stellar_spectrum = spot_cov_frac * spot_spectrum + \
                            (1 - spot_cov_frac) * unspotted_spectrum

@@ -22,29 +22,27 @@ If blas_opt_info mentions OpenBLAS or vecLib, that's a good sign.  If it says
 "NOT AVAILABLE", that's a bad sign.
 
 Once you have a BLAS installed and linked to numpy, download PLATON,
-install the requirements, and install PLATON itself.  The easiest way is to
-use pip::
+install the requirements, and install PLATON itself.  Although it is possible
+to install PLATON using pip (pip install platon), the recommended method is to
+clone the GitHub repository and install from there.  This is because the
+repository includes examples, which you don't get when pip installing.
 
-  pip install platon
-
-That's it!  Because PyPI has a size limit on packages, this will not install
-the data files.  The data files will be automatically downloaded when PLATON is
-first run.  The default data files have a wavelength resolution of R=1000, but
-if you want higher resolution, you can download R=2000 and R=10,000 data from
-`this webpage <http://astro.caltech.edu/~mz/absorption.html>`_
-
-Another option is to install from source::
+To install from GitHub::
 
   git clone https://github.com/ideasrule/platon.git
   cd platon/
   python setup.py install
 
-In this case, you can run unit tests to make sure everything works::
+You can run unit tests to make sure everything works::
   
   nosetests -v 
 
 The unit tests should also give you a good idea of how fast the code will be.
 On a decent Ubuntu machine with OpenBLAS, it takes 3 minutes.
+
+The default data files (in platon/data) have a wavelength resolution of R=1000,
+but if you want higher resolution, you can download R=2000 and R=10,000 data
+from `this webpage <http://astro.caltech.edu/~mz/absorption.html>`_
 
 If you have a CUDA-capable GPU and plan to use the eclipse depth calculator,
 you can take advantage of GPU acceleration.  Install CUDA, cudamat, and gnumpy,

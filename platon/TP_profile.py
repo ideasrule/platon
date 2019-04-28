@@ -8,7 +8,7 @@ from pkg_resources import resource_filename
 from .constants import h, c, k_B, AMU, G
 
 class Profile:
-    def __init__(self, num_profile_heights=500):
+    def __init__(self, num_profile_heights=250):
         pressures = np.load(
             resource_filename(__name__, "data/pressures.npy"))
         self.pressures = np.logspace(
@@ -89,21 +89,24 @@ class Profile:
         T = T4 ** 0.25
         self.temperatures = np.append(T[0], T)
 
-    def set_from_radiative_solution(self, T_star, Rs, a, Mp, Rp, beta, k_th, gamma, gamma2=None, alpha=1, T_int=100, **ignored_kwargs):
+    def set_from_radiative_solution(self, T_star, Rs, a, Mp, Rp, beta, log_k_th, log_gamma, log_gamma2=None, alpha=0, T_int=100, **ignored_kwargs):
         '''From Line et al. 2013: http://adsabs.harvard.edu/abs/2013ApJ...775..137L, Equation 13 - 16'''
 
+        k_th = 10.0**log_k_th
+        gamma = 10.0**log_gamma
+        gamma2 = 10.0**log_gamma2
+        
         g = G * Mp / Rp**2
-        T_irr = beta * np.sqrt(Rs/(2*a)) * T_star
+        T_eq = beta * np.sqrt(Rs/(2*a)) * T_star
         taus = k_th * self.pressures / g
 
         def incoming_stream_contribution(gamma):
-            return 3.0/4 * T_irr**4 * (2.0/3 + 2.0/3/gamma * (1 + (gamma*taus/2 - 1)*np.exp(-gamma * taus)) + 2.0*gamma/3 * (1 - taus**2/2) * scipy.special.expn(2, gamma*taus))
+            return 3.0/4 * T_eq**4 * (2.0/3 + 2.0/3/gamma * (1 + (gamma*taus/2 - 1)*np.exp(-gamma * taus)) + 2.0*gamma/3 * (1 - taus**2/2) * scipy.special.expn(2, gamma*taus))
 
         e1 = incoming_stream_contribution(gamma)
-        T4 = 3.0/4 * T_int**4 * (2.0/3 + taus) + alpha * e1
+        T4 = 3.0/4 * T_int**4 * (2.0/3 + taus) + (1 - alpha) * e1
 
         if gamma2 is not None:
             e2 = incoming_stream_contribution(gamma2)
-            T4 += (1-alpha) * e2
-
+            T4 += alpha * e2
         self.temperatures = T4 ** 0.25

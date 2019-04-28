@@ -54,6 +54,8 @@ class TransitDepthCalculator:
         
         self.lambda_grid = np.load(
             resource_filename(__name__, "data/wavelengths.npy"))
+        self.d_ln_lambda = np.median(np.diff(np.log(self.lambda_grid)))
+        
         self.P_grid = np.load(
             resource_filename(__name__, "data/pressures.npy"))
         self.T_grid = np.load(
@@ -166,15 +168,15 @@ class TransitDepthCalculator:
     def _get_collisional_absorption(self, abundances, P_cond, T_cond):
         absorption_coeff = np.zeros(
             (np.sum(T_cond), np.sum(P_cond), self.N_lambda))
-        n = self.P_meshgrid[T_cond][:, P_cond] / (k_B * self.T_meshgrid[T_cond][:, P_cond])
+        n = self.P_grid[np.newaxis, P_cond] / (k_B * self.T_grid[T_cond, np.newaxis])
 
         for s1, s2 in self.collisional_absorption_data:
             if s1 in abundances and s2 in abundances:
-                n1 = (abundances[s1][T_cond, :][:, P_cond, np.newaxis] * n)
-                n2 = (abundances[s2][T_cond, :][:, P_cond, np.newaxis] * n)
+                n1 = (abundances[s1][T_cond, :][:, P_cond] * n)
+                n2 = (abundances[s2][T_cond, :][:, P_cond] * n)
                 abs_data = self.collisional_absorption_data[(s1, s2)].reshape(
                     (self.N_T, 1, self.N_lambda))[T_cond]
-                absorption_coeff += abs_data * n1 * n2
+                absorption_coeff += abs_data * (n1 * n2)[:, :, np.newaxis]
 
         return absorption_coeff
 
@@ -277,10 +279,11 @@ class TransitDepthCalculator:
             unspotted_spectrum = interpolator(T_star)
             spot_spectrum = interpolator(T_spot)
         else:
-            unspotted_spectrum = 1.0 / self.lambda_grid**5 / \
-                (np.exp(h * c / self.lambda_grid / k_B / T_star) - 1)
-            spot_spectrum = 1.0 / self.lambda_grid**5 / \
-                (np.exp(h * c / self.lambda_grid / k_B / T_spot) - 1)
+            d_lambda = self.d_ln_lambda * self.lambda_grid
+            unspotted_spectrum = 2 * c * np.pi / self.lambda_grid**4 / \
+                (np.exp(h * c / self.lambda_grid / k_B / T_star) - 1) * d_lambda
+            spot_spectrum = 2 * c * np.pi / self.lambda_grid**4 / \
+                (np.exp(h * c / self.lambda_grid / k_B / T_spot) - 1) * d_lambda
 
         stellar_spectrum = spot_cov_frac * spot_spectrum + \
                            (1 - spot_cov_frac) * unspotted_spectrum

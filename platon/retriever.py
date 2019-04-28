@@ -6,7 +6,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy.interpolate
 import emcee
-import nestle
 import copy
 
 from .transit_depth_calculator import TransitDepthCalculator
@@ -69,7 +68,8 @@ class Retriever:
 
     def run_multinest(self, wavelength_bins, depths, errors, fit_info,
                       include_condensation=True, plot_best=False,
-                      **nestle_kwargs):
+                      maxiter=None, maxcall=None, nlive=100,
+                      **dynesty_kwargs):
         '''Runs nested sampling to retrieve atmospheric parameters.
 
         Parameters
@@ -91,12 +91,14 @@ class Retriever:
             condensation.
         plot_best : bool, optional
             If True, plots the best fit model with the data
-        **nestle_kwargs : keyword arguments to pass to nestle's sample method
+        nlive : int
+            Number of live points to use for nested sampling
+        **dynesty_kwargs : keyword arguments to pass to dynesty's NestedSampler
 
         Returns
         -------
         result : Result object
-            This returns the object returned by nestle.sample  The object is
+            This returns 'results' of the NestedSampler object.  It is
             dictionary-like and has many useful items.  For example,
             result.samples (or alternatively, result["samples"]) are the
             parameter values of each sample, result.weights contains the
@@ -105,7 +107,7 @@ class Retriever:
         '''
         return self.combined_retriever.run_multinest(
             wavelength_bins, depths, errors, None, None, None, fit_info,
-            include_condensation, plot_best, **nestle_kwargs)
+            include_condensation, plot_best, maxiter, maxcall, **dynesty_kwargs)
             
 
     @staticmethod

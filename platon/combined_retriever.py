@@ -6,7 +6,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy.interpolate
 import emcee
-import nestle
+from dynesty import NestedSampler
+from dynesty import plotting as dyplot
+import dynesty.utils
 import copy
 
 from .transit_depth_calculator import TransitDepthCalculator
@@ -286,7 +288,8 @@ class CombinedRetriever:
                       eclipse_bins, eclipse_depths, eclipse_errors,
                       fit_info,
                       include_condensation=True, plot_best=False,
-                      **nestle_kwargs):
+                      maxiter=None, maxcall=None, nlive=100,
+                      **dynesty_kwargs):
         '''Runs nested sampling to retrieve atmospheric parameters.
 
         Parameters
@@ -316,17 +319,21 @@ class CombinedRetriever:
             condensation.
         plot_best : bool, optional
             If True, plots the best fit model with the data
-        **nestle_kwargs : keyword arguments to pass to nestle's sample method
+        nlive : int
+            Number of live points to use for nested sampling
+        **dynesty_kwargs : keyword arguments to pass to dynesty's NestedSampler
 
         Returns
         -------
         result : Result object
-            This returns the object returned by nestle.sample, slightly
+            This returns dynesty's NestedSampler 'results' field, slightly
             modified.  The object is
             dictionary-like and has many useful items.  For example,
             result.samples (or alternatively, result["samples"]) are the
-            parameter values of each sample, result.weights contains the
-            weights, result.logl contains the ln likelihoods, and result.logp
+            parameter values of each sample, result.logwt contains the
+            log(weights), result.weights contains the normalized weights 
+            (this is added by PLATON), 
+            result.logl contains the ln likelihoods, and result.logp
             contains the ln posteriors (this is added by PLATON).  result.logz
             is the natural logarithm of the evidence.
         '''
@@ -345,22 +352,26 @@ class CombinedRetriever:
             return new_cube
 
         def multinest_ln_like(cube):
-            return self._ln_like(cube, transit_calc, eclipse_calc, fit_info, transit_depths, transit_errors,
+            ln_like = self._ln_like(cube, transit_calc, eclipse_calc, fit_info, transit_depths, transit_errors,
                                  eclipse_depths, eclipse_errors)
+            if np.random.randint(100) == 0:
+                print("\nEvaluated params: {}".format(self.pretty_print(fit_info)))
+            return ln_like
 
-        def callback(callback_info):
-            print("Iteration {}: {}".format(
-                callback_info["it"], self.pretty_print(fit_info)))
-
-        result = nestle.sample(
-            multinest_ln_like, transform_prior, fit_info._get_num_fit_params(),
-            callback=callback, method='multi', **nestle_kwargs)
-
+        num_dim = fit_info._get_num_fit_params()
+        sampler = NestedSampler(multinest_ln_like, transform_prior, num_dim, bound='multi', sample='rwalk',
+                                update_interval=float(num_dim), nlive=nlive, **dynesty_kwargs)
+        sampler.run_nested(maxiter=maxiter, maxcall=maxcall)
+        result = sampler.results
+        
         result.logp = result.logl + np.array([fit_info._ln_prior(params) for params in result.samples])
         best_params_arr = result.samples[np.argmax(result.logp)]
+
+        normalized_weights = np.exp(result.logwt)/np.sum(np.exp(result.logwt))
+        result.weights = normalized_weights
         
         write_param_estimates_file(
-            nestle.resample_equal(result.samples, result.weights),
+            dynesty.utils.resample_equal(result.samples, normalized_weights),
             best_params_arr,
             np.max(result.logp),
             fit_info.fit_param_names)
@@ -369,6 +380,12 @@ class CombinedRetriever:
             self._ln_prob(best_params_arr, transit_calc, eclipse_calc, fit_info,
                           transit_depths, transit_errors,
                           eclipse_depths, eclipse_errors, plot=True)
+            plt.figure(3)
+            dyplot.runplot(result)
+            plt.savefig("dyplot_runplot.png")
+            plt.figure(4)
+            dyplot.traceplot(result)
+            plt.savefig("dyplot_traceplot.png")
         return result
 
     @staticmethod

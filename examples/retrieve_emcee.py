@@ -5,8 +5,6 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.interpolate
-import emcee
-import nestle
 import corner
 
 from platon.fit_info import FitInfo
@@ -103,7 +101,7 @@ result = retriever.run_emcee(bins, depths, errors, fit_info, plot_best=True)
 plt.savefig("best_fit.png")
 
 np.save("chain.npy", result.chain)
-np.save("logl.npy", result.lnprobability)
+np.save("logp.npy", result.lnprobability)
 
 fig = corner.corner(result.flatchain,
                     range=[0.99] * result.flatchain.shape[1],

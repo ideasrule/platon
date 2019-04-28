@@ -1,9 +1,5 @@
 import unittest
 import numpy as np
-import copy
-import emcee
-import nestle
-import matplotlib
 
 from platon.combined_retriever import CombinedRetriever
 from platon.fit_info import FitInfo

@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import scipy.interpolate
 import emcee
 from dynesty import NestedSampler
+from dynesty import plotting as dyplot
 import dynesty.utils
 import copy
 
@@ -379,6 +380,12 @@ class CombinedRetriever:
             self._ln_prob(best_params_arr, transit_calc, eclipse_calc, fit_info,
                           transit_depths, transit_errors,
                           eclipse_depths, eclipse_errors, plot=True)
+            plt.figure(3)
+            dyplot.runplot(result)
+            plt.savefig("dyplot_runplot.png")
+            plt.figure(4)
+            dyplot.traceplot(result)
+            plt.savefig("dyplot_traceplot.png")
         return result
 
     @staticmethod

@@ -65,11 +65,6 @@ class TransitDepthCalculator:
         self.N_T = len(self.T_grid)
         self.N_P = len(self.P_grid)
 
-        P_meshgrid, T_meshgrid, lambda_meshgrid = np.meshgrid(
-            self.P_grid, self.T_grid, self.lambda_grid)
-        self.P_meshgrid = P_meshgrid
-        self.T_meshgrid = T_meshgrid
-
         self.wavelength_rebinned = False
         self.wavelength_bins = None
 
@@ -131,11 +126,6 @@ class TransitDepthCalculator:
         self.lambda_grid = self.lambda_grid[cond]
         self.N_lambda = len(self.lambda_grid)
 
-        P_meshgrid, T_meshgrid, lambda_meshgrid = np.meshgrid(
-            self.P_grid, self.T_grid, self.lambda_grid)
-        self.P_meshgrid = P_meshgrid
-        self.T_meshgrid = T_meshgrid
-        
         for Teff in self.stellar_spectra:
             self.stellar_spectra[Teff] = self.stellar_spectra[Teff][cond]
 
@@ -159,11 +149,9 @@ class TransitDepthCalculator:
             if species_name in self.polarizability_data:
                 sum_polarizability_sqr += abundances[species_name][T_cond,:][:,P_cond] * self.polarizability_data[species_name]**2
 
-        n = self.P_meshgrid[T_cond][:, P_cond] / \
-            (k_B * self.T_meshgrid[T_cond][:, P_cond])
-        reshaped_lambda = self.lambda_grid.reshape((1, 1, self.N_lambda))
-
-        return multiple * (128.0 / 3 * np.pi**5) * n * sum_polarizability_sqr[:,:,np.newaxis] * ref_wavelength**(slope - 4) / reshaped_lambda**slope
+        n = self.P_grid[P_cond] / (k_B * self.T_grid[T_cond][:, np.newaxis])
+        result = (multiple * (128.0 / 3 * np.pi**5) * ref_wavelength**(slope - 4) * n * sum_polarizability_sqr)[:, :, np.newaxis] / self.lambda_grid**slope
+        return result
 
     def _get_collisional_absorption(self, abundances, P_cond, T_cond):
         absorption_coeff = np.zeros(
@@ -203,10 +191,9 @@ class TransitDepthCalculator:
         Qext_intpl = np.reshape(Qext_intpl, (self.N_lambda, len(radii)))
 
         eff_cross_section = np.trapz(probs*geometric_cross_section*Qext_intpl, z_scores)
-        eff_cross_section = np.reshape(eff_cross_section, (1, 1, self.N_lambda))
 
-        n = max_number_density * np.power(self.P_meshgrid[T_cond][:, P_cond] / max(self.P_grid[P_cond]), 1.0/frac_scale_height)
-        absorption_coeff = n * eff_cross_section
+        n = max_number_density * np.power(self.P_grid[P_cond] / max(self.P_grid[P_cond]), 1.0/frac_scale_height)
+        absorption_coeff = n[np.newaxis, :, np.newaxis] * eff_cross_section[np.newaxis, np.newaxis, :]
         
         return absorption_coeff
 

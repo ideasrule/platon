@@ -8,8 +8,8 @@ from .transit_depth_calculator import TransitDepthCalculator
 
 
 class EclipseDepthCalculator:
-    def __init__(self):
-        self.transit_calculator = TransitDepthCalculator()
+    def __init__(self, include_condensation=True):
+        self.transit_calculator = TransitDepthCalculator(include_condensation)
         self.wavelength_bins = None
         self.d_ln_lambda = np.median(np.diff(np.log(self.transit_calculator.lambda_grid)))
 
@@ -106,6 +106,7 @@ class EclipseDepthCalculator:
             output_dict["planet_spectrum"] = fluxes
             output_dict["unbinned_eclipse_depths"] = eclipse_depths
             output_dict["taus"] = taus
+            output_dict["contrib"] = 2 * np.pi * planck_function * self.exp2_interpolator(taus) * d_taus / fluxes[:, np.newaxis]
             return binned_wavelengths, binned_depths, output_dict
 
         return binned_wavelengths, binned_depths

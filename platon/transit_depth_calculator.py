@@ -337,7 +337,7 @@ class TransitDepthCalculator:
                        T_star=None, T_spot=None, spot_cov_frac=None,
                        ri=None, frac_scale_height=1, number_density=0,
                        part_size=1e-6, part_size_std=0.5,
-                       full_output=False, min_abundance=1e-99):
+                       full_output=False, min_abundance=1e-99, min_cross_sec=1e-99):
         '''
         Computes transit depths at a range of wavelengths, assuming an
         isothermal atmosphere.  To choose bins, call change_wavelength_bins().
@@ -504,11 +504,21 @@ class TransitDepthCalculator:
             absorption_coeff += self._get_collisional_absorption(
                 abundances, P_cond, T_cond)
 
+        # Cross sections vary less than absorption coefficients by pressure
+        # and temperature, so interpolation should be done with cross sections
+        cross_secs = absorption_coeff / (self.P_grid[P_cond][np.newaxis, :, np.newaxis] / k_B / self.T_grid[T_cond][:, np.newaxis, np.newaxis])
+        cross_secs[cross_secs < min_cross_sec] = min_cross_sec
+        
         if len(self.T_grid[T_cond]) == 1:
-            absorption_coeff_atm = scipy.interpolate.interpn((self.P_grid[P_cond],), absorption_coeff[0], P_profile)
+            cross_secs_atm = np.exp(scipy.interpolate.interpn((np.log(self.P_grid[P_cond]),), np.log(cross_secs[0]), np.log(P_profile)))
         else:
-            absorption_coeff_atm = scipy.interpolate.interpn((self.T_grid[T_cond], self.P_grid[P_cond]), absorption_coeff, np.array([T_profile, P_profile]).T)
+            # log(sigma) goes linearly with 1/T more than with T
+            cross_secs_atm = np.exp(scipy.interpolate.interpn(
+                (1.0/self.T_grid[T_cond][::-1], np.log(self.P_grid[P_cond])),
+                np.log(cross_secs[::-1]),
+                np.array([1.0/T_profile, np.log(P_profile)]).T))
 
+        absorption_coeff_atm = cross_secs_atm * (P_profile / k_B / T_profile)[:, np.newaxis]
         tau_los = get_line_of_sight_tau(absorption_coeff_atm, radii)
         absorption_fraction = 1 - np.exp(-tau_los)
 

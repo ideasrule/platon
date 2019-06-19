@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import scipy.interpolate
 import emcee
 import corner
+import pickle
 
 from platon.fit_info import FitInfo
 from platon.retriever import Retriever
@@ -96,8 +97,8 @@ fit_info.add_uniform_fit_param("error_multiple", 0.5, 5)
 
 #Use Nested Sampling to do the fitting
 result = retriever.run_multinest(bins, depths, errors, fit_info, plot_best=True)
-plt.savefig("best_fit.png")
 
+pickle.dump("my_dynesty_run.pkl", open("result", "wb"))
 np.save("samples.npy", result.samples)
 np.save("weights.npy", np.exp(result.logwt))
 np.save("ln_likelihood.npy", result.logl)

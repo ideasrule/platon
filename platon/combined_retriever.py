@@ -10,6 +10,7 @@ from dynesty import NestedSampler
 from dynesty import plotting as dyplot
 import dynesty.utils
 import copy
+import pickle
 
 from .transit_depth_calculator import TransitDepthCalculator
 from .eclipse_depth_calculator import EclipseDepthCalculator
@@ -145,6 +146,7 @@ class CombinedRetriever:
                     plt.xscale('log')
                     plt.tight_layout()
                     plt.legend()
+                    plt.savefig("best_fit_transit.pdf")
 
             if measured_eclipse_depths is not None:
                 t_p_profile = Profile()
@@ -176,6 +178,7 @@ class CombinedRetriever:
                     plt.xscale('log')
                     plt.tight_layout()
                     plt.legend()
+                    plt.savefig("best_fit_eclipse.pdf")
                 
         except AtmosphereError as e:
             print(e)
@@ -359,7 +362,7 @@ class CombinedRetriever:
             return ln_like
 
         num_dim = fit_info._get_num_fit_params()
-        sampler = NestedSampler(multinest_ln_like, transform_prior, num_dim, bound='multi', sample='rwalk',
+        sampler = NestedSampler(multinest_ln_like, transform_prior, num_dim, bound='multi',
                                 update_interval=float(num_dim), nlive=nlive, **dynesty_kwargs)
         sampler.run_nested(maxiter=maxiter, maxcall=maxcall)
         result = sampler.results
@@ -367,8 +370,12 @@ class CombinedRetriever:
         result.logp = result.logl + np.array([fit_info._ln_prior(params) for params in result.samples])
         best_params_arr = result.samples[np.argmax(result.logp)]
 
-        normalized_weights = np.exp(result.logwt)/np.sum(np.exp(result.logwt))
+        normalized_weights = np.exp(result.logwt - np.max(result.logwt))
+        normalized_weights /= np.sum(normalized_weights)
         result.weights = normalized_weights
+
+        with open("dynesty_result.pkl", "wb") as f:
+            pickle.dump(result, f)
         
         write_param_estimates_file(
             dynesty.utils.resample_equal(result.samples, normalized_weights),
@@ -380,6 +387,7 @@ class CombinedRetriever:
             self._ln_prob(best_params_arr, transit_calc, eclipse_calc, fit_info,
                           transit_depths, transit_errors,
                           eclipse_depths, eclipse_errors, plot=True)
+
             plt.figure(3)
             dyplot.runplot(result)
             plt.savefig("dyplot_runplot.png")

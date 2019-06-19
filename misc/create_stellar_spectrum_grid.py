@@ -1,7 +1,7 @@
+from __future__ import print_function
 import numpy as np
 import astropy.io.fits
 import sys
-import matplotlib.pyplot as plt
 import os
 import pickle
 import astropy.units as u

@@ -107,7 +107,8 @@ class Retriever:
         '''
         return self.combined_retriever.run_multinest(
             wavelength_bins, depths, errors, None, None, None, fit_info,
-            include_condensation, plot_best, maxiter, maxcall, **dynesty_kwargs)
+            include_condensation, plot_best, maxiter, maxcall,
+            nlive=nlive, **dynesty_kwargs)
             
 
     @staticmethod

@@ -78,6 +78,7 @@ class EclipseDepthCalculator:
             T_star, T_spot, spot_cov_frac,
             ri, frac_scale_height, number_density, part_size, full_output=True)
 
+        assert(np.max(info_dict["P_profile"]) <= cloudtop_pressure)
         absorption_coeff = info_dict["absorption_coeff_atm"]
         intermediate_coeff = 0.5 * (absorption_coeff[0:-1] + absorption_coeff[1:])
         intermediate_T = 0.5 * (info_dict["T_profile"][0:-1] + info_dict["T_profile"][1:])
@@ -91,6 +92,11 @@ class EclipseDepthCalculator:
         planck_function = 2*h*c**2/reshaped_lambda_grid**5/(np.exp(h*c/reshaped_lambda_grid/k_B/intermediate_T) - 1)
 
         fluxes = 2 * np.pi * scipy.integrate.trapz(planck_function * self.exp2_interpolator(taus), taus, axis=1)
+
+        if not np.isinf(cloudtop_pressure):
+            max_taus = np.max(taus, axis=1)
+            fluxes_from_cloud = -np.pi * planck_function[:, -1] * (max_taus**2 * scipy.special.expi(-max_taus) + max_taus * np.exp(-max_taus) - np.exp(-max_taus))
+            fluxes += fluxes_from_cloud
             
         stellar_photon_fluxes = info_dict["stellar_spectrum"]
         d_lambda = self.d_ln_lambda * lambda_grid

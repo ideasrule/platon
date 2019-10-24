@@ -76,6 +76,10 @@ class TransitDepthCalculator:
         self.ref_pressure = ref_pressure
         self._mie_cache = MieCache()
 
+        #self.all_cross_secs = np.load(resource_filename(__name__, "data/all_cross_secs_MgSiO3_sol.npy"))
+        self.all_cross_secs = load_dict_from_pickle(resource_filename(__name__, "data/all_cross_secs.pkl"))
+        self.all_radii = np.load(resource_filename(__name__, "data/radii.npy"))
+
 
     def change_wavelength_bins(self, bins):
         """Specify wavelength bins, instead of using the full wavelength grid
@@ -129,6 +133,9 @@ class TransitDepthCalculator:
         for Teff in self.stellar_spectra:
             self.stellar_spectra[Teff] = self.stellar_spectra[Teff][cond]
 
+        for key in self.all_cross_secs:
+            self.all_cross_secs[key] = self.all_cross_secs[key][cond]
+
     def _get_gas_absorption(self, abundances, P_cond, T_cond):
         absorption_coeff = np.zeros(
             (np.sum(T_cond), np.sum(P_cond), self.N_lambda))
@@ -171,26 +178,28 @@ class TransitDepthCalculator:
     def _get_mie_scattering_absorption(self, P_cond, T_cond, ri, part_size,
                                        frac_scale_height, max_number_density,
                                        sigma = 0.5, max_zscore = 5, num_integral_points = 100):
-        
-        eff_cross_section = np.zeros(self.N_lambda)
-        z_scores = -np.logspace(np.log10(0.1), np.log10(max_zscore), num_integral_points/2)
-        z_scores = np.append(z_scores[::-1], -z_scores)
+        if isinstance(ri, str):
+            eff_cross_section = scipy.interpolate.interp1d(self.all_radii, self.all_cross_secs[ri])(part_size)
+        else:
+            eff_cross_section = np.zeros(self.N_lambda)
+            z_scores = -np.logspace(np.log10(0.1), np.log10(max_zscore), num_integral_points/2)
+            z_scores = np.append(z_scores[::-1], -z_scores)
 
-        probs = np.exp(-z_scores**2/2) / np.sqrt(2 * np.pi)
-        radii = part_size * np.exp(z_scores * sigma)
-        geometric_cross_section = np.pi * radii**2
+            probs = np.exp(-z_scores**2/2) / np.sqrt(2 * np.pi)
+            radii = part_size * np.exp(z_scores * sigma)
+            geometric_cross_section = np.pi * radii**2
 
-        dense_xs = 2*np.pi*radii[np.newaxis,:] / self.lambda_grid[:,np.newaxis]
-        dense_xs = dense_xs.flatten()
+            dense_xs = 2*np.pi*radii[np.newaxis,:] / self.lambda_grid[:,np.newaxis]
+            dense_xs = dense_xs.flatten()
 
-        x_hist = np.histogram(dense_xs, bins='auto')[1]
-        Qext_hist = self._mie_cache.get_and_update(ri, x_hist) 
+            x_hist = np.histogram(dense_xs, bins='auto')[1]
+            Qext_hist = self._mie_cache.get_and_update(ri, x_hist) 
 
-        spl = scipy.interpolate.splrep(x_hist, Qext_hist)
-        Qext_intpl = scipy.interpolate.splev(dense_xs, spl)
-        Qext_intpl = np.reshape(Qext_intpl, (self.N_lambda, len(radii)))
+            spl = scipy.interpolate.splrep(x_hist, Qext_hist)
+            Qext_intpl = scipy.interpolate.splev(dense_xs, spl)
+            Qext_intpl = np.reshape(Qext_intpl, (self.N_lambda, len(radii)))
 
-        eff_cross_section = np.trapz(probs*geometric_cross_section*Qext_intpl, z_scores)
+            eff_cross_section = np.trapz(probs*geometric_cross_section*Qext_intpl, z_scores)
 
         n = max_number_density * np.power(self.P_grid[P_cond] / max(self.P_grid[P_cond]), 1.0/frac_scale_height)
         absorption_coeff = n[np.newaxis, :, np.newaxis] * eff_cross_section[np.newaxis, np.newaxis, :]

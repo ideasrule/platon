@@ -256,7 +256,8 @@ class CombinedRetriever:
         transit_calc = TransitDepthCalculator(
             include_condensation=include_condensation)
         transit_calc.change_wavelength_bins(transit_bins)
-        eclipse_calc = EclipseDepthCalculator()
+        eclipse_calc = EclipseDepthCalculator(
+            include_condensation=include_condensation)
         eclipse_calc.change_wavelength_bins(eclipse_bins)
        
         self._validate_params(fit_info, transit_calc)

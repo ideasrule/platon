@@ -80,7 +80,7 @@ class TransitDepthCalculator:
 
         #self.all_cross_secs = np.load(resource_filename(__name__, "data/all_cross_secs_MgSiO3_sol.npy"))
         self.all_cross_secs = load_dict_from_pickle(resource_filename(__name__, "data/all_cross_secs.pkl"))
-        self.all_radii = np.load(resource_filename(__name__, "data/radii.npy"))
+        self.all_radii = np.load(resource_filename(__name__, "data/mie_radii.npy"))
 
 
     def change_wavelength_bins(self, bins):

@@ -40,6 +40,8 @@ class TransitDepthCalculator:
             The planetary radius is defined as the radius at this pressure
         '''
         self.arguments = locals()
+        del self.arguments["self"]
+
         if not os.path.isdir(resource_filename(__name__, "data/")):
             get_data(resource_filename(__name__, "./"))
 
@@ -101,7 +103,7 @@ class TransitDepthCalculator:
             which is not supported.
         """
         if self.wavelength_rebinned:
-            self.__init__(self.arguments)
+            self.__init__(**self.arguments)
             self.wavelength_rebinned = False        
             
         if bins is None:

@@ -9,6 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy import integrate
 import scipy.interpolate
+import scipy.ndimage
 from scipy.stats import lognorm
 
 from . import _hydrostatic_solver
@@ -25,7 +26,7 @@ from .errors import AtmosphereError
 
 class TransitDepthCalculator:
     def __init__(self, include_condensation=True, num_profile_heights=250,
-                 ref_pressure=1e5):
+                 ref_pressure=1e5, method='xsec'):
         '''
         All physical parameters are in SI.
 
@@ -49,14 +50,23 @@ class TransitDepthCalculator:
             resource_filename(__name__, "data/stellar_spectra.pkl"))
         self.absorption_data, self.mass_data, self.polarizability_data = read_species_data(
             resource_filename(__name__, "data/Absorption"),
-            resource_filename(__name__, "data/species_info"))
+            resource_filename(__name__, "data/species_info"),
+            method)
 
         self.collisional_absorption_data = load_dict_from_pickle(
             resource_filename(__name__, "data/collisional_absorption.pkl"))
-        
-        self.lambda_grid = np.load(
-            resource_filename(__name__, "data/wavelengths.npy"))
-        self.d_ln_lambda = np.median(np.diff(np.log(self.lambda_grid)))
+
+        if method == "xsec":
+            self.lambda_grid = np.load(
+                resource_filename(__name__, "data/wavelengths.npy"))
+            self.d_ln_lambda = np.median(np.diff(np.log(self.lambda_grid)))
+        else:
+            self.lambda_grid = np.load(
+                resource_filename(__name__, "data/k_wavelengths.npy"))
+            diffs = np.unique(self.lambda_grid)
+            self.d_ln_lambda = np.median(np.diff(np.log(np.unique(self.lambda_grid))))
+            print("I found", self.d_ln_lambda)
+
         
         self.P_grid = np.load(
             resource_filename(__name__, "data/pressures.npy"))
@@ -76,6 +86,7 @@ class TransitDepthCalculator:
 
         self.num_profile_heights = num_profile_heights
         self.ref_pressure = ref_pressure
+        self.method = method
         self._mie_cache = MieCache()
 
         #self.all_cross_secs = np.load(resource_filename(__name__, "data/all_cross_secs_MgSiO3_sol.npy"))
@@ -259,20 +270,44 @@ class TransitDepthCalculator:
         raise ValueError("Unrecognized format for custom_abundances")
 
     def _get_binned_corrected_depths(self, depths, T_star, T_spot,
-                                    spot_cov_frac):
+                                     spot_cov_frac, n_gauss=10, blackbody=True):
+        #Step 1: do a first binning if using k-coeffs; first binning is a
+        #no-op otherwise
+        if self.method == "ktables":
+            #Do a first binning based on ktables
+            points, weights = scipy.special.roots_legendre(n_gauss)
+            percentiles = 100 * (points + 1) / 2
+            weights /= 2
+            assert(len(depths) % n_gauss == 0)
+            num_binned = int(len(depths) / n_gauss)
+            intermediate_lambdas = np.zeros(num_binned)
+            intermediate_depths = np.zeros(num_binned)
+
+            for chunk in range(num_binned):
+                start = chunk * n_gauss
+                end = (chunk + 1 ) * n_gauss
+                intermediate_lambdas[chunk] = np.median(self.lambda_grid[start : end])
+                intermediate_depths[chunk] = np.sum(depths[start : end] * weights)                
+        elif self.method == "xsec":
+            intermediate_lambdas = self.lambda_grid
+            intermediate_depths = depths
+        else:
+            assert(False)
+            
         if spot_cov_frac is None:
             spot_cov_frac = 0
 
         if T_spot is None:
             T_spot = T_star
 
-        temperatures = list(self.stellar_spectra.keys())
+        temperatures = list(self.stellar_spectra.keys()) #NOT sorted!
         if T_star is None:
             unspotted_spectrum = np.ones(len(self.lambda_grid))
             spot_spectrum = np.ones(len(self.lambda_grid))
-        elif T_star >= np.min(temperatures) and T_star <= np.max(temperatures):
+        elif T_star >= np.min(temperatures) and T_star <= np.max(temperatures) and not blackbody:
             interpolator = scipy.interpolate.interp1d(
                 temperatures, list(self.stellar_spectra.values()),
+                assume_sorted=False,
                 axis=0)
             unspotted_spectrum = interpolator(T_star)
             spot_spectrum = interpolator(T_spot)
@@ -286,21 +321,25 @@ class TransitDepthCalculator:
         stellar_spectrum = spot_cov_frac * spot_spectrum + \
                            (1 - spot_cov_frac) * unspotted_spectrum
         correction_factors = unspotted_spectrum/stellar_spectrum
-
+                
         if self.wavelength_bins is None:
-            return self.lambda_grid, depths * correction_factors, stellar_spectrum
+            return intermediate_lambdas, intermediate_depths, stellar_spectrum, stellar_spectrum
+            #return intermediate_lambdas, intermediate_depths * intermediate_correction_factors, stellar_spectrum, stellar_spectrum
         
         binned_wavelengths = []
         binned_depths = []
+        binned_stellar_spectrum = []
+        
         for (start, end) in self.wavelength_bins:
             cond = np.logical_and(
-                self.lambda_grid >= start,
-                self.lambda_grid < end)
-            binned_wavelengths.append(np.mean(self.lambda_grid[cond]))
-            binned_depth = np.average(depths[cond] * correction_factors[cond], weights=stellar_spectrum[cond])
+                intermediate_lambdas >= start,
+                intermediate_lambdas < end)
+            binned_wavelengths.append(np.mean(intermediate_lambdas[cond]))
+            binned_depth = np.average(intermediate_depths[cond] * correction_factors[cond], weights=stellar_spectrum[cond])
             binned_depths.append(binned_depth)
+            binned_stellar_spectrum.append(np.median(stellar_spectrum[cond]))
 
-        return np.array(binned_wavelengths), np.array(binned_depths), stellar_spectrum
+        return np.array(binned_wavelengths), np.array(binned_depths), np.array(binned_stellar_spectrum), stellar_spectrum
 
     def _validate_params(self, temperature, custom_T_profile, logZ, CO_ratio, cloudtop_pressure):
         if temperature is not None:
@@ -536,12 +575,13 @@ class TransitDepthCalculator:
         transit_depths = (np.min(radii) / star_radius)**2 \
             + 2 / star_radius**2 * absorption_fraction.dot(radii[1:] * dr)
 
-        binned_wavelengths, binned_depths, stellar_spectrum = self._get_binned_corrected_depths(transit_depths, T_star, T_spot, spot_cov_frac)
+        binned_wavelengths, binned_depths, binned_stellar_spectrum, stellar_spectrum = self._get_binned_corrected_depths(transit_depths, T_star, T_spot, spot_cov_frac)
         
         if full_output:
             output_dict = {"absorption_coeff_atm": absorption_coeff_atm,
                            "tau_los": tau_los,
                            "stellar_spectrum": stellar_spectrum,
+                           "binned_stellar_spectrum": binned_stellar_spectrum,
                            "radii": radii,
                            "P_profile": P_profile,
                            "T_profile": T_profile,

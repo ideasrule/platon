@@ -6,12 +6,12 @@ import time
 from .constants import h, c, k_B, R_jup, M_jup, R_sun
 from .transit_depth_calculator import TransitDepthCalculator
 
-
 class EclipseDepthCalculator:
-    def __init__(self, include_condensation=True):
-        self.transit_calculator = TransitDepthCalculator(include_condensation)
+    def __init__(self, include_condensation=True, method="xsec"):
+        self.method = method
+        self.transit_calculator = TransitDepthCalculator(include_condensation, method=method)
         self.wavelength_bins = None
-        self.d_ln_lambda = np.median(np.diff(np.log(self.transit_calculator.lambda_grid)))
+        self.d_ln_lambda = self.transit_calculator.d_ln_lambda
 
         # scipy.special.expn is slow when called on millions of values, so
         # use interpolator to speed it up
@@ -27,17 +27,41 @@ class EclipseDepthCalculator:
         self.transit_calculator.change_wavelength_bins(bins)
         self.wavelength_bins = bins
 
-    def _get_binned_depths(self, depths, stellar_spectrum):
+    def _get_binned_depths(self, depths, stellar_spectrum, n_gauss=10):
+        #Step 1: do a first binning if using k-coeffs; first binning is a
+        #no-op otherwise
+        if self.method == "ktables":
+            #Do a first binning based on ktables
+            points, weights = scipy.special.roots_legendre(n_gauss)
+            percentiles = 100 * (points + 1) / 2
+            weights /= 2
+            assert(len(depths) % n_gauss == 0)
+            num_binned = int(len(depths) / n_gauss)
+            intermediate_lambdas = np.zeros(num_binned)
+            intermediate_depths = np.zeros(num_binned)
+
+            for chunk in range(num_binned):
+                start = chunk * n_gauss
+                end = (chunk + 1 ) * n_gauss
+                intermediate_lambdas[chunk] = np.median(self.transit_calculator.lambda_grid[start : end])
+                intermediate_depths[chunk] = np.sum(depths[start : end] * weights)                
+        elif self.method == "xsec":
+            intermediate_lambdas = self.transit_calculator.lambda_grid
+            intermediate_depths = depths
+        else:
+            assert(False)
+
+        
         if self.wavelength_bins is None:
-            return self.transit_calculator.lambda_grid, depths
+            return intermediate_lambdas, intermediate_depths
         
         binned_wavelengths = []
         binned_depths = []
         for (start, end) in self.wavelength_bins:
             cond = np.logical_and(
-                self.transit_calculator.lambda_grid >= start,
-                self.transit_calculator.lambda_grid < end)
-            binned_wavelengths.append(np.mean(self.transit_calculator.lambda_grid[cond]))
+                intermediate_lambdas >= start,
+                intermediate_lambdas < end)
+            binned_wavelengths.append(np.mean(intermediate_lambdas[cond]))
             binned_depth = np.average(depths[cond], weights=stellar_spectrum[cond])
             binned_depths.append(binned_depth)
             

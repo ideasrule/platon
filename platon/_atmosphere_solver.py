@@ -13,7 +13,7 @@ import scipy.ndimage
 from scipy.stats import lognorm
 
 from . import _hydrostatic_solver
-from ._compatible_loader import load_dict_from_pickle
+from ._loader import load_dict_from_pickle, load_numpy
 from .abundance_getter import AbundanceGetter
 from ._species_data_reader import read_species_data
 from . import _interpolator_3D
@@ -51,29 +51,22 @@ class AtmosphereSolver:
             resource_filename(__name__, "data/species_info"),
             method)
 
-        self.collisional_lambda_grid = np.load(
-             resource_filename(__name__, "data/collisional_wavelengths.npy"))
+        self.collisional_lambda_grid = load_numpy("data/collisional_wavelengths.npy")
         self.collisional_absorption_data = load_dict_from_pickle(
-            resource_filename(__name__, "data/collisional_absorption.pkl"))
+            "data/collisional_absorption.pkl")
 
         if method == "xsec":
-            self.lambda_grid = np.load(
-                resource_filename(__name__, "data/wavelengths.npy"))
+            self.lambda_grid = load_numpy("data/wavelengths.npy")
             self.d_ln_lambda = np.median(np.diff(np.log(self.lambda_grid)))
-            self.stellar_spectra = load_dict_from_pickle(
-                resource_filename(__name__, "data/stellar_spectra.pkl"))
+            self.stellar_spectra = load_dict_from_pickle("data/stellar_spectra.pkl")
         else:
-            self.lambda_grid = np.load(
-                resource_filename(__name__, "data/k_wavelengths.npy"))
+            self.lambda_grid = load_numpy("data/k_wavelengths.npy")
             diffs = np.unique(self.lambda_grid)
             self.d_ln_lambda = np.median(np.diff(np.log(np.unique(self.lambda_grid))))
-            self.stellar_spectra = load_dict_from_pickle(
-                resource_filename(__name__, "data/k_stellar_spectra.pkl"))
+            self.stellar_spectra = load_dict_from_pickle("data/k_stellar_spectra.pkl")
         
-        self.P_grid = np.load(
-            resource_filename(__name__, "data/pressures.npy"))
-        self.T_grid = np.load(
-            resource_filename(__name__, "data/temperatures.npy"))
+        self.P_grid = load_numpy("data/pressures.npy")
+        self.T_grid = load_numpy("data/temperatures.npy")
 
         self.N_lambda = len(self.lambda_grid)
         self.N_T = len(self.T_grid)
@@ -92,8 +85,8 @@ class AtmosphereSolver:
         self._mie_cache = MieCache()
 
         #self.all_cross_secs = np.load(resource_filename(__name__, "data/all_cross_secs_MgSiO3_sol.npy"))
-        self.all_cross_secs = load_dict_from_pickle(resource_filename(__name__, "data/all_cross_secs.pkl"))
-        self.all_radii = np.load(resource_filename(__name__, "data/mie_radii.npy"))
+        self.all_cross_secs = load_dict_from_pickle("data/all_cross_secs.pkl")
+        self.all_radii = load_numpy("data/mie_radii.npy")
 
 
     def change_wavelength_bins(self, bins):

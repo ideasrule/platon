@@ -13,7 +13,6 @@ import scipy.ndimage
 from scipy.stats import lognorm
 
 from . import _hydrostatic_solver
-from ._compatible_loader import load_dict_from_pickle
 from .abundance_getter import AbundanceGetter
 from ._species_data_reader import read_species_data
 from . import _interpolator_3D

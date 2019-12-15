@@ -6,7 +6,7 @@ import time
 import configparser
 from pkg_resources import resource_filename
 
-from ._compatible_loader import load_dict_from_pickle
+from ._loader import load_dict_from_pickle
 
 
 class AbundanceGetter:

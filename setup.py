@@ -15,8 +15,7 @@ setuptools.setup(
     url = "https://github.com/ideasrule/platon",
     packages = setuptools.find_packages(),
     classifiers = (
-        "Programming Language :: Python :: 2.7",
-        "Programming Language :: Python :: 3.6",
+        "Programming Language :: Python :: 3",
         "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
         "Operating System :: OS Independent",
     ),
@@ -24,10 +23,8 @@ setuptools.setup(
     zip_safe = False,
     install_requires = [
         "numpy",
-        'scipy < 1.3;python_version < "3.5"',
-        'scipy;python_version >= "3.5"',
+        "scipy",
         "emcee", "dynesty",
         "future", "nose", "setuptools", "configparser",
-        'matplotlib < 3;python_version < "3.5"',
-        'matplotlib;python_version >= "3.5"']
+        "matplotlib"]
 )

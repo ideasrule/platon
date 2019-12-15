@@ -117,7 +117,7 @@ class TransitDepthCalculator:
                        custom_T_profile=None, custom_P_profile=None,
                        T_star=None, T_spot=None, spot_cov_frac=None,
                        ri=None, frac_scale_height=1, number_density=0,
-                       part_size=1e-6, part_size_std=0.5,
+                       part_size=1e-6, part_size_std=0.5, P_quench=1e-99,
                        full_output=False, min_abundance=1e-99, min_cross_sec=1e-99):
         '''
         Computes transit depths at a range of wavelengths, assuming an
@@ -248,7 +248,7 @@ class TransitDepthCalculator:
             scattering_factor, scattering_slope, scattering_ref_wavelength,
             add_collisional_absorption, cloudtop_pressure, custom_abundances,
             T_star, T_spot, spot_cov_frac, ri, frac_scale_height,
-            number_density, part_size, part_size_std)
+            number_density, part_size, part_size_std, P_quench)
 
         radii = atm_info["radii"]
         dr = atm_info["dr"]

@@ -339,6 +339,7 @@ class AtmosphereSolver:
                        T_star=None, T_spot=None, spot_cov_frac=None,
                        ri=None, frac_scale_height=1, number_density=0,
                        part_size=1e-6, part_size_std=0.5,
+                       P_quench=1e-99,
                        min_abundance=1e-99, min_cross_sec=1e-99):       
         self._validate_params(P_profile, T_profile, logZ, CO_ratio, cloudtop_pressure)
        
@@ -348,6 +349,9 @@ class AtmosphereSolver:
         for name in abundances:
             low_abundances = abundances[name] < min_abundance
             abundances[name][low_abundances] = min_abundance
+            for t in range(abundances[name].shape[0]):
+                quench_abund = np.exp(np.interp(np.log(P_quench), np.log(self.P_grid), np.log(abundances[name][t])))
+                abundances[name][t, self.P_grid < P_quench] = quench_abund
             
         above_clouds = P_profile < cloudtop_pressure
 

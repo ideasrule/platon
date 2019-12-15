@@ -112,6 +112,7 @@ class CombinedRetriever:
         number_density = 10.0**params_dict["log_number_density"]
         part_size = 10.0**params_dict["log_part_size"]
         ri = params_dict["ri"]
+        P_quench = 10 ** params_dict["log_P_quench"]
 
         if Rs <= 0 or Mp <= 0:
             return -np.inf
@@ -128,7 +129,7 @@ class CombinedRetriever:
                     cloudtop_pressure=cloudtop_P, T_star=T_star,
                     T_spot=T_spot, spot_cov_frac=spot_cov_frac,
                     frac_scale_height=frac_scale_height, number_density=number_density,
-                    part_size=part_size, ri=ri, full_output=True)
+                    part_size=part_size, ri=ri, P_quench=P_quench, full_output=True)
                 residuals = calculated_transit_depths - measured_transit_depths
                 scaled_errors = error_multiple * measured_transit_errors
                 ln_likelihood += -0.5 * np.sum(residuals**2 / scaled_errors**2 + np.log(2 * np.pi * scaled_errors**2))
@@ -159,7 +160,7 @@ class CombinedRetriever:
                     cloudtop_pressure=cloudtop_P,
                     T_spot=T_spot, spot_cov_frac=spot_cov_frac,
                     frac_scale_height=frac_scale_height, number_density=number_density,
-                    part_size = part_size, ri = ri, full_output=True)
+                    part_size = part_size, ri=ri, P_quench=P_quench, full_output=True)
                 residuals = calculated_eclipse_depths - measured_eclipse_depths
                 scaled_errors = error_multiple * measured_eclipse_errors
                 ln_likelihood += -0.5 * np.sum(residuals**2 / scaled_errors**2 + np.log(2 * np.pi * scaled_errors**2))
@@ -401,6 +402,7 @@ class CombinedRetriever:
                              scatt_slope=4, error_multiple=1, T_star=None,
                              T_spot=None, spot_cov_frac=None,frac_scale_height=1,
                              log_number_density=-np.inf, log_part_size =-6, ri = None,
+                             log_P_quench=-99,
                              profile_type = 'isothermal', **profile_kwargs):
         '''Get a :class:`.FitInfo` object filled with best guess values.  A few
         parameters are required, but others can be set to default values if you

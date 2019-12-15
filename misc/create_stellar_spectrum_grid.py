@@ -1,4 +1,3 @@
-from __future__ import print_function
 import numpy as np
 import astropy.io.fits
 import sys
@@ -16,7 +15,7 @@ def air_to_vac(wavelength):
     wlum = wavelength.to(u.um).value
     return (1 + 1e-6*(287.6155 + 1.62887/wlum**2 + 0.01360/wlum**4)) * wavelength
 
-binned_wavelengths = np.load("../platon/data/wavelengths.npy") * u.meter
+binned_wavelengths = np.load("../platon/data/k_wavelengths.npy") * u.meter
 
 output_spectra = {}
 
@@ -37,7 +36,7 @@ for temperature in np.arange(2000, 12000, 100):
     
     binned_spectrum = []
 
-    avg_log_interval = np.median(np.diff(np.log10(binned_wavelengths.value)))
+    avg_log_interval = np.median(np.diff(np.log10(np.unique(binned_wavelengths).value)))
     conversion_factor = None
 
     for i, wavelength in enumerate(binned_wavelengths):
@@ -47,8 +46,6 @@ for temperature in np.arange(2000, 12000, 100):
         cond = np.logical_and(wavelengths >= start, wavelengths < end)
         photon_energy = h*c/wavelength
         photon_flux = np.mean(spectrum[cond])/photon_energy * (end - start)
-
-        
 
         if conversion_factor is None:
             conversion_factor = photon_flux.si.value / photon_flux.value

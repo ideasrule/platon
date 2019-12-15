@@ -1,5 +1,4 @@
-from __future__ import print_function
-from future.moves.urllib.request import urlopen
+from urllib.request import urlopen
 
 from pkg_resources import resource_filename
 from platon import __data_url__
@@ -15,12 +14,9 @@ def get_data(target_dir):
     filename = "data.zip"
     u = urlopen(__data_url__)
     f = open(filename, 'wb')
-    try:
-        # Python 3
-        file_size = int(u.getheader("Content-Length"))
-    except AttributeError:
-        # Python 2
-        file_size = int(u.info().getheaders("Content-Length")[0])
+
+    #Only for Python 3, because we don't support Python 2 anymore
+    file_size = int(u.getheader("Content-Length"))
 
     print("Downloading {}: {:.0f} MB".format(
         filename, file_size / MB_TO_BYTES))

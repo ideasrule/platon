@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 import numpy as np
 from . import _mie_multi_x
 

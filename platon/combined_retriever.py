@@ -21,6 +21,9 @@ from .TP_profile import Profile
 
 class CombinedRetriever:
     def pretty_print(self, fit_info):
+        if self.last_lnprob is None:
+            return
+        
         line = "ln_prob={:.2e}\t".format(self.last_lnprob)
         for i, name in enumerate(fit_info.fit_param_names):            
             value = self.last_params[i]
@@ -41,7 +44,11 @@ class CombinedRetriever:
                 format_str = "{:4.0f}"                
             elif abs(value) < 1e4: format_str = "{:.2f}"
             else: format_str = "{:.2e}"
-                
+
+            if name == "wfc3_offset_transit" or name == "wfc3_offset_eclipse":
+                unit = "ppm"
+                value *= 1e6
+            
             format_str = "{}=" + format_str + " " + unit + "\t"
             line += format_str.format(name, value)
             
@@ -88,7 +95,7 @@ class CombinedRetriever:
 
     def _ln_like(self, params, transit_calc, eclipse_calc, fit_info, measured_transit_depths,
                  measured_transit_errors, measured_eclipse_depths,
-                 measured_eclipse_errors, plot=False):
+                 measured_eclipse_errors, plot=False, wfc3_start=1e-6, wfc3_end=1.7e-6):
 
         if not fit_info._within_limits(params):
             return -np.inf
@@ -112,6 +119,9 @@ class CombinedRetriever:
         number_density = 10.0**params_dict["log_number_density"]
         part_size = 10.0**params_dict["log_part_size"]
         P_quench = 10 ** params_dict["log_P_quench"]
+        wfc3_offset_transit = params_dict["wfc3_offset_transit"]
+        wfc3_offset_eclipse = params_dict["wfc3_offset_eclipse"]
+        
         if "n" in params_dict and "log_k" in params_dict:
             ri = params_dict["n"] - 1j * 10**params_dict["log_k"]
         else:
@@ -133,11 +143,14 @@ class CombinedRetriever:
                     T_spot=T_spot, spot_cov_frac=spot_cov_frac,
                     frac_scale_height=frac_scale_height, number_density=number_density,
                     part_size=part_size, ri=ri, P_quench=P_quench, full_output=True)
+                calculated_transit_depths[np.logical_and(transit_wavelengths >= wfc3_start, transit_wavelengths <= wfc3_end)] += wfc3_offset_transit
                 residuals = calculated_transit_depths - measured_transit_depths
                 scaled_errors = error_multiple * measured_transit_errors
                 ln_likelihood += -0.5 * np.sum(residuals**2 / scaled_errors**2 + np.log(2 * np.pi * scaled_errors**2))
                 
                 if plot:
+                    chi_sqr = np.sum(residuals**2 / measured_transit_errors**2)
+                    print("Transit chi_sqr:", chi_sqr)
                     plt.figure(1)
                     plt.plot(METRES_TO_UM * info_dict["unbinned_wavelengths"],
                              info_dict["unbinned_depths"],
@@ -168,11 +181,14 @@ class CombinedRetriever:
                     T_spot=T_spot, spot_cov_frac=spot_cov_frac,
                     frac_scale_height=frac_scale_height, number_density=number_density,
                     part_size = part_size, ri=ri, P_quench=P_quench, full_output=True)
+                calculated_eclipse_depths[np.logical_and(eclipse_wavelengths >= wfc3_start, eclipse_wavelengths <= wfc3_end)] += wfc3_offset_eclipse
                 residuals = calculated_eclipse_depths - measured_eclipse_depths
                 scaled_errors = error_multiple * measured_eclipse_errors
                 ln_likelihood += -0.5 * np.sum(residuals**2 / scaled_errors**2 + np.log(2 * np.pi * scaled_errors**2))
                 
                 if plot:
+                    chi_sqr = np.sum(residuals**2 / measured_eclipse_depths**2)
+                    print("Eclipse chi_sqr:", chi_sqr)
                     plt.figure(2)
                     plt.plot(METRES_TO_UM * info_dict["unbinned_wavelengths"],
                              info_dict["unbinned_eclipse_depths"],

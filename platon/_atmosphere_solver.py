@@ -51,6 +51,8 @@ class AtmosphereSolver:
             resource_filename(__name__, "data/species_info"),
             method)
 
+        self.collisional_lambda_grid = np.load(
+             resource_filename(__name__, "data/collisional_wavelengths.npy"))
         self.collisional_absorption_data = load_dict_from_pickle(
             resource_filename(__name__, "data/collisional_absorption.pkl"))
 
@@ -177,14 +179,21 @@ class AtmosphereSolver:
         absorption_coeff = np.zeros(
             (np.sum(T_cond), np.sum(P_cond), self.N_lambda))
         n = self.P_grid[np.newaxis, P_cond] / (k_B * self.T_grid[T_cond, np.newaxis])
-
+        no_interp = len(self.lambda_grid) == len(self.collisional_lambda_grid) and np.allclose(self.lambda_grid, self.collisional_lambda_grid)
+        
         for s1, s2 in self.collisional_absorption_data:
             if s1 in abundances and s2 in abundances:
                 n1 = (abundances[s1][T_cond, :][:, P_cond] * n)
                 n2 = (abundances[s2][T_cond, :][:, P_cond] * n)
                 abs_data = self.collisional_absorption_data[(s1, s2)].reshape(
-                    (self.N_T, 1, self.N_lambda))[T_cond]
-                absorption_coeff += abs_data * (n1 * n2)[:, :, np.newaxis]
+                    (self.N_T, 1, len(self.collisional_lambda_grid)))[T_cond]
+
+                if no_interp:
+                    absorption_coeff += abs_data * (n1 * n2)[:, :, np.newaxis]
+                else:
+                    absorption_coeff += scipy.interpolate.interp1d(
+                        self.collisional_lambda_grid,
+                        abs_data * (n1 * n2)[:, :, np.newaxis])(self.lambda_grid)
 
         return absorption_coeff
 

@@ -54,7 +54,7 @@ class CombinedRetriever:
         # infinite range.
         fit_info = copy.deepcopy(fit_info)
         
-        if fit_info.all_params["ri"].best_guess is None:
+        if fit_info.all_params["log_k"].best_guess is None:
             # Not using Mie scattering
             if fit_info.all_params["log_number_density"].best_guess != -np.inf:
                 raise ValueError("log number density must be -inf if not using Mie scattering")            
@@ -111,8 +111,11 @@ class CombinedRetriever:
         frac_scale_height = params_dict["frac_scale_height"]
         number_density = 10.0**params_dict["log_number_density"]
         part_size = 10.0**params_dict["log_part_size"]
-        ri = params_dict["ri"]
         P_quench = 10 ** params_dict["log_P_quench"]
+        if "n" in params_dict and "log_k" in params_dict:
+            ri = params_dict["n"] - 1j * 10**params_dict["log_k"]
+        else:
+            ri = None
 
         if Rs <= 0 or Mp <= 0:
             return -np.inf
@@ -136,10 +139,14 @@ class CombinedRetriever:
                 
                 if plot:
                     plt.figure(1)
-                    plt.plot(METRES_TO_UM * info_dict["unbinned_wavelengths"], info_dict["unbinned_depths"], alpha=0.2, color='b', label="Calculated (unbinned)")
+                    plt.plot(METRES_TO_UM * info_dict["unbinned_wavelengths"],
+                             info_dict["unbinned_depths"],
+                             alpha=0.2, color='b', label="Calculated (unbinned)")
                     plt.errorbar(METRES_TO_UM * transit_wavelengths, measured_transit_depths,
                                  yerr = measured_transit_errors, fmt='.', color='k', label="Observed")
-                    plt.scatter(METRES_TO_UM * transit_wavelengths, calculated_transit_depths, color='r', label="Calculated (binned)")
+                    plt.scatter(METRES_TO_UM * transit_wavelengths,
+                                calculated_transit_depths,
+                                color='r', label="Calculated (binned)")
                     plt.xlabel("Wavelength ($\mu m$)")
                     plt.ylabel("Transit depth")
                     plt.xscale('log')
@@ -167,10 +174,15 @@ class CombinedRetriever:
                 
                 if plot:
                     plt.figure(2)
-                    plt.plot(METRES_TO_UM * info_dict["unbinned_wavelengths"], info_dict["unbinned_eclipse_depths"], alpha=0.2, color='b', label="Calculated (unbinned)")
-                    plt.errorbar(METRES_TO_UM * eclipse_wavelengths, measured_eclipse_depths,
-                                 yerr = measured_eclipse_errors, fmt='.', color='k', label="Observed")
-                    plt.scatter(METRES_TO_UM * eclipse_wavelengths, calculated_eclipse_depths, color='r', label="Calculated (binned)")
+                    plt.plot(METRES_TO_UM * info_dict["unbinned_wavelengths"],
+                             info_dict["unbinned_eclipse_depths"],
+                             alpha=0.2, color='b', label="Calculated (unbinned)")
+                    plt.errorbar(METRES_TO_UM * eclipse_wavelengths,
+                                 measured_eclipse_depths,
+                                 yerr=measured_eclipse_errors, fmt='.', color='k', label="Observed")
+                    plt.scatter(METRES_TO_UM * eclipse_wavelengths,
+                                calculated_eclipse_depths,
+                                color='r', label="Calculated (binned)")
                     plt.legend()
                     plt.xlabel("Wavelength ($\mu m$)")
                     plt.ylabel("Eclipse depth")
@@ -400,8 +412,10 @@ class CombinedRetriever:
     def get_default_fit_info(Rs, Mp, Rp, T=None, logZ=0, CO_ratio=0.53,
                              log_cloudtop_P=np.inf, log_scatt_factor=0,
                              scatt_slope=4, error_multiple=1, T_star=None,
-                             T_spot=None, spot_cov_frac=None,frac_scale_height=1,
-                             log_number_density=-np.inf, log_part_size =-6, ri = None,
+                             T_spot=None, spot_cov_frac=None,
+                             frac_scale_height=1,
+                             log_number_density=-np.inf, log_part_size=-6,
+                             n=None, log_k=None,
                              log_P_quench=-99,
                              profile_type = 'isothermal', **profile_kwargs):
         '''Get a :class:`.FitInfo` object filled with best guess values.  A few

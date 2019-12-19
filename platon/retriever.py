@@ -115,7 +115,8 @@ class Retriever:
                              scatt_slope=4, error_multiple=1, T_star=None,
                              T_spot=None, spot_cov_frac=None,frac_scale_height=1,
                              log_number_density=-np.inf, log_part_size =-6,
-                             part_size_std = 0.5, ri = None):
+                             n=None, log_k=-np.inf, log_P_quench=-99,
+                             part_size_std = 0.5, wfc3_offset_transit=0):
         '''Get a :class:`.FitInfo` object filled with best guess values.  A few
         parameters are required, but others can be set to default values if you
         do not want to specify them.  All parameters are in SI.

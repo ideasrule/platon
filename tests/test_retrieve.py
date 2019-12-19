@@ -8,6 +8,7 @@ import dynesty
 from platon.retriever import Retriever
 from platon.fit_info import FitInfo
 from platon.constants import R_sun, R_jup, M_jup
+from platon.errors import AtmosphereError
 
 class TestRetriever(unittest.TestCase):
     def initialize(self, use_guesses=False):
@@ -84,23 +85,23 @@ class TestRetriever(unittest.TestCase):
         self.initialize(False)
         retriever = Retriever()
 
-        def run_both(name, low_lim, best_guess, high_lim):
+        def run_both(name, low_lim, best_guess, high_lim, expected_error=ValueError):
             fit_info = copy.deepcopy(self.fit_info)
             fit_info.all_params[name].low_lim = low_lim
             fit_info.all_params[name].best_guess = best_guess
             fit_info.all_params[name].high_lim = high_lim
-            with self.assertRaises(ValueError):
+            with self.assertRaises(expected_error):
                 retriever.run_multinest(self.wavelength_bins, self.depths,
                                         self.errors, fit_info, maxiter=10)
                 retriever.run_emcee(self.wavelength_bins, self.depths,
                                     self.errors, fit_info, nsteps=10)
 
         # All of these are invalid inputs
-        run_both("T", 199, 1000, 2999)
-        run_both("T", 3000, 1000, 300)
+        run_both("T", 199, 1000, 2999, AtmosphereError)
+        run_both("T", 3000, 1000, 300, ValueError)
         
-        run_both("T", 201, 1000, 3001)        
-        run_both("T", 201, 1000, 999)
+        run_both("T", 201, 1000, 3001, AtmosphereError)        
+        run_both("T", 201, 1000, 999, ValueError)
 
         run_both("logZ", -1.1, 0, 3)
         run_both("logZ", -1, 2, 3.1)        

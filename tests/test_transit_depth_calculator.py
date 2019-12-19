@@ -105,7 +105,7 @@ class TestTransitDepthCalculator(unittest.TestCase):
         H = k_B * T / (2 * AMU * g)
         gamma = 0.57721
         polarizability = 0.8059e-30
-        sigma = 128. * np.pi**5/3 * polarizability**2 / depth_calculator.lambda_grid**4
+        sigma = 128. * np.pi**5/3 * polarizability**2 / depth_calculator.atm.lambda_grid**4
         kappa = sigma / (2 * AMU)
 
         P_surface = 1e8
@@ -129,9 +129,9 @@ class TestTransitDepthCalculator(unittest.TestCase):
         CO_ratio = 1.1
         calculator = TransitDepthCalculator()
         
-        with self.assertRaises(ValueError):
+        with self.assertRaises(AtmosphereError):
             calculator.compute_depths(Rs, Mp, Rp, 199, logZ=logZ, CO_ratio=CO_ratio)
-        with self.assertRaises(ValueError):
+        with self.assertRaises(AtmosphereError):
             calculator.compute_depths(Rs, Mp, Rp, 3001, logZ=logZ, CO_ratio=CO_ratio)
         with self.assertRaises(ValueError):
             calculator.compute_depths(Rs, Mp, Rp, T, logZ=-1.1, CO_ratio=CO_ratio)

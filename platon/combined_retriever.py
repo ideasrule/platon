@@ -78,8 +78,8 @@ class CombinedRetriever:
             if this_param.best_guess < this_param.low_lim \
                or this_param.best_guess > this_param.high_lim:
                 raise ValueError(
-                    "Value {} for {} not between low and high limits".format(
-                        this_param.best_guess, name))
+                    "Value {} for {} not between low and high limits {}-{}".format(
+                        this_param.best_guess, name, this_param.low_lim, this_param.high_lim))
             if this_param.low_lim >= this_param.high_lim:
                 raise ValueError(
                     "low_lim for {} is higher than high_lim".format(name))
@@ -117,15 +117,14 @@ class CombinedRetriever:
         frac_scale_height = params_dict["frac_scale_height"]
         number_density = 10.0**params_dict["log_number_density"]
         part_size = 10.0**params_dict["log_part_size"]
-        P_quench = 10 ** params_dict["log_P_quench"]
-        wfc3_offset_transit = params_dict["wfc3_offset_transit"]
-        wfc3_offset_eclipse = params_dict["wfc3_offset_eclipse"]
-        
-        if "n" in params_dict and "log_k" in params_dict:
+        P_quench = 10 ** params_dict["log_P_quench"]        
+
+        if "n" in params_dict and params_dict["n"] is not None and "log_k" in params_dict:
             ri = params_dict["n"] - 1j * 10**params_dict["log_k"]
         else:
             ri = None
 
+            
         if Rs <= 0 or Mp <= 0:
             return -np.inf
 
@@ -142,7 +141,8 @@ class CombinedRetriever:
                     T_spot=T_spot, spot_cov_frac=spot_cov_frac,
                     frac_scale_height=frac_scale_height, number_density=number_density,
                     part_size=part_size, ri=ri, P_quench=P_quench, full_output=True)
-                calculated_transit_depths[np.logical_and(transit_wavelengths >= wfc3_start, transit_wavelengths <= wfc3_end)] += wfc3_offset_transit
+                calculated_transit_depths[np.logical_and(transit_wavelengths >= wfc3_start, transit_wavelengths <= wfc3_end)] += params_dict["wfc3_offset_transit"]
+
                 residuals = calculated_transit_depths - measured_transit_depths
                 scaled_errors = error_multiple * measured_transit_errors
                 ln_likelihood += -0.5 * np.sum(residuals**2 / scaled_errors**2 + np.log(2 * np.pi * scaled_errors**2))
@@ -180,7 +180,7 @@ class CombinedRetriever:
                     T_spot=T_spot, spot_cov_frac=spot_cov_frac,
                     frac_scale_height=frac_scale_height, number_density=number_density,
                     part_size = part_size, ri=ri, P_quench=P_quench, full_output=True)
-                calculated_eclipse_depths[np.logical_and(eclipse_wavelengths >= wfc3_start, eclipse_wavelengths <= wfc3_end)] += wfc3_offset_eclipse
+                calculated_eclipse_depths[np.logical_and(eclipse_wavelengths >= wfc3_start, eclipse_wavelengths <= wfc3_end)] += params_dict["wfc3_offset_eclipse"] 
                 residuals = calculated_eclipse_depths - measured_eclipse_depths
                 scaled_errors = error_multiple * measured_eclipse_errors
                 ln_likelihood += -0.5 * np.sum(residuals**2 / scaled_errors**2 + np.log(2 * np.pi * scaled_errors**2))
@@ -372,7 +372,7 @@ class CombinedRetriever:
         transit_calc.change_wavelength_bins(transit_bins)
         eclipse_calc = EclipseDepthCalculator()
         eclipse_calc.change_wavelength_bins(eclipse_bins)
-        
+
         self._validate_params(fit_info, transit_calc)
 
         def transform_prior(cube):
@@ -430,7 +430,7 @@ class CombinedRetriever:
                              T_spot=None, spot_cov_frac=None,
                              frac_scale_height=1,
                              log_number_density=-np.inf, log_part_size=-6,
-                             n=None, log_k=None,
+                             n=None, log_k=-np.inf,
                              log_P_quench=-99,
                              wfc3_offset_transit=0, wfc3_offset_eclipse=0,
                              profile_type = 'isothermal', **profile_kwargs):

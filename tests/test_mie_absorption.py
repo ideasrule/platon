@@ -39,13 +39,13 @@ class TestMieAbsorption(unittest.TestCase):
         to_include = np.array([1, 200, 1000, 3000, 4600])
         #to_include = np.array([4600])
         exact_cross_sections = [self.exact_cross_section(
-            r_mean, w, m, sigma) for w in calc.lambda_grid[to_include]]
+            r_mean, w, m, sigma) for w in calc.atm.lambda_grid[to_include]]
 
         # This technically gets us absorption cross sections, but for n_0=1 and
         # a single pressure in the list, this should equal cross section
-        P_cond = calc.P_grid <= 1e5
-        absorption = calc._get_mie_scattering_absorption(
-            P_cond, calc.T_grid == 800, m, r_mean,
+        P_cond = calc.atm.P_grid <= 1e5
+        absorption = calc.atm._get_mie_scattering_absorption(
+            P_cond, calc.atm.T_grid == 800, m, r_mean,
             frac_scale_height, n_0, sigma=sigma)
 
         # absorption at max pressure for n_0=1 should equal cross section
@@ -55,8 +55,8 @@ class TestMieAbsorption(unittest.TestCase):
         self.assertTrue(np.max(frac_dev) < 0.01)
 
         for i in range(absorption.shape[1]):
-            P = calc.P_grid[P_cond][i]
-            ref_P = np.max(calc.P_grid[P_cond])
+            P = calc.atm.P_grid[P_cond][i]
+            ref_P = np.max(calc.atm.P_grid[P_cond])
             ratio = (P/ref_P)**(1.0/frac_scale_height)
             self.assertTrue(np.allclose(rough_cross_sections * n_0 * ratio, absorption[:, i, :].flatten(), atol=0, rtol=1e-3))
             

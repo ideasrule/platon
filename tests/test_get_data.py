@@ -5,6 +5,7 @@ import tempfile
 from platon._get_data import get_data
 
 class TestGetData(unittest.TestCase):
+    @unittest.skip("Too long")
     def test_get_data(self):
         target_dir = tempfile.mkdtemp()
         get_data(target_dir)

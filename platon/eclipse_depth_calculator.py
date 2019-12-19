@@ -130,6 +130,7 @@ class EclipseDepthCalculator:
         binned_wavelengths, binned_depths = self._get_binned_depths(eclipse_depths, stellar_photon_fluxes)
 
         if full_output:
+            atm_info["stellar_spectrum"] = stellar_photon_fluxes
             atm_info["planet_spectrum"] = fluxes
             atm_info["unbinned_eclipse_depths"] = eclipse_depths
             atm_info["taus"] = taus

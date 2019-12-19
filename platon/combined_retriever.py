@@ -88,7 +88,6 @@ class CombinedRetriever:
                 this_param.best_guess = lim
                 calculator._validate_params(
                     fit_info._get("T"),
-                    None,
                     fit_info._get("logZ"),
                     fit_info._get("CO_ratio"),
                     10**fit_info._get("log_cloudtop_P"))
@@ -433,6 +432,7 @@ class CombinedRetriever:
                              log_number_density=-np.inf, log_part_size=-6,
                              n=None, log_k=None,
                              log_P_quench=-99,
+                             wfc3_offset_transit=0, wfc3_offset_eclipse=0,
                              profile_type = 'isothermal', **profile_kwargs):
         '''Get a :class:`.FitInfo` object filled with best guess values.  A few
         parameters are required, but others can be set to default values if you

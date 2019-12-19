@@ -79,6 +79,7 @@ class EclipseDepthCalculator:
                        T_spot=None, spot_cov_frac=None,
                        ri = None, frac_scale_height=1,number_density=0,
                        part_size=1e-6, part_size_std=0.5, P_quench=1e-99,
+                       stellar_blackbody=False,
                        full_output=False):
         '''Most parameters are explained in :func:`~platon.transit_depth_calculator.TransitDepthCalculator.compute_depths`
 
@@ -119,7 +120,7 @@ class EclipseDepthCalculator:
             fluxes += fluxes_from_cloud
 
         stellar_photon_fluxes, _ = self.atm.get_stellar_spectrum(
-            lambda_grid, T_star, T_spot, spot_cov_frac)        
+            lambda_grid, T_star, T_spot, spot_cov_frac, stellar_blackbody)
         d_lambda = self.atm.d_ln_lambda * lambda_grid
         photon_fluxes = fluxes * d_lambda / (h * c / lambda_grid)
 

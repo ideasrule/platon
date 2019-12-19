@@ -54,7 +54,7 @@ class TransitDepthCalculator:
                                   spot_cov_frac, n_gauss=10, blackbody=True):
         unbinned_lambdas = self.atm.lambda_grid
         stellar_spectrum, correction_factors = self.atm.get_stellar_spectrum(
-            unbinned_lambdas, T_star, T_spot, spot_cov_frac)
+            unbinned_lambdas, T_star, T_spot, spot_cov_frac, blackbody)
         
         #Step 1: do a first binning if using k-coeffs; first binning is a
         #no-op otherwise
@@ -106,6 +106,10 @@ class TransitDepthCalculator:
 
         return np.array(binned_wavelengths), np.array(binned_depths), np.array(binned_stellar_spectrum)
 
+    def _validate_params(self, T, logZ, CO_ratio, cloudtop_pressure):
+        T_profile = np.ones(self.atm.num_profile_heights) * T
+        self.atm._validate_params(T, logZ, CO_ratio, cloudtop_pressure)
+        
     
     def compute_depths(self, star_radius, planet_mass, planet_radius,
                        temperature, logZ=0, CO_ratio=0.53,
@@ -118,7 +122,7 @@ class TransitDepthCalculator:
                        T_star=None, T_spot=None, spot_cov_frac=None,
                        ri=None, frac_scale_height=1, number_density=0,
                        part_size=1e-6, part_size_std=0.5, P_quench=1e-99,
-                       full_output=False, min_abundance=1e-99, min_cross_sec=1e-99):
+                       full_output=False, min_abundance=1e-99, min_cross_sec=1e-99, stellar_blackbody=False):
         '''
         Computes transit depths at a range of wavelengths, assuming an
         isothermal atmosphere.  To choose bins, call change_wavelength_bins().
@@ -258,7 +262,7 @@ class TransitDepthCalculator:
 
         transit_depths = (np.min(radii) / star_radius)**2 \
             + 2 / star_radius**2 * absorption_fraction.dot(radii[1:] * dr)
-        binned_wavelengths, binned_depths, binned_stellar_spectrum = self._get_binned_corrected_depths(transit_depths, T_star, T_spot, spot_cov_frac)
+        binned_wavelengths, binned_depths, binned_stellar_spectrum = self._get_binned_corrected_depths(transit_depths, T_star, T_spot, spot_cov_frac, stellar_blackbody)
         
         if full_output:
             atm_info["tau_los"] = tau_los

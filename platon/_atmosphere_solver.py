@@ -130,9 +130,6 @@ class AtmosphereSolver:
         for key in self.absorption_data:
             self.absorption_data[key] = self.absorption_data[key][:, :, cond]
 
-        for key in self.collisional_absorption_data:
-            self.collisional_absorption_data[key] = self.collisional_absorption_data[key][:, cond]
-
         self.lambda_grid = self.lambda_grid[cond]
         self.N_lambda = len(self.lambda_grid)
 
@@ -270,7 +267,7 @@ class AtmosphereSolver:
         raise ValueError("Unrecognized format for custom_abundances")
    
 
-    def _validate_params(self, P_profile, T_profile, logZ, CO_ratio, cloudtop_pressure):
+    def _validate_params(self, T_profile, logZ, CO_ratio, cloudtop_pressure):
         if np.min(T_profile) < self.min_temperature or\
            np.max(T_profile) > self.max_temperature:
             raise AtmosphereError("Invalid temperatures in T/P profile")
@@ -298,7 +295,7 @@ class AtmosphereSolver:
                     "Cloudtop pressure is {} Pa, but must be between {} and {} Pa unless it is np.inf".format(
                         cloudtop_pressure, minimum, maximum))
 
-    def get_stellar_spectrum(self, lambdas, T_star, T_spot, spot_cov_frac, blackbody=True):
+    def get_stellar_spectrum(self, lambdas, T_star, T_spot, spot_cov_frac, blackbody=False):
         if spot_cov_frac is None:
             spot_cov_frac = 0
 
@@ -341,7 +338,7 @@ class AtmosphereSolver:
                        part_size=1e-6, part_size_std=0.5,
                        P_quench=1e-99,
                        min_abundance=1e-99, min_cross_sec=1e-99):       
-        self._validate_params(P_profile, T_profile, logZ, CO_ratio, cloudtop_pressure)
+        self._validate_params(T_profile, logZ, CO_ratio, cloudtop_pressure)
        
         abundances = self._get_abundances_array(
             logZ, CO_ratio, custom_abundances)

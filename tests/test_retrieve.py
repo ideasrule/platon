@@ -3,6 +3,7 @@ import numpy as np
 import copy
 import emcee
 import matplotlib
+matplotlib.use("Agg")
 import dynesty
 
 from platon.retriever import Retriever

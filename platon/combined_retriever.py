@@ -230,6 +230,7 @@ class CombinedRetriever:
                   eclipse_bins, eclipse_depths, eclipse_errors,
                   fit_info, nwalkers=50,
                   nsteps=1000, include_condensation=True,
+                  rad_method="xsec",
                   plot_best=False):
         '''Runs affine-invariant MCMC to retrieve atmospheric parameters.
 
@@ -280,10 +281,10 @@ class CombinedRetriever:
 
         initial_positions = fit_info._generate_rand_param_arrays(nwalkers)
         transit_calc = TransitDepthCalculator(
-            include_condensation=include_condensation)
+            include_condensation=include_condensation, method=rad_method)
         transit_calc.change_wavelength_bins(transit_bins)
         eclipse_calc = EclipseDepthCalculator(
-            include_condensation=include_condensation)
+            include_condensation=include_condensation, method=rad_method)
         eclipse_calc.change_wavelength_bins(eclipse_bins)
        
         self._validate_params(fit_info, transit_calc)
@@ -317,7 +318,8 @@ class CombinedRetriever:
     def run_multinest(self, transit_bins, transit_depths, transit_errors,
                       eclipse_bins, eclipse_depths, eclipse_errors,
                       fit_info,
-                      include_condensation=True, plot_best=False,
+                      include_condensation=True, rad_method="xsec",
+                      plot_best=False,
                       maxiter=None, maxcall=None, nlive=100,
                       **dynesty_kwargs):
         '''Runs nested sampling to retrieve atmospheric parameters.
@@ -368,9 +370,10 @@ class CombinedRetriever:
             is the natural logarithm of the evidence.
         '''
         transit_calc = TransitDepthCalculator(
-            include_condensation=include_condensation)
+            include_condensation=include_condensation, method=rad_method)
         transit_calc.change_wavelength_bins(transit_bins)
-        eclipse_calc = EclipseDepthCalculator()
+        eclipse_calc = EclipseDepthCalculator(
+            include_condensation=include_condensation, method=rad_method)
         eclipse_calc.change_wavelength_bins(eclipse_bins)
 
         self._validate_params(fit_info, transit_calc)

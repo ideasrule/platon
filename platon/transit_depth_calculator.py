@@ -51,7 +51,7 @@ class TransitDepthCalculator:
         
 
     def _get_binned_corrected_depths(self, depths, T_star, T_spot,
-                                  spot_cov_frac, n_gauss=10, blackbody=True):
+                                     spot_cov_frac, blackbody=True, n_gauss=10):
         unbinned_lambdas = self.atm.lambda_grid
         stellar_spectrum, correction_factors = self.atm.get_stellar_spectrum(
             unbinned_lambdas, T_star, T_spot, spot_cov_frac, blackbody)

@@ -36,12 +36,14 @@ class EclipseDepthCalculator:
             num_binned = int(len(depths) / n_gauss)
             intermediate_lambdas = np.zeros(num_binned)
             intermediate_depths = np.zeros(num_binned)
+            intermediate_stellar_spectrum = np.zeros(num_binned)
 
             for chunk in range(num_binned):
                 start = chunk * n_gauss
                 end = (chunk + 1 ) * n_gauss
                 intermediate_lambdas[chunk] = np.median(self.atm.lambda_grid[start : end])
-                intermediate_depths[chunk] = np.sum(depths[start : end] * weights)                
+                intermediate_depths[chunk] = np.sum(depths[start : end] * weights)
+                intermediate_stellar_spectrum[chunk] = np.median(stellar_spectrum[start : end])
         elif self.atm.method == "xsec":
             intermediate_lambdas = self.atm.lambda_grid
             intermediate_depths = depths
@@ -59,7 +61,8 @@ class EclipseDepthCalculator:
                 intermediate_lambdas >= start,
                 intermediate_lambdas < end)
             binned_wavelengths.append(np.mean(intermediate_lambdas[cond]))
-            binned_depth = np.average(depths[cond], weights=stellar_spectrum[cond])
+            binned_depth = np.average(intermediate_depths[cond],
+                                      weights=intermediate_stellar_spectrum[cond])
             binned_depths.append(binned_depth)
             
         return np.array(binned_wavelengths), np.array(binned_depths)

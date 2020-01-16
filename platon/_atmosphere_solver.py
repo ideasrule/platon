@@ -49,7 +49,7 @@ class AtmosphereSolver:
             resource_filename(__name__, "data/species_info"),
             method)
 
-        self.collisional_lambda_grid = load_numpy("data/collisional_wavelengths.npy")
+        self.low_res_lambdas = load_numpy("data/low_res_lambdas.npy")
         self.collisional_absorption_data = load_dict_from_pickle(
             "data/collisional_absorption.pkl")
 
@@ -82,7 +82,6 @@ class AtmosphereSolver:
         self.method = method
         self._mie_cache = MieCache()
 
-        #self.all_cross_secs = np.load(resource_filename(__name__, "data/all_cross_secs_MgSiO3_sol.npy"))
         self.all_cross_secs = load_dict_from_pickle("data/all_cross_secs.pkl")
         self.all_radii = load_numpy("data/mie_radii.npy")
 
@@ -136,8 +135,6 @@ class AtmosphereSolver:
         for Teff in self.stellar_spectra:
             self.stellar_spectra[Teff] = self.stellar_spectra[Teff][cond]
 
-        for key in self.all_cross_secs:
-            self.all_cross_secs[key] = self.all_cross_secs[key][cond]
 
     def _get_gas_absorption(self, abundances, P_cond, T_cond):
         absorption_coeff = np.zeros(
@@ -167,20 +164,20 @@ class AtmosphereSolver:
         absorption_coeff = np.zeros(
             (np.sum(T_cond), np.sum(P_cond), self.N_lambda))
         n = self.P_grid[np.newaxis, P_cond] / (k_B * self.T_grid[T_cond, np.newaxis])
-        no_interp = len(self.lambda_grid) == len(self.collisional_lambda_grid) and np.allclose(self.lambda_grid, self.collisional_lambda_grid)
+        no_interp = len(self.lambda_grid) == len(self.low_res_lambdas) and np.allclose(self.lambda_grid, self.low_res_lambdas)
         
         for s1, s2 in self.collisional_absorption_data:
             if s1 in abundances and s2 in abundances:
                 n1 = (abundances[s1][T_cond, :][:, P_cond] * n)
                 n2 = (abundances[s2][T_cond, :][:, P_cond] * n)
                 abs_data = self.collisional_absorption_data[(s1, s2)].reshape(
-                    (self.N_T, 1, len(self.collisional_lambda_grid)))[T_cond]
+                    (self.N_T, 1, len(self.low_res_lambdas)))[T_cond]
 
                 if no_interp:
                     absorption_coeff += abs_data * (n1 * n2)[:, :, np.newaxis]
                 else:
                     absorption_coeff += scipy.interpolate.interp1d(
-                        self.collisional_lambda_grid,
+                        self.low_res_lambdas,
                         abs_data * (n1 * n2)[:, :, np.newaxis])(self.lambda_grid)
 
         return absorption_coeff
@@ -189,7 +186,10 @@ class AtmosphereSolver:
                                        frac_scale_height, max_number_density,
                                        sigma = 0.5, max_zscore = 5, num_integral_points = 100):
         if isinstance(ri, str):
-            eff_cross_section = scipy.interpolate.interp1d(self.all_radii, self.all_cross_secs[ri])(part_size)
+            eff_cross_section = np.interp(
+                self.lambda_grid,
+                self.low_res_lambdas,
+                scipy.interpolate.interp1d(self.all_radii, self.all_cross_secs[ri])(part_size))
         else:
             eff_cross_section = np.zeros(self.N_lambda)
             z_scores = -np.logspace(np.log10(0.1), np.log10(max_zscore), num_integral_points/2)

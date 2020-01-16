@@ -47,6 +47,7 @@ class EclipseDepthCalculator:
         elif self.atm.method == "xsec":
             intermediate_lambdas = self.atm.lambda_grid
             intermediate_depths = depths
+            intermediate_stellar_spectrum = stellar_spectrum
         else:
             assert(False)
 

@@ -19,7 +19,7 @@ class Retriever:
         self.combined_retriever = CombinedRetriever()
         
     def run_emcee(self, wavelength_bins, depths, errors, fit_info, nwalkers=50,
-                  nsteps=1000, include_condensation=True,
+                  nsteps=1000, include_condensation=True, rad_method="xsec",
                   plot_best=False):
         '''Runs affine-invariant MCMC to retrieve atmospheric parameters.
 
@@ -61,11 +61,13 @@ class Retriever:
         '''
         return self.combined_retriever.run_emcee(
             wavelength_bins, depths, errors, None, None, None,
-            fit_info, nwalkers, nsteps, include_condensation, plot_best)
+            fit_info, nwalkers, nsteps, include_condensation, rad_method,
+            plot_best)
                                           
 
     def run_multinest(self, wavelength_bins, depths, errors, fit_info,
-                      include_condensation=True, plot_best=False,
+                      include_condensation=True, rad_method="xsec",
+                      plot_best=False,
                       maxiter=None, maxcall=None, nlive=100,
                       **dynesty_kwargs):
         '''Runs nested sampling to retrieve atmospheric parameters.
@@ -105,7 +107,7 @@ class Retriever:
         '''
         return self.combined_retriever.run_multinest(
             wavelength_bins, depths, errors, None, None, None, fit_info,
-            include_condensation, plot_best, maxiter, maxcall,
+            include_condensation, rad_method, plot_best, maxiter, maxcall,
             nlive=nlive, **dynesty_kwargs)
             
 

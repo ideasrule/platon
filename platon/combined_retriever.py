@@ -21,7 +21,7 @@ from .TP_profile import Profile
 
 class CombinedRetriever:
     def pretty_print(self, fit_info):
-        if self.last_lnprob is None:
+        if not hasattr(self, "last_lnprob"):
             return
         
         line = "ln_prob={:.2e}\t".format(self.last_lnprob)
@@ -142,7 +142,6 @@ class CombinedRetriever:
                     frac_scale_height=frac_scale_height, number_density=number_density,
                     part_size=part_size, ri=ri, P_quench=P_quench, full_output=True)
                 calculated_transit_depths[np.logical_and(transit_wavelengths >= wfc3_start, transit_wavelengths <= wfc3_end)] += params_dict["wfc3_offset_transit"]
-
                 residuals = calculated_transit_depths - measured_transit_depths
                 scaled_errors = error_multiple * measured_transit_errors
                 ln_likelihood += -0.5 * np.sum(residuals**2 / scaled_errors**2 + np.log(2 * np.pi * scaled_errors**2))
@@ -186,7 +185,7 @@ class CombinedRetriever:
                 ln_likelihood += -0.5 * np.sum(residuals**2 / scaled_errors**2 + np.log(2 * np.pi * scaled_errors**2))
                 
                 if plot:
-                    chi_sqr = np.sum(residuals**2 / measured_eclipse_depths**2)
+                    chi_sqr = np.sum(residuals**2 / measured_eclipse_errors**2)
                     print("Eclipse chi_sqr:", chi_sqr)
                     plt.figure(2)
                     plt.plot(METRES_TO_UM * info_dict["unbinned_wavelengths"],
@@ -280,14 +279,18 @@ class CombinedRetriever:
         '''
 
         initial_positions = fit_info._generate_rand_param_arrays(nwalkers)
-        transit_calc = TransitDepthCalculator(
-            include_condensation=include_condensation, method=rad_method)
-        transit_calc.change_wavelength_bins(transit_bins)
-        eclipse_calc = EclipseDepthCalculator(
-            include_condensation=include_condensation, method=rad_method)
-        eclipse_calc.change_wavelength_bins(eclipse_bins)
-       
-        self._validate_params(fit_info, transit_calc)
+        transit_calc = None
+        eclipse_calc = None
+
+        if transit_bins is not None:
+            transit_calc = TransitDepthCalculator(
+                include_condensation=include_condensation, method=rad_method)
+            transit_calc.change_wavelength_bins(transit_bins)
+            self._validate_params(fit_info, transit_calc)
+        if eclipse_bins is not None:
+            eclipse_calc = EclipseDepthCalculator(
+                include_condensation=include_condensation, method=rad_method)
+            eclipse_calc.change_wavelength_bins(eclipse_bins)       
 
         sampler = emcee.EnsembleSampler(
             nwalkers, fit_info._get_num_fit_params(), self._ln_prob,
@@ -369,14 +372,17 @@ class CombinedRetriever:
             contains the ln posteriors (this is added by PLATON).  result.logz
             is the natural logarithm of the evidence.
         '''
-        transit_calc = TransitDepthCalculator(
-            include_condensation=include_condensation, method=rad_method)
-        transit_calc.change_wavelength_bins(transit_bins)
-        eclipse_calc = EclipseDepthCalculator(
-            include_condensation=include_condensation, method=rad_method)
-        eclipse_calc.change_wavelength_bins(eclipse_bins)
-
-        self._validate_params(fit_info, transit_calc)
+        transit_calc = None
+        eclipse_calc = None
+        if transit_bins is not None:
+            transit_calc = TransitDepthCalculator(
+                include_condensation=include_condensation, method=rad_method)
+            transit_calc.change_wavelength_bins(transit_bins)
+            self._validate_params(fit_info, transit_calc)
+        if eclipse_bins is not None:
+            eclipse_calc = EclipseDepthCalculator(
+                include_condensation=include_condensation, method=rad_method)
+            eclipse_calc.change_wavelength_bins(eclipse_bins)
 
         def transform_prior(cube):
             new_cube = np.zeros(len(cube))

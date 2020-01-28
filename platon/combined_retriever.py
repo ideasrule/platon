@@ -18,6 +18,7 @@ from ._params import _UniformParam
 from .errors import AtmosphereError
 from ._output_writer import write_param_estimates_file
 from .TP_profile import Profile
+from .retrieval_result import RetrievalResult
 
 class CombinedRetriever:
     def pretty_print(self, fit_info):
@@ -94,7 +95,7 @@ class CombinedRetriever:
 
     def _ln_like(self, params, transit_calc, eclipse_calc, fit_info, measured_transit_depths,
                  measured_transit_errors, measured_eclipse_depths,
-                 measured_eclipse_errors, plot=False, wfc3_start=1e-6, wfc3_end=1.7e-6):
+                 measured_eclipse_errors, plot=False, wfc3_start=1e-6, wfc3_end=1.7e-6, ret_best_fit=False):
 
         if not fit_info._within_limits(params):
             return -np.inf
@@ -129,6 +130,9 @@ class CombinedRetriever:
             return -np.inf
 
         ln_likelihood = 0
+        calculated_transit_depths = None
+        calculated_eclipse_depths = None
+        
         try:
             if measured_transit_depths is not None:
                 if T is None:
@@ -211,6 +215,9 @@ class CombinedRetriever:
         
         self.last_params = params
         self.last_lnprob = fit_info._ln_prior(params) + ln_likelihood
+        
+        if ret_best_fit:
+            return ln_likelihood, calculated_transit_depths, calculated_eclipse_depths
         return ln_likelihood
 
 
@@ -311,12 +318,31 @@ class CombinedRetriever:
             np.max(sampler.flatlnprobability),
             fit_info.fit_param_names)
 
+        _, best_fit_transit_depths, best_fit_eclipse_depths = self._ln_like(
+            best_params_arr, transit_calc, eclipse_calc, fit_info,
+            transit_depths, transit_errors,
+            eclipse_depths, eclipse_errors, ret_best_fit=True)
+        retrieval_result = RetrievalResult(
+            {"acceptance_fraction": sampler.acceptance_fraction,
+             "chain": sampler.chain,
+             "flatchain": sampler.flatchain,
+             "lnprobability": sampler.lnprobability,
+             "flatlnprobability": sampler.flatlnprobability},             
+            "emcee",
+            transit_bins, transit_depths, transit_errors,
+            eclipse_bins, eclipse_depths, eclipse_errors,
+            best_fit_transit_depths, best_fit_eclipse_depths,
+            fit_info)
+
+        with open("retrieval_result.pkl", "wb") as f:
+            pickle.dump(result, f)
+        
         if plot_best:
              self._ln_prob(best_params_arr, transit_calc, eclipse_calc, fit_info,
                           transit_depths, transit_errors,
                           eclipse_depths, eclipse_errors, plot=True)
 
-        return sampler
+        return retrieval_result
 
     def run_multinest(self, transit_bins, transit_depths, transit_errors,
                       eclipse_bins, eclipse_depths, eclipse_errors,
@@ -408,29 +434,34 @@ class CombinedRetriever:
 
         normalized_weights = np.exp(result.logwt - np.max(result.logwt))
         normalized_weights /= np.sum(normalized_weights)
-        result.weights = normalized_weights
-
-        with open("dynesty_result.pkl", "wb") as f:
-            pickle.dump(result, f)
+        result.weights = normalized_weights                                
         
         write_param_estimates_file(
             dynesty.utils.resample_equal(result.samples, normalized_weights),
             best_params_arr,
             np.max(result.logp),
             fit_info.fit_param_names)
+        
+        _, best_fit_transit_depths, best_fit_eclipse_depths = self._ln_like(
+            best_params_arr, transit_calc, eclipse_calc, fit_info,
+            transit_depths, transit_errors,
+            eclipse_depths, eclipse_errors, ret_best_fit=True)
+        
+        retrieval_result = RetrievalResult(result, "dynesty",
+            transit_bins, transit_depths, transit_errors,
+            eclipse_bins, eclipse_depths, eclipse_errors,
+            best_fit_transit_depths, best_fit_eclipse_depths,
+            fit_info)
 
+        with open("retrieval_result.pkl", "wb") as f:
+            pickle.dump(retrieval_result, f)
+        
         if plot_best:
-            self._ln_prob(best_params_arr, transit_calc, eclipse_calc, fit_info,
+            self._ln_like(best_params_arr, transit_calc, eclipse_calc, fit_info,
                           transit_depths, transit_errors,
                           eclipse_depths, eclipse_errors, plot=True)
 
-            plt.figure(3)
-            dyplot.runplot(result)
-            plt.savefig("dyplot_runplot.png")
-            plt.figure(4)
-            dyplot.traceplot(result)
-            plt.savefig("dyplot_traceplot.png")
-        return result
+        return retrieval_result
 
     @staticmethod
     def get_default_fit_info(Rs, Mp, Rp, T=None, logZ=0, CO_ratio=0.53,

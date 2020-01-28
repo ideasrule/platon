@@ -58,6 +58,9 @@ def get_data(target_dir):
     with open(filename, "rb") as f:
         curr_md5sum = hashlib.md5(f.read()).hexdigest()
 
+    if curr_md5sum != __md5sum__:
+        raise RuntimeError("Downloaded data file is corrupt (wrong md5sum).  Please try again.")
+    
     with open(resource_filename(__name__, "md5sum"), "w") as f:
         f.write(curr_md5sum)
         

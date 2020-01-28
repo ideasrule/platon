@@ -17,7 +17,7 @@ from ._species_data_reader import read_species_data
 from . import _interpolator_3D
 from ._tau_calculator import get_line_of_sight_tau
 from .constants import k_B, AMU, M_sun, Teff_sun, G, h, c
-from ._get_data import get_data
+from ._get_data import get_data_if_needed
 from ._mie_cache import MieCache
 from .errors import AtmosphereError
 
@@ -41,13 +41,13 @@ class AtmosphereSolver:
         self.arguments = locals()
         del self.arguments["self"]
 
-        if not os.path.isdir(resource_filename(__name__, "data/")):
-            get_data(resource_filename(__name__, "./"))
+        get_data_if_needed()
         
         self.absorption_data, self.mass_data, self.polarizability_data = read_species_data(
             resource_filename(__name__, "data/Absorption"),
             resource_filename(__name__, "data/species_info"),
             method)
+        #self.absorption_data["H2O"] *= 0
 
         self.low_res_lambdas = load_numpy("data/low_res_lambdas.npy")
         self.collisional_absorption_data = load_dict_from_pickle(

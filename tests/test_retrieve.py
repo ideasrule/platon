@@ -10,6 +10,7 @@ from platon.retriever import Retriever
 from platon.fit_info import FitInfo
 from platon.constants import R_sun, R_jup, M_jup
 from platon.errors import AtmosphereError
+from platon.retrieval_result import RetrievalResult
 
 class TestRetriever(unittest.TestCase):
     def initialize(self, use_guesses=False):
@@ -57,13 +58,13 @@ class TestRetriever(unittest.TestCase):
         
         retriever = Retriever()
         result = retriever.run_emcee(self.wavelength_bins, self.depths, self.errors, self.fit_info, nsteps=nsteps, nwalkers=nwalkers, include_condensation=False)
-        self.assertTrue(isinstance(result, emcee.ensemble.EnsembleSampler))
+        self.assertTrue(isinstance(result, RetrievalResult))
         self.assertTrue(result.chain.shape, (nwalkers, nsteps, len(self.fit_info.fit_param_names)))
         self.assertTrue(result.lnprobability.shape, (nwalkers, nsteps))
         
         retriever = Retriever()
         result = retriever.run_emcee(self.wavelength_bins, self.depths, self.errors, self.fit_info, nsteps=nsteps, nwalkers=nwalkers, include_condensation=True, plot_best=True)
-        self.assertTrue(isinstance(result, emcee.ensemble.EnsembleSampler))
+        self.assertTrue(isinstance(result, RetrievalResult))
         self.assertEqual(result.chain.shape, (nwalkers, nsteps, len(self.fit_info.fit_param_names)))
         self.assertEqual(result.lnprobability.shape, (nwalkers, nsteps))
                 
@@ -73,12 +74,12 @@ class TestRetriever(unittest.TestCase):
         retriever = Retriever()
         result = retriever.run_multinest(self.wavelength_bins, self.depths, self.errors, self.fit_info, maxcall=200, include_condensation=False, plot_best=True)
         
-        self.assertTrue(isinstance(result, dynesty.utils.Results))
+        self.assertTrue(isinstance(result, RetrievalResult))
         self.assertEqual(result.samples.shape[1], len(self.fit_info.fit_param_names))
 
         retriever = Retriever()
         retriever.run_multinest(self.wavelength_bins, self.depths, self.errors, self.fit_info, maxiter=20, include_condensation=True)
-        self.assertTrue(isinstance(result, dynesty.utils.Results))
+        self.assertTrue(isinstance(result, RetrievalResult))
         self.assertEqual(result.samples.shape[1], len(self.fit_info.fit_param_names))
 
 

@@ -19,8 +19,7 @@ radius of 1 micron and standard deviation of 0.5.  They have a density of
 :math:`10^9/m^3` at the cloud-top pressure of :math:`10^5` Pa, declining with
 altitude with a scale height of 0.5 times the gas scale height.
 
-To retrieve Mie scattering parameters, make sure to set log_scatt_factor to
--np.inf, log_number_density to a finite value, and ri to the complex refractive
+To retrieve Mie scattering parameters, make sure to set log_scatt_factor to 0, log_number_density to a finite value, and ri to the complex refractive
 index of the scattering particles (which cannot be a free parameter)::
 
   fit_info = retriever.get_default_fit_info(Rs, Mp, Rp, T,

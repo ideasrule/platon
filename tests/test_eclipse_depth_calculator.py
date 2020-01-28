@@ -23,6 +23,20 @@ class TestEclipseDepthCalculator(unittest.TestCase):
         blackbody = np.pi * 2*h*c**2/wavelengths**5/(np.exp(h*c/wavelengths/k_B/Tp) - 1)
 
         rel_diffs = (info_dict["planet_spectrum"] - blackbody)/blackbody
+
+        plt.loglog(1e6 * wavelengths, 1e-3 * blackbody, label="Blackbody")
+        plt.loglog(1e6 * wavelengths, 1e-3 * info_dict["planet_spectrum"], label="PLATON")
+        plt.xlabel("Wavelength (micron)", fontsize=12)
+        plt.ylabel("Planet flux (erg/s/cm$^2$/micron)", fontsize=12)
+        plt.legend()
+        plt.tight_layout()
+        plt.figure()
+        plt.semilogx(1e6 * wavelengths, 100 * rel_diffs)
+        plt.xlabel("Wavelength (micron)", fontsize=12)
+        plt.ylabel("Relative difference (%)", fontsize=12)
+        plt.tight_layout()
+        plt.show()
+        
         # Should be exact, but in practice isn't, due to our discretization
         self.assertLess(np.percentile(np.abs(rel_diffs), 50), 0.02)
         self.assertLess(np.percentile(np.abs(rel_diffs), 99), 0.05)

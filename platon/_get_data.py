@@ -1,17 +1,29 @@
 from urllib.request import urlopen
 
 from pkg_resources import resource_filename
-from platon import __data_url__
+from platon import __data_url__, __md5sum__
 
 import sys
 import zipfile
 import os
 import shutil
+import hashlib
 
+def get_data_if_needed():
+    if not os.path.isdir(resource_filename(__name__, "data/")):
+        get_data(resource_filename(__name__, "./"))
+        
+    with open(resource_filename(__name__, "md5sum")) as f:
+        curr_md5sum = f.read().strip()
+
+    if __md5sum__ != curr_md5sum:
+        print("Warning: data files are out of date.  To update, remove the PLATON data directory ({}) and PLATON will automatically download the latest data files on the next run.".format(resource_filename(__name__, "data/")))
+        
 
 def get_data(target_dir):
     MB_TO_BYTES = 2**20
     filename = "data.zip"
+    print("Data URL", __data_url__)
     u = urlopen(__data_url__)
     f = open(filename, 'wb')
 
@@ -43,4 +55,10 @@ def get_data(target_dir):
     zip_ref.close()
 
     print("Extraction finished!")
+    with open(filename, "rb") as f:
+        curr_md5sum = hashlib.md5(f.read()).hexdigest()
+
+    with open(resource_filename(__name__, "md5sum"), "w") as f:
+        f.write(curr_md5sum)
+        
     os.remove(filename)

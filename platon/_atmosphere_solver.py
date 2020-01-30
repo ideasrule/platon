@@ -21,7 +21,6 @@ from ._get_data import get_data_if_needed
 from ._mie_cache import MieCache
 from .errors import AtmosphereError
 
-
 class AtmosphereSolver:
     def __init__(self, include_condensation=True, num_profile_heights=250,
                  ref_pressure=1e5, method='xsec'):
@@ -134,57 +133,68 @@ class AtmosphereSolver:
 
         for Teff in self.stellar_spectra:
             self.stellar_spectra[Teff] = self.stellar_spectra[Teff][cond]
-
-    def _get_k(self, T, wavelength):
-        wavelength *= 1e6
+  
+    def _get_k(self, T, wavelengths):
+        wavelengths = 1e6 * np.copy(wavelengths)
         alpha = 14391
         lambda_0 = 1.6419
-        if wavelength < lambda_0:
-            C = [152.519, 49.534, -118.858, 92.536, -34.194, 4.982]
-            f_lambda = np.sum([C[i-1] * (1/wavelength - 1/lambda_0)**((i-1)/2) for i in range(1,7)])
-            sigma = 1e-18 * wavelength**3 * (1 / wavelength - 1 / lambda_0)**1.5 * f_lambda
-            k_bf = 0.75 * T**-2.5 * np.exp(alpha/lambda_0 / T) * (1 - np.exp(-alpha / wavelength / T)) * sigma
-        else:
-            k_bf = 0.
 
-        if wavelength > 0.3645:
-            ff_matrix = np.array([
-                [0, 0, 0, 0, 0, 0],
-                [2483.346, 285.827, -2054.291, 2827.776, -1341.537, 208.952],
-                [-3449.889, -1158.382, 8746.523, -11485.632, 5303.609, -812.939],
-                [2200.04, 2427.719, -13651.105, 16755.524, -7510.494, 1132.738],
-                [-696.271, -1841.4, 8624.97, -10051.53, 4400.067, -655.02],
-                [88.283, 444.517, -1863.864, 2095.288, -901.788, 132.985]])
-        elif wavelength > 0.1823 and wavelength < 0.3645:
-            ff_matrix = np.array([
-                [518.1021, -734.8666, 1021.1775, -479.0721, 93.1373, -6.4285],
-                [473.2636, 1443.4137, -1977.3395, 922.3575, -178.9275, 12.36],
-                [-482.2089, -737.1616, 1096.8827, -521.1341, 101.7963, -7.0571],
-                [115.5291, 169.6374, -245.649, 114.243, -21.9972, 1.5097],
-                [0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0]])
-        else:
-            assert(False)
+        #Calculate bound-free absorption coefficient
+        k_bf = np.zeros(len(wavelengths))
+        cond = wavelengths < lambda_0
+        C = [152.519, 49.534, -118.858, 92.536, -34.194, 4.982]
+        f_lambda = np.sum([C[i-1] * (1/wavelengths[cond] - 1/lambda_0)**((i-1)/2) for i in range(1,7)], axis=0)
+        sigma = 1e-18 * wavelengths[cond]**3 * (1 / wavelengths[cond] - 1 / lambda_0)**1.5 * f_lambda
+        k_bf[cond] = 0.75 * T**-2.5 * np.exp(alpha/lambda_0 / T) * (1 - np.exp(-alpha / wavelengths[cond] / T)) * sigma
 
-        k_ff = 0
+        #Now calculate free-free absorption coefficient
+        k_ff = np.zeros(len(wavelengths))
+        mid = np.logical_and(wavelengths > 0.1823, wavelengths < 0.3645)
+        red = wavelengths > 0.3645
+                    
+        ff_matrix_red = np.array([
+            [0, 0, 0, 0, 0, 0],
+            [2483.346, 285.827, -2054.291, 2827.776, -1341.537, 208.952],
+            [-3449.889, -1158.382, 8746.523, -11485.632, 5303.609, -812.939],
+            [2200.04, 2427.719, -13651.105, 16755.524, -7510.494, 1132.738],
+            [-696.271, -1841.4, 8624.97, -10051.53, 4400.067, -655.02],
+            [88.283, 444.517, -1863.864, 2095.288, -901.788, 132.985]])
+        ff_matrix_mid = np.array([
+            [518.1021, -734.8666, 1021.1775, -479.0721, 93.1373, -6.4285],
+            [473.2636, 1443.4137, -1977.3395, 922.3575, -178.9275, 12.36],
+            [-482.2089, -737.1616, 1096.8827, -521.1341, 101.7963, -7.0571],
+            [115.5291, 169.6374, -245.649, 114.243, -21.9972, 1.5097],
+            [0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0]])
+
         for n in range(1, 7):
-            k_ff += 1e-29 * (5040/T)**((n+1)/2) * np.sum(ff_matrix[n-1] * np.array([wavelength**2, 1, wavelength**-1, wavelength**-2, wavelength**-3, wavelength**-4]))            
-        k = k_bf + k_ff
+            A_mid = np.array([wavelengths[mid]**i for i in (2, 0, -1, -2, -3, -4)]).T
+            #print(A_mid.shape)
+            A_red = np.array([wavelengths[red]**i for i in (2, 0, -1, -2, -3, -4)]).T
+            
+            k_ff[mid] += 1e-29 * (5040/T)**((n+1)/2) * A_mid.dot(ff_matrix_mid[n-1]) #np.sum(ff_matrix_mid[n-1] * np.array([wavelength**2, 1, wavelength**-1, wavelength**-2, wavelength**-3, wavelength**-4]))
+            k_ff[red] += 1e-29 * (5040/T)**((n+1)/2) * A_red.dot(ff_matrix_red[n-1])
 
+        k = k_bf + k_ff
+        
         #1e-4 to convert from cm^4/dyne to m^4/N
-        return k * 1e-4
+        return k * 1e-4    
     
     def _get_H_minus_absorption(self, abundances, P_cond, T_cond):
         absorption_coeff = np.zeros(
             (np.sum(T_cond), np.sum(P_cond), self.N_lambda))
         
-        for l in range(absorption_coeff.shape[2]):
-            k = self._get_k(self.T_grid[T_cond], self.lambda_grid[l])
-            absorption_coeff[:, :, l] = k * abundances["el"][T_cond] * abundances["H"][T_cond] * self.P_grid[P_cond]**2 / (k_B * self.T_grid[T_cond])
-            
-            
+        valid_Ts = self.T_grid[T_cond]
+        trunc_el_abundances = abundances["el"][T_cond][:, P_cond]
+        trunc_H_abundances = abundances["H"][T_cond][:, P_cond]
+        
+        for t in range(len(valid_Ts)):
+            k = self._get_k(valid_Ts[t], self.lambda_grid)          
+            absorption_coeff[t] = k * (trunc_el_abundances[t] * trunc_H_abundances[t] * self.P_grid[P_cond]**2)[:, np.newaxis] / (k_B * valid_Ts[t])
+                  
         return absorption_coeff
-            
+
+    
     def _get_gas_absorption(self, abundances, P_cond, T_cond):
         absorption_coeff = np.zeros(
             (np.sum(T_cond), np.sum(P_cond), self.N_lambda))

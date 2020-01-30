@@ -135,7 +135,56 @@ class AtmosphereSolver:
         for Teff in self.stellar_spectra:
             self.stellar_spectra[Teff] = self.stellar_spectra[Teff][cond]
 
+    def _get_k(self, T, wavelength):
+        wavelength *= 1e6
+        alpha = 14391
+        lambda_0 = 1.6419
+        if wavelength < lambda_0:
+            C = [152.519, 49.534, -118.858, 92.536, -34.194, 4.982]
+            f_lambda = np.sum([C[i-1] * (1/wavelength - 1/lambda_0)**((i-1)/2) for i in range(1,7)])
+            sigma = 1e-18 * wavelength**3 * (1 / wavelength - 1 / lambda_0)**1.5 * f_lambda
+            k_bf = 0.75 * T**-2.5 * np.exp(alpha/lambda_0 / T) * (1 - np.exp(-alpha / wavelength / T)) * sigma
+        else:
+            k_bf = 0.
 
+        if wavelength > 0.3645:
+            ff_matrix = np.array([
+                [0, 0, 0, 0, 0, 0],
+                [2483.346, 285.827, -2054.291, 2827.776, -1341.537, 208.952],
+                [-3449.889, -1158.382, 8746.523, -11485.632, 5303.609, -812.939],
+                [2200.04, 2427.719, -13651.105, 16755.524, -7510.494, 1132.738],
+                [-696.271, -1841.4, 8624.97, -10051.53, 4400.067, -655.02],
+                [88.283, 444.517, -1863.864, 2095.288, -901.788, 132.985]])
+        elif wavelength > 0.1823 and wavelength < 0.3645:
+            ff_matrix = np.array([
+                [518.1021, -734.8666, 1021.1775, -479.0721, 93.1373, -6.4285],
+                [473.2636, 1443.4137, -1977.3395, 922.3575, -178.9275, 12.36],
+                [-482.2089, -737.1616, 1096.8827, -521.1341, 101.7963, -7.0571],
+                [115.5291, 169.6374, -245.649, 114.243, -21.9972, 1.5097],
+                [0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0]])
+        else:
+            assert(False)
+
+        k_ff = 0
+        for n in range(1, 7):
+            k_ff += 1e-29 * (5040/T)**((n+1)/2) * np.sum(ff_matrix[n-1] * np.array([wavelength**2, 1, wavelength**-1, wavelength**-2, wavelength**-3, wavelength**-4]))            
+        k = k_bf + k_ff
+
+        #1e-4 to convert from cm^4/dyne to m^4/N
+        return k * 1e-4
+    
+    def _get_H_minus_absorption(self, abundances, P_cond, T_cond):
+        absorption_coeff = np.zeros(
+            (np.sum(T_cond), np.sum(P_cond), self.N_lambda))
+        
+        for l in range(absorption_coeff.shape[2]):
+            k = self._get_k(self.T_grid[T_cond], self.lambda_grid[l])
+            absorption_coeff[:, :, l] = k * abundances["el"][T_cond] * abundances["H"][T_cond] * self.P_grid[P_cond]**2 / (k_B * self.T_grid[T_cond])
+            
+            
+        return absorption_coeff
+            
     def _get_gas_absorption(self, abundances, P_cond, T_cond):
         absorption_coeff = np.zeros(
             (np.sum(T_cond), np.sum(P_cond), self.N_lambda))
@@ -329,6 +378,7 @@ class AtmosphereSolver:
                        P_profile, T_profile,
                        logZ=0, CO_ratio=0.53,
                        add_gas_absorption=True,
+                       add_H_minus_absorption=False,
                        add_scattering=True, scattering_factor=1,
                        scattering_slope=4, scattering_ref_wavelength=1e-6,
                        add_collisional_absorption=True,
@@ -365,6 +415,8 @@ class AtmosphereSolver:
         absorption_coeff = np.zeros((np.sum(T_cond), np.sum(P_cond), len(self.lambda_grid)))
         if add_gas_absorption:
             absorption_coeff += self._get_gas_absorption(abundances, P_cond, T_cond)
+        if add_H_minus_absorption:
+            absorption_coeff += self._get_H_minus_absorption(abundances, P_cond, T_cond)
         if add_scattering:
             if ri is not None:
                 if scattering_factor != 1 or scattering_slope != 4:

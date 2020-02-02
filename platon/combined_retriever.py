@@ -269,6 +269,8 @@ class CombinedRetriever:
         include_condensation : bool, optional
             When determining atmospheric abundances, whether to include
             condensation.
+        rad_method : string, optional
+            "xsec" for opacity sampling, "ktables" for correlated k
         plot_best : bool, optional
             If True, plots the best fit model with the data
 
@@ -378,6 +380,8 @@ class CombinedRetriever:
         include_condensation : bool, optional
             When determining atmospheric abundances, whether to include
             condensation.
+        rad_method : string, optional
+            "xsec" for opacity sampling, "ktables" for correlated k
         plot_best : bool, optional
             If True, plots the best fit model with the data
         nlive : int
@@ -476,46 +480,37 @@ class CombinedRetriever:
                              profile_type = 'isothermal', **profile_kwargs):
         '''Get a :class:`.FitInfo` object filled with best guess values.  A few
         parameters are required, but others can be set to default values if you
-        do not want to specify them.  All parameters are in SI.
+        do not want to specify them.  All parameters are in SI.  For 
+        information on the parameters not described below, see the documentation
+        for :func:`~platon.transit_depth_calculator.TransitDepthCalculator.compute_depths` and :func:`~platon.eclipse_depth_calculator.EclipseDepthCalculator.compute_depths`
 
         Parameters
         ----------
-        Rs : float
-            Stellar radius
-        Mp : float
-            Planetary mass
-        Rp : float
-            Planetary radius
-        T : float
-            Temperature of the isothermal planetary atmosphere
-        logZ : float
-            Base-10 logarithm of the metallicity, in solar units
-        CO_ratio : float, optional
-            C/O atomic ratio in the atmosphere.  The solar value is 0.53.
-        log_cloudtop_P : float, optional
-            Base-10 log of the pressure level (in Pa) below which light cannot
-            penetrate.  Use np.inf for a cloudless atmosphere.
-        log_scatt_factor : float, optional
-            Base-10 logarithm of scattering factoring, which make scattering
-            that many times as strong. If `scatt_slope` is 4, corresponding to
-            Rayleigh scattering, the absorption coefficients are simply
-            multiplied by `scattering_factor`. If slope is not 4,
-            `scattering_factor` is defined such that the absorption coefficient
-            is that many times as strong as Rayleigh scattering at
-            the reference wavelength of 1 um.
-        scatt_slope : float, optional
-            Wavelength dependence of scattering, with 4 being Rayleigh.
-        error_multiple : float, optional
-            All error bars are multiplied by this factor.
-        T_star : float, optional
-            Effective temperature of the star.  This is used to make wavelength
-            binning of transit depths more accurate.
-        T_spot : float, optional
-            Effective temperature of the star spots. This is used to make
-            wavelength dependent correction to the observed transit depths.
-        spot_cov_frac : float, optional
-            The spot covering fraction of the star by area. This is used to make
-            wavelength dependent correction to the transit depths.
+        n : float
+            Real component of the refractive index of haze particles. Set to
+            None to disable Mie scattering
+        log_k : float
+            log10 of the imaginary component of the refractive index of haze
+            particles.  Set to -np.inf for k=0
+        wfc3_offset_transit : float
+            Offset of WFC3 transit data, which PLATON identifies by wavelength
+            (everything between 1 and 1.7 um is assumed to be WFC3).  A
+            positive offset means the observed transit depths are decreased
+            before comparing to the model.
+        wfc3_offset_eclipse : float
+            Same as above, but for eclipse depths.
+        profile_type : string
+            "isothermal", "parametric" (Madhusudhan & Seager 2009) or 
+            "radiative_solution" (Line et al 2013) T/P profile 
+            parameterizations.  This profile applies to the dayside only,
+            and hence is only relevant for eclipse depths.
+        profile_kwargs : kwargs
+            T/P profile arguments.  For "isothermal": T_day.  For "parametric":
+            T0, P1, alpha1, alpha2, P3, T3.  For "radiative_solution":
+            T_star, Rs, a, Mp, Rp, beta, log_k_th, log_gamma, log_gamma2,
+            alpha, and T_int (optional).  We recommend that T_star, Rs, a, and 
+            Mp be fixed, and that T_int be omitted (which sets it to 100 K).
+            
 
         Returns
         -------

@@ -25,6 +25,21 @@ from ._atmosphere_solver import AtmosphereSolver
 class TransitDepthCalculator:
     def __init__(self, include_condensation=True, num_profile_heights=250,
                  ref_pressure=1e5, method='xsec'):
+        '''
+        All physical parameters are in SI.
+
+        Parameters
+        ----------
+        include_condensation : bool
+            Whether to use equilibrium abundances that take condensation into
+            account.
+        num_profile_heights : int
+            The number of zones the atmosphere is divided into
+        ref_pressure : float
+            The planetary radius is defined as the radius at this pressure
+        method : string
+            "xsec" for opacity sampling, "ktables" for correlated k
+        '''
         self.atm = AtmosphereSolver(include_condensation, num_profile_heights,
                                ref_pressure, method)               
 
@@ -51,7 +66,7 @@ class TransitDepthCalculator:
         
 
     def _get_binned_corrected_depths(self, depths, T_star, T_spot,
-                                     spot_cov_frac, blackbody=True, n_gauss=10):
+                                     spot_cov_frac, blackbody=False, n_gauss=10):
         unbinned_lambdas = self.atm.lambda_grid
         stellar_spectrum, correction_factors = self.atm.get_stellar_spectrum(
             unbinned_lambdas, T_star, T_spot, spot_cov_frac, blackbody)
@@ -143,6 +158,8 @@ class TransitDepthCalculator:
             C/O atomic ratio in the atmosphere.  The solar value is 0.53.
         add_gas_absorption: float, optional
             Whether gas absorption is accounted for
+        add_H_minus_absorption: float, optional
+            Whether H- bound-free and free-free absorption is added in
         add_scattering : bool, optional
             whether Rayleigh scattering is taken into account
         scattering_factor : float, optional
@@ -207,8 +224,13 @@ class TransitDepthCalculator:
         part_size_std : float, optional
             The geometric standard deviation of particle radii. We recommend
             leaving this at the default value of 0.5.
+        P_quench : float, optional
+            Quench pressure in Pa.
+        stellar_blackbody : bool, optional
+            Whether to use a PHOENIX model for the stellar spectrum, or a blackbody
         full_output : bool, optional
             If True, returns info_dict as a third return value.
+
 
         Raises
         ------

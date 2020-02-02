@@ -23,20 +23,7 @@ from .errors import AtmosphereError
 
 class AtmosphereSolver:
     def __init__(self, include_condensation=True, num_profile_heights=250,
-                 ref_pressure=1e5, method='xsec'):
-        '''
-        All physical parameters are in SI.
-
-        Parameters
-        ----------
-        include_condensation : bool
-            Whether to use equilibrium abundances that take condensation into
-            account.
-        num_profile_heights : int
-            The number of zones the atmosphere is divided into
-        ref_pressure : float
-            The planetary radius is defined as the radius at this pressure
-        '''
+                 ref_pressure=1e5, method='xsec'):        
         self.arguments = locals()
         del self.arguments["self"]
 

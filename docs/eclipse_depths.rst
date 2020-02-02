@@ -16,7 +16,7 @@ This creates a parametric T-P profile according to `Madhusudhan & Seager 2009 <h
 Then, call the eclipse depth calculator::
 
   from eclipse_depth_calculator import EclipseDepthCalculator
-
+  calc = EclipseDepthCalculator(method="xsec") #"ktables" for correlated k
   wavelengths, depths = calc.compute_depths(p, Rs, Mp, Rp, Tstar)
   
 Most of the same parameters accepted by the transit depth calculator are also
@@ -35,7 +35,8 @@ It is also possible to retrieve on combined transit and eclipse depths::
 
   result = retriever.run_multinest(transit_bins, transit_depths, transit_errors,
                                    eclipse_bins, eclipse_depths, eclipse_errors,
-				   fit_info)
+				   fit_info,
+				   rad_method="xsec") #"ktables" for corr-k
 
 Here, T_limb is the temperature at the planetary limb (used for transit depths),
 while the T-P profile parameters are for the dayside (used for eclipse depths).

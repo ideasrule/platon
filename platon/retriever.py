@@ -16,6 +16,7 @@ from .combined_retriever import CombinedRetriever
 
 class Retriever:
     def __init__(self):
+        raise RuntimeError("To avoid confusion, use CombinedRetriever instead")
         self.combined_retriever = CombinedRetriever()
         
     def run_emcee(self, wavelength_bins, depths, errors, fit_info, nwalkers=50,
@@ -131,5 +132,6 @@ class Retriever:
             This object is used to indicate which parameters to fit for, which
             to fix, and what values all parameters should take.'''
 
+        raise RuntimeError("To avoid confusion, use CombinedRetriever instead")
         fit_info = FitInfo(locals().copy())
         return fit_info

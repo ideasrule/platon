@@ -6,7 +6,7 @@ import scipy.interpolate
 import corner
 
 from platon.fit_info import FitInfo
-from platon.retriever import Retriever
+from platon.combined_retriever import CombinedRetriever
 from platon.constants import R_sun, R_jup, M_jup
 
 def hd209458b_stis():
@@ -70,7 +70,7 @@ R_guess = 1.4 * R_jup
 T_guess = 1200
 
 #create a Retriever object
-retriever = Retriever()
+retriever = CombinedRetriever()
 
 #create a FitInfo object and set best guess parameters
 fit_info = retriever.get_default_fit_info(
@@ -95,7 +95,9 @@ fit_info.add_uniform_fit_param("log_cloudtop_P", -0.99, 5)
 fit_info.add_uniform_fit_param("error_multiple", 0, np.inf, 0.5, 5)
 
 #Use Nested Sampling to do the fitting
-result = retriever.run_emcee(bins, depths, errors, fit_info, plot_best=True)
+result = retriever.run_emcee(bins, depths, errors,
+                             None, None, None,
+                             fit_info, plot_best=True)
 
 np.save("chain.npy", result.chain)
 np.save("logp.npy", result.lnprobability)
@@ -104,4 +106,3 @@ fig = corner.corner(result.flatchain,
                     range=[0.99] * result.flatchain.shape[1],
                     labels=fit_info.fit_param_names)
 fig.savefig("emcee_corner.png")
-

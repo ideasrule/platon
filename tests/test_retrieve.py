@@ -84,6 +84,14 @@ class TestRetriever(unittest.TestCase):
         self.assertTrue(isinstance(result, RetrievalResult))
         self.assertEqual(result.samples.shape[1], len(self.fit_info.fit_param_names))
 
+        #Make sure retrieval with correlated k works
+        retriever.run_multinest(self.wavelength_bins, self.depths, self.errors,
+                                None, None, None, self.fit_info, maxiter=20,
+                                include_condensation=True,
+                                rad_method="ktables")
+        self.assertTrue(isinstance(result, RetrievalResult))
+        self.assertEqual(result.samples.shape[1], len(self.fit_info.fit_param_names))
+
 
     def test_bounds_check(self):
         self.initialize(False)

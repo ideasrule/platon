@@ -47,8 +47,8 @@ def read_ggchem_file(filename, species_info_file):
         #print total/grand_total
 
     N_P = 13
-    N_T = data.shape[0]/N_P
-
+    N_T = int(data.shape[0]/N_P)
+    
     write_species_file("included_species", [h for h in header if h in species_to_include])
     
     for i, h in enumerate(header):
@@ -62,8 +62,14 @@ def read_ggchem_file(filename, species_info_file):
 
             fake_cols = np.ones((N_P, 2)) * np.nan
             abund_dict[h] = np.append(fake_cols, abund_dict[h], axis=1)
-        elif N_T == 29: #T in 10K increments, with 300K min
+        elif N_T == 29: #T in 10K increments, with 200K min
             fake_cols = np.ones((N_P, 1)) * np.nan
+            abund_dict[h] = np.append(fake_cols, abund_dict[h], axis=1)
+        elif N_T == 28: #T in 10 K increments, with 300K min
+            fake_cols = np.ones((N_P, 2)) * np.nan
+            abund_dict[h] = np.append(fake_cols, abund_dict[h], axis=1)
+        elif N_T == 21:
+            fake_cols = np.ones((N_P, 9)) * np.nan
             abund_dict[h] = np.append(fake_cols, abund_dict[h], axis=1)
         elif N_T != 30:
             assert(False)

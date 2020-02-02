@@ -96,7 +96,8 @@ fit_info.add_uniform_fit_param("error_multiple", 0.5, 5)
 #Use Nested Sampling to do the fitting
 result = retriever.run_multinest(bins, depths, errors,
                                  None, None, None,
-                                 fit_info, plot_best=True)
+                                 fit_info, plot_best=True,
+                                 rad_method="xsec") #"ktables" to use corr-k
 
 pickle.dump("my_dynesty_run.pkl", open("result", "wb"))
 np.save("samples.npy", result.samples)

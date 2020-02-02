@@ -11,7 +11,7 @@ from platon.TP_profile import Profile
 p = Profile()
 p.set_parametric(1200, 500, 0.5, 0.6, 1e6, 1900)
 #p.set_isothermal(1500)
-calc = EclipseDepthCalculator()
+calc = EclipseDepthCalculator(method="xsec") #"ktables" for correlated k
 #calc.change_wavelength_bins(bins)
 
 wavelengths, depths, info_dict = calc.compute_depths(p, R_sun, M_jup, R_jup, 5700, full_output=True)

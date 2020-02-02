@@ -12,7 +12,7 @@ from platon.constants import R_sun, R_jup, M_jup
 def hd209458b_stis():
     #http://iopscience.iop.org/article/10.1086/510111/pdf
     star_radius = 1.125 * R_sun
-    wave_bins = [[300.1,347], [348,402], [403,457], [458,512], [512,567], [532,629], [629,726], [727,824], [825,922], [922,1019]]
+    wave_bins = [[302,347], [348,402], [403,457], [458,512], [512,567], [532,629], [629,726], [727,824], [825,922], [922,1019]]
     wave_bins = 1e-9 * np.array(wave_bins)
 
     planet_radii = [1.3263, 1.3254, 1.32, 1.3179, 1.3177, 1.3246, 1.3176, 1.3158, 1.32, 1.3268]
@@ -97,7 +97,9 @@ fit_info.add_uniform_fit_param("error_multiple", 0, np.inf, 0.5, 5)
 #Use Nested Sampling to do the fitting
 result = retriever.run_emcee(bins, depths, errors,
                              None, None, None,
-                             fit_info, plot_best=True)
+                             fit_info, plot_best=True,
+                             rad_method="xsec" #"ktables" for corr-k
+)
 
 np.save("chain.npy", result.chain)
 np.save("logp.npy", result.lnprobability)

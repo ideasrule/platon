@@ -21,6 +21,9 @@ class _Param:
     def get_random_value(self):
         return np.random.uniform(self.low_guess, self.high_guess)
 
+    def __repr__(self):
+        return "Guess, low, high: {}, {}, {}".format(
+            self.best_guess, self.low_guess, self.high_guess)
 
 class _UniformParam(_Param):
     def __init__(self, best_guess, low_lim, high_lim, low_guess, high_guess):
@@ -42,6 +45,9 @@ class _UniformParam(_Param):
             raise ValueError("Limit cannot be infinity")
         return self.low_lim + (self.high_lim - self.low_lim) * u
 
+    def __repr__(self):
+        return "Guess, low, high: {}, {}, {}".format(
+            self.best_guess, self.low_guess, self.high_guess)
 
 class _GaussianParam(_Param):
     def __init__(self, best_guess, std, low_guess, high_guess):
@@ -57,3 +63,6 @@ class _GaussianParam(_Param):
 
     def within_limits(self, value):
         return True
+
+    def __repr__(self):
+        return "Guess, STD: {}, {}".format(self.best_guess, self.std)

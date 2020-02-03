@@ -8,12 +8,10 @@ from pkg_resources import resource_filename
 from .constants import h, c, k_B, AMU, G
 
 class Profile:
-    def __init__(self, num_profile_heights=250):
-        pressures = np.load(
-            resource_filename(__name__, "data/pressures.npy"))
+    def __init__(self, num_profile_heights=250, min_P=1e-4, max_P=1e8):
         self.pressures = np.logspace(
-                np.log10(pressures[0]),
-                np.log10(pressures[-1]),
+                np.log10(min_P),
+                np.log10(max_P),
                 num_profile_heights)
         
     def set_from_params_dict(self, profile_type, params_dict):

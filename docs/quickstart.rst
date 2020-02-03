@@ -21,7 +21,7 @@ To compute transit depths, look at transit_depth_example.py, then go to
 
   # The initializer loads all data files.  Create a TransitDepthCalculator
   # object and hold on to it
-  calculator = TransitDepthCalculator()
+  calculator = TransitDepthCalculator(method="xsec") #"ktables" for correlated k
 
   # compute_depths is fast once data files are loaded
   wavelengths, depths, info_dict = calculator.compute_depths(Rs, Mp, Rp, T, logZ=0, CO_ratio=0.53, full_output=True)
@@ -44,13 +44,12 @@ ExoTransmit format::
                             custom_abundances=filename)
 
 To retrieve atmospheric parameters, look at retrieve_example.py, then go to
-:class:`.Retriever` for more info.  In short::
+:class:`.CombinedRetriever` for more info.  In short::
 
   from platon.fit_info import FitInfo
-  from platon.retriever import Retriever
+  from platon.combined_retriever import CombinedRetriever
 
-  # Set your best guess.  T_star is used only to improve binning of transit
-  # depths.
+  retriever = CombinedRetriever()
   fit_info = retriever.get_default_fit_info(Rs, Mp, Rp, T, logZ=0, T_star=6100)
 
   # Decide what you want to fit for, and add those parameters to fit_info
@@ -69,7 +68,11 @@ To retrieve atmospheric parameters, look at retrieve_example.py, then go to
   fit_info.add_uniform_fit_param("error_multiple", 0.5, 5)
   
   # Run nested sampling
-  result = retriever.run_multinest(bins, depths, errors, fit_info, plot_best=True)
+  result = retriever.run_multinest(
+	 bins, depths, errors, #transit bins, depths, errors
+         None, None, None, #eclipse bins, depths, errors
+	 fit_info, plot_best=True,
+	 rad_method="xsec") #Change this to "ktables" for correlated k
 
 Here, `bins` is a N x 2 array representing the start and end wavelengths of the
 bins, in metres; `depths` is a list of N transit depths; and `errors` is a list

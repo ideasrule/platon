@@ -6,9 +6,11 @@ import matplotlib
 matplotlib.use("Agg")
 import dynesty
 
-from platon.retriever import Retriever
+from platon.combined_retriever import CombinedRetriever
 from platon.fit_info import FitInfo
 from platon.constants import R_sun, R_jup, M_jup
+from platon.errors import AtmosphereError
+from platon.retrieval_result import RetrievalResult
 
 class TestRetriever(unittest.TestCase):
     def initialize(self, use_guesses=False):
@@ -17,9 +19,9 @@ class TestRetriever(unittest.TestCase):
         wavelength_bins = np.array([min_wavelength, max_wavelength]).T
         self.wavelength_bins = wavelength_bins
 
-        self.retriever = Retriever()
+        self.retriever = CombinedRetriever()
 
-        self.fit_info = Retriever.get_default_fit_info(
+        self.fit_info = CombinedRetriever.get_default_fit_info(
             Rs = 1.19 * R_sun, Mp = 0.73 * M_jup, Rp = 1.4 * R_jup, T = 1200,
             logZ = 1, CO_ratio = 0.53,
             log_cloudtop_P = 3,
@@ -54,54 +56,68 @@ class TestRetriever(unittest.TestCase):
         nwalkers = 20
         nsteps = 20
         
-        retriever = Retriever()
-        result = retriever.run_emcee(self.wavelength_bins, self.depths, self.errors, self.fit_info, nsteps=nsteps, nwalkers=nwalkers, include_condensation=False)
-        self.assertTrue(isinstance(result, emcee.ensemble.EnsembleSampler))
+        retriever = CombinedRetriever()
+        result = retriever.run_emcee(self.wavelength_bins, self.depths, self.errors, None, None, None, self.fit_info, nsteps=nsteps, nwalkers=nwalkers, include_condensation=False, num_final_samples=20)
+        self.assertTrue(isinstance(result, RetrievalResult))
         self.assertTrue(result.chain.shape, (nwalkers, nsteps, len(self.fit_info.fit_param_names)))
         self.assertTrue(result.lnprobability.shape, (nwalkers, nsteps))
         
-        retriever = Retriever()
-        result = retriever.run_emcee(self.wavelength_bins, self.depths, self.errors, self.fit_info, nsteps=nsteps, nwalkers=nwalkers, include_condensation=True, plot_best=True)
-        self.assertTrue(isinstance(result, emcee.ensemble.EnsembleSampler))
+        retriever = CombinedRetriever()
+        result = retriever.run_emcee(self.wavelength_bins, self.depths, self.errors, None, None, None, self.fit_info, nsteps=nsteps, nwalkers=nwalkers, include_condensation=True, num_final_samples=20)
+        result.plot_spectrum("test")
+        self.assertTrue(isinstance(result, RetrievalResult))
         self.assertEqual(result.chain.shape, (nwalkers, nsteps, len(self.fit_info.fit_param_names)))
         self.assertEqual(result.lnprobability.shape, (nwalkers, nsteps))
                 
 
     def test_multinest(self):
         self.initialize(False)
-        retriever = Retriever()
-        result = retriever.run_multinest(self.wavelength_bins, self.depths, self.errors, self.fit_info, maxcall=200, include_condensation=False, plot_best=True)
+        retriever = CombinedRetriever()
+        result = retriever.run_multinest(self.wavelength_bins, self.depths, self.errors, None, None, None, self.fit_info, maxcall=200, include_condensation=False, num_final_samples=20)
+        result.plot_spectrum("test_plot")
         
-        self.assertTrue(isinstance(result, dynesty.utils.Results))
+        self.assertTrue(isinstance(result, RetrievalResult))
         self.assertEqual(result.samples.shape[1], len(self.fit_info.fit_param_names))
 
-        retriever = Retriever()
-        retriever.run_multinest(self.wavelength_bins, self.depths, self.errors, self.fit_info, maxiter=20, include_condensation=True)
-        self.assertTrue(isinstance(result, dynesty.utils.Results))
+        retriever = CombinedRetriever()
+        retriever.run_multinest(self.wavelength_bins, self.depths, self.errors,
+                                None, None, None, self.fit_info, maxiter=20,
+                                include_condensation=True, num_final_samples=20)
+        self.assertTrue(isinstance(result, RetrievalResult))
+        self.assertEqual(result.samples.shape[1], len(self.fit_info.fit_param_names))
+
+        #Make sure retrieval with correlated k works
+        retriever.run_multinest(self.wavelength_bins, self.depths, self.errors,
+                                None, None, None, self.fit_info, maxiter=20,
+                                include_condensation=True,
+                                rad_method="ktables", num_final_samples=20)
+        self.assertTrue(isinstance(result, RetrievalResult))
         self.assertEqual(result.samples.shape[1], len(self.fit_info.fit_param_names))
 
 
     def test_bounds_check(self):
         self.initialize(False)
-        retriever = Retriever()
+        retriever = CombinedRetriever()
 
-        def run_both(name, low_lim, best_guess, high_lim):
+        def run_both(name, low_lim, best_guess, high_lim, expected_error=ValueError):
             fit_info = copy.deepcopy(self.fit_info)
             fit_info.all_params[name].low_lim = low_lim
             fit_info.all_params[name].best_guess = best_guess
             fit_info.all_params[name].high_lim = high_lim
-            with self.assertRaises(ValueError):
+            with self.assertRaises(expected_error):
                 retriever.run_multinest(self.wavelength_bins, self.depths,
-                                        self.errors, fit_info, maxiter=10)
+                                        self.errors, None, None, None,
+                                        fit_info, maxiter=10, num_final_samples=10)
                 retriever.run_emcee(self.wavelength_bins, self.depths,
-                                    self.errors, fit_info, nsteps=10)
+                                    self.errors, None, None, None,
+                                    fit_info, nsteps=10, num_final_samples=10)
 
         # All of these are invalid inputs
-        run_both("T", 199, 1000, 2999)
-        run_both("T", 3000, 1000, 300)
+        run_both("T", 199, 1000, 2999, AtmosphereError)
+        run_both("T", 3000, 1000, 300, ValueError)
         
-        run_both("T", 201, 1000, 3001)        
-        run_both("T", 201, 1000, 999)
+        run_both("T", 201, 1000, 3001, AtmosphereError)        
+        run_both("T", 201, 1000, 999, ValueError)
 
         run_both("logZ", -1.1, 0, 3)
         run_both("logZ", -1, 2, 3.1)        

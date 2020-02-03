@@ -3,7 +3,7 @@ import sys
 from read_one import read_ggchem_file
 
 def load(dir, species_info_file):    
-    metallicities = np.arange(-1, 3+0.1, 0.1)
+    metallicities = np.arange(-1, 3.0+0.1, 0.1)
     COs = np.array([0.05, 0.1, 0.2, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 1.0, 1.05, 1.1, 1.2, 1.4, 1.6, 1.8, 2.0])
     all_data = []
     
@@ -18,7 +18,7 @@ def load(dir, species_info_file):
             else:
                 co_string = "{:.1f}".format(co)
             filename = "{}/result_{:.1f}_{}/Static_Conc_2D.dat".format(dir, m, co_string)
-            print filename, m
+            print(filename, m)
 
             abund_dict, abund_arr = read_ggchem_file(filename, species_info_file)
             data_for_Z.append(abund_arr)
@@ -28,7 +28,7 @@ def load(dir, species_info_file):
     all_data = np.array(all_data)
 
     #Want shape to be: (N_P, N_T, N_species, N_CO, N_metallicites)
-    all_data = all_data.transpose([3, 4, 2, 1, 0])
+    all_data = all_data.transpose([0, 1, 2, 4, 3])
     np.save("all_data.npy", all_data)
 
 

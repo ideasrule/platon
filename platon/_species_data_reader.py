@@ -2,10 +2,14 @@ import numpy as np
 import os
 
 
-def read_species_data(
-        absorption_dir,
-        species_info_file,
-        absorption_file_prefix="absorb_coeffs_"):
+def read_species_data(absorption_dir, species_info_file, method):
+    if method == "xsec":
+        absorption_file_prefix = "absorb_coeffs_"
+    elif method == "ktables":
+        absorption_file_prefix = "k_coeffs_"
+    else:
+        assert(False)
+        
     absorption_data = dict()
     mass_data = dict()
     polarizability_data = dict()

@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 import os
 
 import numpy as np
@@ -7,15 +5,16 @@ import matplotlib.pyplot as plt
 import scipy.interpolate
 import emcee
 import corner
+import pickle
 
 from platon.fit_info import FitInfo
-from platon.retriever import Retriever
+from platon.combined_retriever import CombinedRetriever
 from platon.constants import R_sun, R_jup, M_jup
 
 def hd209458b_stis():
     #http://iopscience.iop.org/article/10.1086/510111/pdf
     star_radius = 1.125 * R_sun
-    wave_bins = [[300.1,347], [348,402], [403,457], [458,512], [512,567], [532,629], [629,726], [727,824], [825,922], [922,1019]]
+    wave_bins = [[302,347], [348,402], [403,457], [458,512], [512,567], [532,629], [629,726], [727,824], [825,922], [922,1019]]
     wave_bins = 1e-9 * np.array(wave_bins)
 
     planet_radii = [1.3263, 1.3254, 1.32, 1.3179, 1.3177, 1.3246, 1.3176, 1.3158, 1.32, 1.3268]
@@ -73,7 +72,7 @@ R_guess = 1.4 * R_jup
 T_guess = 1200
 
 #create a Retriever object
-retriever = Retriever()
+retriever = CombinedRetriever()
 
 #create a FitInfo object and set best guess parameters
 fit_info = retriever.get_default_fit_info(
@@ -95,16 +94,16 @@ fit_info.add_uniform_fit_param("log_cloudtop_P", -0.99, 5)
 fit_info.add_uniform_fit_param("error_multiple", 0.5, 5)
 
 #Use Nested Sampling to do the fitting
-result = retriever.run_multinest(bins, depths, errors, fit_info, plot_best=True)
-plt.savefig("best_fit.png")
+result = retriever.run_multinest(bins, depths, errors,
+                                 None, None, None,
+                                 fit_info,
+                                 rad_method="xsec") #"ktables" to use corr-k
 
+pickle.dump("my_dynesty_run.pkl", open("result", "wb"))
 np.save("samples.npy", result.samples)
 np.save("weights.npy", np.exp(result.logwt))
 np.save("ln_likelihood.npy", result.logl)
 np.save("ln_probability.npy", result.logp)
 
-fig = corner.corner(result.samples, weights=np.exp(result.logwt),
-                    range=[0.99] * result.samples.shape[1],
-                    labels=fit_info.fit_param_names)
-fig.savefig("multinest_corner.png")
-
+result.plot_spectrum("best_fit")
+result.plot_corner("multinest_corner.png")

@@ -1,4 +1,3 @@
-from __future__ import division
 import numpy as np
 from sys import stdout
 import os, glob

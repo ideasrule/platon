@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 import os
 import sys
 
@@ -9,10 +7,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy import integrate
 import scipy.interpolate
+import scipy.ndimage
 from scipy.stats import lognorm
 
 from . import _hydrostatic_solver
-from ._compatible_loader import load_dict_from_pickle
 from .abundance_getter import AbundanceGetter
 from ._species_data_reader import read_species_data
 from . import _interpolator_3D
@@ -21,11 +19,12 @@ from .constants import k_B, AMU, M_sun, Teff_sun, G, h, c
 from ._get_data import get_data
 from ._mie_cache import MieCache
 from .errors import AtmosphereError
+from ._atmosphere_solver import AtmosphereSolver
 
 
 class TransitDepthCalculator:
     def __init__(self, include_condensation=True, num_profile_heights=250,
-                 ref_pressure=1e5):
+                 ref_pressure=1e5, method='xsec'):
         '''
         All physical parameters are in SI.
 
@@ -38,49 +37,11 @@ class TransitDepthCalculator:
             The number of zones the atmosphere is divided into
         ref_pressure : float
             The planetary radius is defined as the radius at this pressure
+        method : string
+            "xsec" for opacity sampling, "ktables" for correlated k
         '''
-        self.arguments = locals()
-        if not os.path.isdir(resource_filename(__name__, "data/")):
-            get_data(resource_filename(__name__, "./"))
-
-        self.stellar_spectra = load_dict_from_pickle(
-            resource_filename(__name__, "data/stellar_spectra.pkl"))
-        self.absorption_data, self.mass_data, self.polarizability_data = read_species_data(
-            resource_filename(__name__, "data/Absorption"),
-            resource_filename(__name__, "data/species_info"))
-
-        self.collisional_absorption_data = load_dict_from_pickle(
-            resource_filename(__name__, "data/collisional_absorption.pkl"))
-        
-        self.lambda_grid = np.load(
-            resource_filename(__name__, "data/wavelengths.npy"))
-        self.d_ln_lambda = np.median(np.diff(np.log(self.lambda_grid)))
-        
-        self.P_grid = np.load(
-            resource_filename(__name__, "data/pressures.npy"))
-        self.T_grid = np.load(
-            resource_filename(__name__, "data/temperatures.npy"))
-
-        self.N_lambda = len(self.lambda_grid)
-        self.N_T = len(self.T_grid)
-        self.N_P = len(self.P_grid)
-
-        P_meshgrid, T_meshgrid, lambda_meshgrid = np.meshgrid(
-            self.P_grid, self.T_grid, self.lambda_grid)
-        self.P_meshgrid = P_meshgrid
-        self.T_meshgrid = T_meshgrid
-
-        self.wavelength_rebinned = False
-        self.wavelength_bins = None
-
-        self.abundance_getter = AbundanceGetter(include_condensation)
-        self.min_temperature = max(np.min(self.T_grid), self.abundance_getter.min_temperature)
-        self.max_temperature = np.max(self.T_grid)
-
-        self.num_profile_heights = num_profile_heights
-        self.ref_pressure = ref_pressure
-        self._mie_cache = MieCache()
-
+        self.atm = AtmosphereSolver(include_condensation, num_profile_heights,
+                               ref_pressure, method)               
 
     def change_wavelength_bins(self, bins):
         """Specify wavelength bins, instead of using the full wavelength grid
@@ -101,247 +62,74 @@ class TransitDepthCalculator:
             Raised when `change_wavelength_bins` is called more than once,
             which is not supported.
         """
-        if self.wavelength_rebinned:
-            self.__init__(self.arguments)
-            self.wavelength_rebinned = False        
-            
-        if bins is None:
-            return
-
-        for start, end in bins:
-            if start < np.min(self.lambda_grid) \
-               or start > np.max(self.lambda_grid) \
-               or end < np.min(self.lambda_grid) \
-               or end > np.max(self.lambda_grid):
-                raise ValueError("Invalid wavelength bin: {}-{} meters".format(start, end))
+        self.atm.change_wavelength_bins(bins)
         
-        self.wavelength_rebinned = True
-        self.wavelength_bins = bins
-
-        cond = np.any([
-            np.logical_and(self.lambda_grid > start, self.lambda_grid < end) \
-            for (start, end) in bins], axis=0)
-
-        for key in self.absorption_data:
-            self.absorption_data[key] = self.absorption_data[key][:, :, cond]
-
-        for key in self.collisional_absorption_data:
-            self.collisional_absorption_data[key] = self.collisional_absorption_data[key][:, cond]
-
-        self.lambda_grid = self.lambda_grid[cond]
-        self.N_lambda = len(self.lambda_grid)
-
-        P_meshgrid, T_meshgrid, lambda_meshgrid = np.meshgrid(
-            self.P_grid, self.T_grid, self.lambda_grid)
-        self.P_meshgrid = P_meshgrid
-        self.T_meshgrid = T_meshgrid
-        
-        for Teff in self.stellar_spectra:
-            self.stellar_spectra[Teff] = self.stellar_spectra[Teff][cond]
-
-    def _get_gas_absorption(self, abundances, P_cond, T_cond):
-        absorption_coeff = np.zeros(
-            (np.sum(T_cond), np.sum(P_cond), self.N_lambda))
-        
-        for species_name, species_abundance in abundances.items():
-            assert(species_abundance.shape == (self.N_T, self.N_P))
-            
-            if species_name in self.absorption_data:
-                absorption_coeff += self.absorption_data[species_name][T_cond][:,P_cond] * species_abundance[T_cond][:,P_cond,np.newaxis]
-
-        return absorption_coeff
-
-    def _get_scattering_absorption(self, abundances, P_cond, T_cond,
-                                   multiple=1, slope=4, ref_wavelength=1e-6):
-        sum_polarizability_sqr = np.zeros((np.sum(T_cond), np.sum(P_cond)))
-
-        for species_name in abundances:
-            if species_name in self.polarizability_data:
-                sum_polarizability_sqr += abundances[species_name][T_cond,:][:,P_cond] * self.polarizability_data[species_name]**2
-
-        n = self.P_meshgrid[T_cond][:, P_cond] / \
-            (k_B * self.T_meshgrid[T_cond][:, P_cond])
-        reshaped_lambda = self.lambda_grid.reshape((1, 1, self.N_lambda))
-
-        return multiple * (128.0 / 3 * np.pi**5) * n * sum_polarizability_sqr[:,:,np.newaxis] * ref_wavelength**(slope - 4) / reshaped_lambda**slope
-
-    def _get_collisional_absorption(self, abundances, P_cond, T_cond):
-        absorption_coeff = np.zeros(
-            (np.sum(T_cond), np.sum(P_cond), self.N_lambda))
-        n = self.P_grid[np.newaxis, P_cond] / (k_B * self.T_grid[T_cond, np.newaxis])
-
-        for s1, s2 in self.collisional_absorption_data:
-            if s1 in abundances and s2 in abundances:
-                n1 = (abundances[s1][T_cond, :][:, P_cond] * n)
-                n2 = (abundances[s2][T_cond, :][:, P_cond] * n)
-                abs_data = self.collisional_absorption_data[(s1, s2)].reshape(
-                    (self.N_T, 1, self.N_lambda))[T_cond]
-                absorption_coeff += abs_data * (n1 * n2)[:, :, np.newaxis]
-
-        return absorption_coeff
-
-    def _get_mie_scattering_absorption(self, P_cond, T_cond, ri, part_size,
-                                       frac_scale_height, max_number_density,
-                                       sigma = 0.5, max_zscore = 5, num_integral_points = 100):
-        
-        eff_cross_section = np.zeros(self.N_lambda)
-        z_scores = -np.logspace(np.log10(0.1), np.log10(max_zscore), num_integral_points/2)
-        z_scores = np.append(z_scores[::-1], -z_scores)
-
-        probs = np.exp(-z_scores**2/2) / np.sqrt(2 * np.pi)
-        radii = part_size * np.exp(z_scores * sigma)
-        geometric_cross_section = np.pi * radii**2
-
-        dense_xs = 2*np.pi*radii[np.newaxis,:] / self.lambda_grid[:,np.newaxis]
-        dense_xs = dense_xs.flatten()
-
-        x_hist = np.histogram(dense_xs, bins='auto')[1]
-        Qext_hist = self._mie_cache.get_and_update(ri, x_hist) 
-
-        spl = scipy.interpolate.splrep(x_hist, Qext_hist)
-        Qext_intpl = scipy.interpolate.splev(dense_xs, spl)
-        Qext_intpl = np.reshape(Qext_intpl, (self.N_lambda, len(radii)))
-
-        eff_cross_section = np.trapz(probs*geometric_cross_section*Qext_intpl, z_scores)
-        eff_cross_section = np.reshape(eff_cross_section, (1, 1, self.N_lambda))
-
-        n = max_number_density * np.power(self.P_meshgrid[T_cond][:, P_cond] / max(self.P_grid[P_cond]), 1.0/frac_scale_height)
-        absorption_coeff = n * eff_cross_section
-        
-        return absorption_coeff
-
-    def _get_above_cloud_profiles(self, P_profile, T_profile, abundances,
-                                  planet_mass, planet_radius, star_radius,
-                                  above_cloud_cond, T_star=None):
-        
-        assert(len(P_profile) == len(T_profile))
-        # First, get atmospheric weight profile
-        mu_profile = np.zeros(len(P_profile))
-        atm_abundances = {}
-        
-        for species_name in abundances:
-            interpolator = RectBivariateSpline(
-                self.T_grid, np.log10(self.P_grid),
-                np.log10(abundances[species_name]), kx=1, ky=1)
-            abund = 10**interpolator.ev(T_profile, np.log10(P_profile))
-            atm_abundances[species_name] = abund
-            mu_profile += abund * self.mass_data[species_name]
-
-        radii, dr = _hydrostatic_solver._solve(
-            P_profile, T_profile, self.ref_pressure, mu_profile, planet_mass,
-            planet_radius, star_radius, above_cloud_cond, T_star)
-        
-        for key in atm_abundances:
-            atm_abundances[key] = atm_abundances[key][above_cloud_cond]
-            
-        return radii, dr, atm_abundances, mu_profile
-
-    def _get_abundances_array(self, logZ, CO_ratio, custom_abundances):
-        if custom_abundances is None:
-            return self.abundance_getter.get(logZ, CO_ratio)
-
-        if logZ is not None or CO_ratio is not None:
-            raise ValueError(
-                "Must set logZ=None and CO_ratio=None to use custom_abundances")
-
-        if isinstance(custom_abundances, str):
-            # Interpret as filename
-            return AbundanceGetter.from_file(custom_abundances)
-
-        if isinstance(custom_abundances, dict):
-            for key, value in custom_abundances.items():
-                if not isinstance(value, np.ndarray):
-                    raise ValueError(
-                        "custom_abundances must map species names to arrays")
-                if value.shape != (self.N_T, self.N_P):
-                    raise ValueError(
-                        "custom_abundances has array of invalid size")
-            return custom_abundances
-
-        raise ValueError("Unrecognized format for custom_abundances")
 
     def _get_binned_corrected_depths(self, depths, T_star, T_spot,
-                                    spot_cov_frac):
-        if spot_cov_frac is None:
-            spot_cov_frac = 0
-
-        if T_spot is None:
-            T_spot = T_star
-
-        temperatures = list(self.stellar_spectra.keys())
-        if T_star is None:
-            unspotted_spectrum = np.ones(len(self.lambda_grid))
-            spot_spectrum = np.ones(len(self.lambda_grid))
-        elif T_star >= np.min(temperatures) and T_star <= np.max(temperatures):
-            interpolator = scipy.interpolate.interp1d(
-                temperatures, list(self.stellar_spectra.values()),
-                axis=0)
-            unspotted_spectrum = interpolator(T_star)
-            spot_spectrum = interpolator(T_spot)
-        else:
-            d_lambda = self.d_ln_lambda * self.lambda_grid
-            unspotted_spectrum = 2 * c * np.pi / self.lambda_grid**4 / \
-                (np.exp(h * c / self.lambda_grid / k_B / T_star) - 1) * d_lambda
-            spot_spectrum = 2 * c * np.pi / self.lambda_grid**4 / \
-                (np.exp(h * c / self.lambda_grid / k_B / T_spot) - 1) * d_lambda
-
-        stellar_spectrum = spot_cov_frac * spot_spectrum + \
-                           (1 - spot_cov_frac) * unspotted_spectrum
-        correction_factors = unspotted_spectrum/stellar_spectrum
-
-        if self.wavelength_bins is None:
-            return self.lambda_grid, depths * correction_factors, stellar_spectrum
+                                     spot_cov_frac, blackbody=False, n_gauss=10):
+        unbinned_lambdas = self.atm.lambda_grid
+        stellar_spectrum, correction_factors = self.atm.get_stellar_spectrum(
+            unbinned_lambdas, T_star, T_spot, spot_cov_frac, blackbody)
         
+        #Step 1: do a first binning if using k-coeffs; first binning is a
+        #no-op otherwise
+        if self.atm.method == "ktables":
+            #Do a first binning based on ktables
+            points, weights = scipy.special.roots_legendre(n_gauss)
+            percentiles = 100 * (points + 1) / 2
+            weights /= 2
+            assert(len(depths) % n_gauss == 0)
+            num_binned = int(len(depths) / n_gauss)
+            intermediate_lambdas = np.zeros(num_binned)
+            intermediate_depths = np.zeros(num_binned)
+
+            for chunk in range(num_binned):
+                start = chunk * n_gauss
+                end = (chunk + 1 ) * n_gauss
+                intermediate_depths[chunk] = np.sum(depths[start : end] * weights)
+
+            intermediate_lambdas = unbinned_lambdas[::n_gauss]
+            intermediate_stellar_spectrum = stellar_spectrum[::n_gauss]
+            intermediate_correction_factors = correction_factors[::n_gauss]
+            
+        elif self.atm.method == "xsec":
+            intermediate_lambdas = unbinned_lambdas
+            intermediate_depths = depths
+            intermediate_stellar_spectrum = stellar_spectrum
+            intermediate_correction_factors = correction_factors
+        else:
+            assert(False)                  
+                
+        if self.atm.wavelength_bins is None:
+            return intermediate_lambdas,\
+                intermediate_depths * intermediate_correction_factors,\
+                intermediate_stellar_spectrum,\
+                intermediate_stellar_spectrum, intermediate_correction_factors
+                        
         binned_wavelengths = []
         binned_depths = []
-        for (start, end) in self.wavelength_bins:
+        binned_stellar_spectrum = []
+        
+        for (start, end) in self.atm.wavelength_bins:
             cond = np.logical_and(
-                self.lambda_grid >= start,
-                self.lambda_grid < end)
-            binned_wavelengths.append(np.mean(self.lambda_grid[cond]))
-            binned_depth = np.average(depths[cond] * correction_factors[cond], weights=stellar_spectrum[cond])
+                intermediate_lambdas >= start,
+                intermediate_lambdas < end)
+            binned_wavelengths.append(np.mean(intermediate_lambdas[cond]))
+            binned_depth = np.average(intermediate_depths[cond] * intermediate_correction_factors[cond],
+                                      weights=intermediate_stellar_spectrum[cond])
             binned_depths.append(binned_depth)
+            binned_stellar_spectrum.append(np.median(intermediate_stellar_spectrum[cond]))
 
-        return np.array(binned_wavelengths), np.array(binned_depths), stellar_spectrum
+        return np.array(binned_wavelengths), np.array(binned_depths), np.array(binned_stellar_spectrum), intermediate_stellar_spectrum, intermediate_correction_factors
 
-    def _validate_params(self, temperature, custom_T_profile, logZ, CO_ratio, cloudtop_pressure):
-        if temperature is not None:
-            if temperature < self.min_temperature or temperature > self.max_temperature:
-                raise ValueError(
-                    "Temperature {} K is out of bounds ({} to {} K)".format(
-                        temperature, self.min_temperature, self.max_temperature))
-
-        if custom_T_profile is not None:
-            if np.min(custom_T_profile) < self.min_temperature or\
-               np.max(custom_T_profile) > self.max_temperature:
-                raise AtmosphereError("Invalid temperatures in T/P profile")
-            
-        if logZ is not None:
-            minimum = np.min(self.abundance_getter.logZs)
-            maximum = np.max(self.abundance_getter.logZs)
-            if logZ < minimum or logZ > maximum:
-                raise ValueError(
-                    "logZ {} is out of bounds ({} to {})".format(
-                        logZ, minimum, maximum))
-
-        if CO_ratio is not None:
-            minimum = np.min(self.abundance_getter.CO_ratios)
-            maximum = np.max(self.abundance_getter.CO_ratios)
-            if CO_ratio < minimum or CO_ratio > maximum:
-                raise ValueError(
-                    "C/O ratio {} is out of bounds ({} to {})".format(CO_ratio, minimum, maximum))
-
-        if not np.isinf(cloudtop_pressure):
-            minimum = np.min(self.P_grid)
-            maximum = np.max(self.P_grid)
-            if cloudtop_pressure <= minimum or cloudtop_pressure > maximum:
-                raise ValueError(
-                    "Cloudtop pressure is {} Pa, but must be between {} and {} Pa unless it is np.inf".format(
-                        cloudtop_pressure, minimum, maximum))
-
+    def _validate_params(self, T, logZ, CO_ratio, cloudtop_pressure):
+        T_profile = np.ones(self.atm.num_profile_heights) * T
+        self.atm._validate_params(T, logZ, CO_ratio, cloudtop_pressure)
+        
+    
     def compute_depths(self, star_radius, planet_mass, planet_radius,
                        temperature, logZ=0, CO_ratio=0.53,
-                       add_gas_absorption=True,
+                       add_gas_absorption=True, add_H_minus_absorption=False,
                        add_scattering=True, scattering_factor=1,
                        scattering_slope=4, scattering_ref_wavelength=1e-6,
                        add_collisional_absorption=True,
@@ -349,8 +137,8 @@ class TransitDepthCalculator:
                        custom_T_profile=None, custom_P_profile=None,
                        T_star=None, T_spot=None, spot_cov_frac=None,
                        ri=None, frac_scale_height=1, number_density=0,
-                       part_size=1e-6, part_size_std=0.5,
-                       full_output=False, min_abundance=1e-99):
+                       part_size=1e-6, part_size_std=0.5, P_quench=1e-99,
+                       full_output=False, min_abundance=1e-99, min_cross_sec=1e-99, stellar_blackbody=False):
         '''
         Computes transit depths at a range of wavelengths, assuming an
         isothermal atmosphere.  To choose bins, call change_wavelength_bins().
@@ -371,6 +159,8 @@ class TransitDepthCalculator:
             C/O atomic ratio in the atmosphere.  The solar value is 0.53.
         add_gas_absorption: float, optional
             Whether gas absorption is accounted for
+        add_H_minus_absorption: float, optional
+            Whether H- bound-free and free-free absorption is added in
         add_scattering : bool, optional
             whether Rayleigh scattering is taken into account
         scattering_factor : float, optional
@@ -435,8 +225,13 @@ class TransitDepthCalculator:
         part_size_std : float, optional
             The geometric standard deviation of particle radii. We recommend
             leaving this at the default value of 0.5.
+        P_quench : float, optional
+            Quench pressure in Pa.
+        stellar_blackbody : bool, optional
+            Whether to use a PHOENIX model for the stellar spectrum, or a blackbody
         full_output : bool, optional
             If True, returns info_dict as a third return value.
+
 
         Raises
         ------
@@ -455,7 +250,6 @@ class TransitDepthCalculator:
             stellar_spectrum, radii, P_profile, T_profile, mu_profile,
             atm_abundances, unbinned_depths, unbinned_wavelengths
        '''
-        self._validate_params(temperature, custom_T_profile, logZ, CO_ratio, cloudtop_pressure)
         if custom_P_profile is not None:
             if custom_T_profile is None or len(
                     custom_P_profile) != len(custom_T_profile):
@@ -470,78 +264,37 @@ class TransitDepthCalculator:
             T_profile = custom_T_profile
         else:
             P_profile = np.logspace(
-                np.log10(self.P_grid[0]),
-                np.log10(self.P_grid[-1]),
-                self.num_profile_heights)
+                np.log10(self.atm.P_grid[0]),
+                np.log10(self.atm.P_grid[-1]),
+                self.atm.num_profile_heights)
             T_profile = np.ones(len(P_profile)) * temperature
 
-        abundances = self._get_abundances_array(
-            logZ, CO_ratio, custom_abundances)
-        
-        for name in abundances:
-            low_abundances = abundances[name] < min_abundance
-            abundances[name][low_abundances] = min_abundance
-            
-        above_clouds = P_profile < cloudtop_pressure
+        atm_info = self.atm.compute_params(
+            star_radius, planet_mass, planet_radius, P_profile, T_profile,
+            logZ, CO_ratio, add_gas_absorption, add_H_minus_absorption,
+            add_scattering,
+            scattering_factor, scattering_slope, scattering_ref_wavelength,
+            add_collisional_absorption, cloudtop_pressure, custom_abundances,
+            T_star, T_spot, spot_cov_frac, ri, frac_scale_height,
+            number_density, part_size, part_size_std, P_quench)
 
-        radii, dr, atm_abundances, mu_profile = self._get_above_cloud_profiles(
-            P_profile, T_profile, abundances, planet_mass, planet_radius,
-            star_radius, above_clouds, T_star)
-
-        P_profile = P_profile[above_clouds]
-        T_profile = T_profile[above_clouds]
-
-        T_cond = _interpolator_3D.get_condition_array(T_profile, self.T_grid)
-        P_cond = _interpolator_3D.get_condition_array(
-            P_profile, self.P_grid, cloudtop_pressure)
-        absorption_coeff = np.zeros((np.sum(T_cond), np.sum(P_cond), len(self.lambda_grid)))
-        if add_gas_absorption:
-            absorption_coeff += self._get_gas_absorption(abundances, P_cond, T_cond)
-        if add_scattering:
-            if ri is not None:
-                if scattering_factor != 1 or scattering_slope != 4:
-                    raise ValueError("Cannot use both parametric and Mie scattering at the same time")
-                
-                absorption_coeff += self._get_mie_scattering_absorption(
-                    P_cond, T_cond, ri, part_size,
-                    frac_scale_height, number_density, sigma=part_size_std)
-                absorption_coeff += self._get_scattering_absorption(abundances,
-                P_cond, T_cond)
-                
-            else:
-                absorption_coeff += self._get_scattering_absorption(abundances,
-                P_cond, T_cond, scattering_factor, scattering_slope,
-                scattering_ref_wavelength)
-
-        if add_collisional_absorption:
-            absorption_coeff += self._get_collisional_absorption(
-                abundances, P_cond, T_cond)
-
-        if len(self.T_grid[T_cond]) == 1:
-            absorption_coeff_atm = scipy.interpolate.interpn((self.P_grid[P_cond],), absorption_coeff[0], P_profile)
-        else:
-            absorption_coeff_atm = scipy.interpolate.interpn((self.T_grid[T_cond], self.P_grid[P_cond]), absorption_coeff, np.array([T_profile, P_profile]).T)
-
-        tau_los = get_line_of_sight_tau(absorption_coeff_atm, radii)
+        radii = atm_info["radii"]
+        dr = atm_info["dr"]
+        tau_los = get_line_of_sight_tau(atm_info["absorption_coeff_atm"],
+                                        radii)
         absorption_fraction = 1 - np.exp(-tau_los)
 
         transit_depths = (np.min(radii) / star_radius)**2 \
             + 2 / star_radius**2 * absorption_fraction.dot(radii[1:] * dr)
-
-        binned_wavelengths, binned_depths, stellar_spectrum = self._get_binned_corrected_depths(transit_depths, T_star, T_spot, spot_cov_frac)
+        binned_wavelengths, binned_depths, binned_stellar_spectrum, unbinned_stellar_spectrum, unbinned_correction_factors = self._get_binned_corrected_depths(transit_depths, T_star, T_spot, spot_cov_frac, stellar_blackbody)
         
         if full_output:
-            output_dict = {"absorption_coeff_atm": absorption_coeff_atm,
-                           "tau_los": tau_los,
-                           "stellar_spectrum": stellar_spectrum,
-                           "radii": radii,
-                           "P_profile": P_profile,
-                           "T_profile": T_profile,
-                           "mu_profile": mu_profile,
-                           "atm_abundances": atm_abundances,
-                           "unbinned_depths": transit_depths,
-                           "unbinned_wavelengths": self.lambda_grid}
-            return binned_wavelengths, binned_depths, output_dict
+            atm_info["tau_los"] = tau_los
+            atm_info["binned_stellar_spectrum"] = binned_stellar_spectrum
+            atm_info["unbinned_depths"] = transit_depths
+            atm_info["unbinned_stellar_spectrum"] = unbinned_stellar_spectrum
+            atm_info["unbinned_correction_factors"] = unbinned_correction_factors
+            return binned_wavelengths, binned_depths, atm_info
 
         return binned_wavelengths, binned_depths
         

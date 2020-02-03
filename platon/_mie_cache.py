@@ -1,13 +1,8 @@
-from __future__ import print_function
-
 import numpy as np
-import scipy.interpolate
-
 from . import _mie_multi_x
 
 class MieCache:
     def __init__(self):
-        self.interpolator = None
         self.all_xs = np.array([])
         self.all_Qexts = np.array([])
         self.all_ms = np.array([], dtype=complex)
@@ -28,8 +23,13 @@ class MieCache:
         frac_errors = np.abs(self.all_xs[closest_matches] - xs)/xs
         in_cache[frac_errors > max_frac_error] = False
 
-        result[in_cache] = self.interpolator(xs[in_cache])
+        if np.sum(self.all_ms == m) == 0: return result
         
+        result[in_cache] = np.interp(
+            xs[in_cache],
+            self.all_xs[self.all_ms == m],
+            self.all_Qexts[self.all_ms == m])
+
         return result
         
     def get_and_update(self, m, xs):
@@ -64,8 +64,3 @@ class MieCache:
         self.all_Qexts = self.all_Qexts[p]
         self.all_ms = self.all_ms[p]
         
-        self.interpolator = scipy.interpolate.interp1d(
-            self.all_xs[self.all_ms == m],
-            self.all_Qexts[self.all_ms == m],
-            assume_sorted=True)
-

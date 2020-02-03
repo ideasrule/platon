@@ -5,6 +5,7 @@ import shutil
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.special
+from scipy.ndimage.filters import uniform_filter
 
 import platon
 from platon.abundance_getter import AbundanceGetter
@@ -105,7 +106,7 @@ class TestTransitDepthCalculator(unittest.TestCase):
         H = k_B * T / (2 * AMU * g)
         gamma = 0.57721
         polarizability = 0.8059e-30
-        sigma = 128. * np.pi**5/3 * polarizability**2 / depth_calculator.lambda_grid**4
+        sigma = 128. * np.pi**5/3 * polarizability**2 / depth_calculator.atm.lambda_grid**4
         kappa = sigma / (2 * AMU)
 
         P_surface = 1e8
@@ -119,6 +120,47 @@ class TestTransitDepthCalculator(unittest.TestCase):
         relative_diffs = np.abs(ratios - 1)
         self.assertTrue(np.all(relative_diffs < 0.001))
 
+    def test_k_coeffs_unbinned(self):
+        xsec_calc = TransitDepthCalculator(method="xsec")
+        ktab_calc = TransitDepthCalculator(method="ktables")
+                
+        xsec_wavelengths, xsec_depths = xsec_calc.compute_depths(R_sun, M_jup, R_jup, 1000)
+
+        #Smooth from R=1000 to R=100 to match ktables
+        N = 10
+        smoothed_xsec_wavelengths = uniform_filter(xsec_wavelengths, N)[::N]
+        smoothed_xsec_depths = uniform_filter(xsec_depths, N)[::N]
+        ktab_wavelengths, ktab_depths = ktab_calc.compute_depths(R_sun, M_jup, R_jup, 1000)
+        
+        diffs = np.abs(ktab_depths - smoothed_xsec_depths[:-1])
+        self.assertTrue(np.median(diffs) < 20e-6)
+        self.assertTrue(np.percentile(diffs, 95) < 50e-6)
+        self.assertTrue(np.max(diffs) < 150e-6)
+        
+
+    def test_k_coeffs_binned(self):
+        wavelengths = np.exp(np.arange(np.log(0.31e-6), np.log(29e-6), 1./20))
+        wavelength_bins = np.array([wavelengths[0:-1], wavelengths[1:]]).T
+        
+        xsec_calc = TransitDepthCalculator(method="xsec")
+        xsec_calc.change_wavelength_bins(wavelength_bins)
+        ktab_calc = TransitDepthCalculator(method="ktables")
+        ktab_calc.change_wavelength_bins(wavelength_bins)
+                
+        wavelengths, xsec_depths = xsec_calc.compute_depths(R_sun, M_jup, R_jup, 300, logZ=1, CO_ratio=1.5)
+        wavelengths, ktab_depths = ktab_calc.compute_depths(R_sun, M_jup, R_jup, 300, logZ=1, CO_ratio=1.5)
+        
+        diffs = np.abs(ktab_depths - xsec_depths)
+
+        '''plt.semilogx(wavelengths, xsec_depths)
+        plt.semilogx(wavelengths, ktab_depths)
+        plt.figure()
+        plt.semilogx(wavelengths, 1e6 * diffs)
+        plt.show()'''
+        
+        self.assertTrue(np.median(diffs) < 10e-6)
+        self.assertTrue(np.percentile(diffs, 95) < 20e-6)
+        self.assertTrue(np.max(diffs) < 30e-6)
         
     def test_bounds_checking(self):
         Rp = 7.14e7
@@ -129,9 +171,9 @@ class TestTransitDepthCalculator(unittest.TestCase):
         CO_ratio = 1.1
         calculator = TransitDepthCalculator()
         
-        with self.assertRaises(ValueError):
+        with self.assertRaises(AtmosphereError):
             calculator.compute_depths(Rs, Mp, Rp, 199, logZ=logZ, CO_ratio=CO_ratio)
-        with self.assertRaises(ValueError):
+        with self.assertRaises(AtmosphereError):
             calculator.compute_depths(Rs, Mp, Rp, 3001, logZ=logZ, CO_ratio=CO_ratio)
         with self.assertRaises(ValueError):
             calculator.compute_depths(Rs, Mp, Rp, T, logZ=-1.1, CO_ratio=CO_ratio)

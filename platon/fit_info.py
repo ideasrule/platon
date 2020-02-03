@@ -106,3 +106,7 @@ class FitInfo:
             result += self.all_params[name].ln_prior(array[i])
 
         return result
+
+    def __repr__(self):
+        return "Params to fit: {}; all params: {}".format(self.fit_param_names,
+                                                          self.all_params)

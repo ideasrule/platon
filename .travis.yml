@@ -3,15 +3,8 @@ matrix:
     include:
         - os: linux
           sudo: required
-          python: 2.7
-          env: TOXENV=py27 
-        - os: linux
-          sudo: required
           python: 3.6
           env: TOXENV=py36 
-        - os: osx
-          language: generic
-          env: TOXENV=py27 PATH=/usr/local/opt/python2/bin:$PATH
         - os: osx
           language: generic
           env: TOXENV=py36 PATH=/usr/local/opt/python/libexec/bin:$PATH
@@ -25,14 +18,8 @@ before_install:  |
     sleep 3 # give xvfb some time to start
     sudo apt-get install -y libopenblas-dev
   else
-    if [ $TOXENV = py27 ]
-    then
-       brew install python@2 || true
-    elif [ $TOXENV = py36 ]
-    then
-       brew uninstall --ignore-dependencies python
-       brew install python@3
-    fi
+    brew uninstall --ignore-dependencies python
+    brew install python@3
     
     sudo mkdir -p /usr/local/man
     sudo chown -R "$USER:admin" /usr/local/man

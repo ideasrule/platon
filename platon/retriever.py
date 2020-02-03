@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 import os
 
 import numpy as np
@@ -18,10 +16,11 @@ from .combined_retriever import CombinedRetriever
 
 class Retriever:
     def __init__(self):
+        raise RuntimeError("To avoid confusion, use CombinedRetriever instead")
         self.combined_retriever = CombinedRetriever()
         
     def run_emcee(self, wavelength_bins, depths, errors, fit_info, nwalkers=50,
-                  nsteps=1000, include_condensation=True,
+                  nsteps=1000, include_condensation=True, rad_method="xsec",
                   plot_best=False):
         '''Runs affine-invariant MCMC to retrieve atmospheric parameters.
 
@@ -63,11 +62,13 @@ class Retriever:
         '''
         return self.combined_retriever.run_emcee(
             wavelength_bins, depths, errors, None, None, None,
-            fit_info, nwalkers, nsteps, include_condensation, plot_best)
+            fit_info, nwalkers, nsteps, include_condensation, rad_method,
+            plot_best)
                                           
 
     def run_multinest(self, wavelength_bins, depths, errors, fit_info,
-                      include_condensation=True, plot_best=False,
+                      include_condensation=True, rad_method="xsec",
+                      plot_best=False,
                       maxiter=None, maxcall=None, nlive=100,
                       **dynesty_kwargs):
         '''Runs nested sampling to retrieve atmospheric parameters.
@@ -107,7 +108,8 @@ class Retriever:
         '''
         return self.combined_retriever.run_multinest(
             wavelength_bins, depths, errors, None, None, None, fit_info,
-            include_condensation, plot_best, maxiter, maxcall, **dynesty_kwargs)
+            include_condensation, rad_method, plot_best, maxiter, maxcall,
+            nlive=nlive, **dynesty_kwargs)
             
 
     @staticmethod
@@ -116,7 +118,8 @@ class Retriever:
                              scatt_slope=4, error_multiple=1, T_star=None,
                              T_spot=None, spot_cov_frac=None,frac_scale_height=1,
                              log_number_density=-np.inf, log_part_size =-6,
-                             part_size_std = 0.5, ri = None):
+                             n=None, log_k=-np.inf, log_P_quench=-99,
+                             part_size_std = 0.5, wfc3_offset_transit=0):
         '''Get a :class:`.FitInfo` object filled with best guess values.  A few
         parameters are required, but others can be set to default values if you
         do not want to specify them.  All parameters are in SI.
@@ -129,5 +132,6 @@ class Retriever:
             This object is used to indicate which parameters to fit for, which
             to fix, and what values all parameters should take.'''
 
+        raise RuntimeError("To avoid confusion, use CombinedRetriever instead")
         fit_info = FitInfo(locals().copy())
         return fit_info

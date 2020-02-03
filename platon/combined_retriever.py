@@ -95,7 +95,7 @@ class CombinedRetriever:
 
     def _ln_like(self, params, transit_calc, eclipse_calc, fit_info, measured_transit_depths,
                  measured_transit_errors, measured_eclipse_depths,
-                 measured_eclipse_errors, plot=False, wfc3_start=1e-6, wfc3_end=1.7e-6, ret_best_fit=False):
+                 measured_eclipse_errors, wfc3_start=1e-6, wfc3_end=1.7e-6, ret_best_fit=False):
 
         if not fit_info._within_limits(params):
             return -np.inf
@@ -131,14 +131,16 @@ class CombinedRetriever:
 
         ln_likelihood = 0
         calculated_transit_depths = None
+        transit_info_dict = None
         calculated_eclipse_depths = None
+        eclipse_info_dict = None
         
         try:
             if measured_transit_depths is not None:
                 if T is None:
                     raise ValueError("Must fit for T if using transit depths")
                 
-                transit_wavelengths, calculated_transit_depths, info_dict = transit_calc.compute_depths(
+                transit_wavelengths, calculated_transit_depths, transit_info_dict = transit_calc.compute_depths(
                     Rs, Mp, Rp, T, logZ, CO_ratio,
                     scattering_factor=scatt_factor, scattering_slope=scatt_slope,
                     cloudtop_pressure=cloudtop_P, T_star=T_star,
@@ -150,25 +152,6 @@ class CombinedRetriever:
                 scaled_errors = error_multiple * measured_transit_errors
                 ln_likelihood += -0.5 * np.sum(residuals**2 / scaled_errors**2 + np.log(2 * np.pi * scaled_errors**2))
                 
-                if plot:
-                    chi_sqr = np.sum(residuals**2 / measured_transit_errors**2)
-                    print("Transit chi_sqr:", chi_sqr)
-                    plt.figure(1)
-                    plt.plot(METRES_TO_UM * info_dict["unbinned_wavelengths"],
-                             info_dict["unbinned_depths"],
-                             alpha=0.2, color='b', label="Calculated (unbinned)")
-                    plt.errorbar(METRES_TO_UM * transit_wavelengths, measured_transit_depths,
-                                 yerr = measured_transit_errors, fmt='.', color='k', label="Observed")
-                    plt.scatter(METRES_TO_UM * transit_wavelengths,
-                                calculated_transit_depths,
-                                color='r', label="Calculated (binned)")
-                    plt.xlabel("Wavelength ($\mu m$)")
-                    plt.ylabel("Transit depth")
-                    plt.xscale('log')
-                    plt.tight_layout()
-                    plt.legend()
-                    plt.savefig("best_fit_transit.pdf")
-
             if measured_eclipse_depths is not None:
                 t_p_profile = Profile()
                 t_p_profile.set_from_params_dict(params_dict["profile_type"], params_dict)
@@ -176,7 +159,7 @@ class CombinedRetriever:
                 if np.any(np.isnan(t_p_profile.temperatures)):
                     raise AtmosphereError("Invalid T/P profile")
                 
-                eclipse_wavelengths, calculated_eclipse_depths, info_dict = eclipse_calc.compute_depths(
+                eclipse_wavelengths, calculated_eclipse_depths, eclipse_info_dict = eclipse_calc.compute_depths(
                     t_p_profile, Rs, Mp, Rp, T_star, logZ, CO_ratio,
                     scattering_factor=scatt_factor, scattering_slope=scatt_slope,
                     cloudtop_pressure=cloudtop_P,
@@ -186,28 +169,7 @@ class CombinedRetriever:
                 calculated_eclipse_depths[np.logical_and(eclipse_wavelengths >= wfc3_start, eclipse_wavelengths <= wfc3_end)] += params_dict["wfc3_offset_eclipse"] 
                 residuals = calculated_eclipse_depths - measured_eclipse_depths
                 scaled_errors = error_multiple * measured_eclipse_errors
-                ln_likelihood += -0.5 * np.sum(residuals**2 / scaled_errors**2 + np.log(2 * np.pi * scaled_errors**2))
-                
-                if plot:
-                    chi_sqr = np.sum(residuals**2 / measured_eclipse_errors**2)
-                    print("Eclipse chi_sqr:", chi_sqr)
-                    plt.figure(2)
-                    plt.plot(METRES_TO_UM * info_dict["unbinned_wavelengths"],
-                             info_dict["unbinned_eclipse_depths"],
-                             alpha=0.2, color='b', label="Calculated (unbinned)")
-                    plt.errorbar(METRES_TO_UM * eclipse_wavelengths,
-                                 measured_eclipse_depths,
-                                 yerr=measured_eclipse_errors, fmt='.', color='k', label="Observed")
-                    plt.scatter(METRES_TO_UM * eclipse_wavelengths,
-                                calculated_eclipse_depths,
-                                color='r', label="Calculated (binned)")
-                    plt.legend()
-                    plt.xlabel("Wavelength ($\mu m$)")
-                    plt.ylabel("Eclipse depth")
-                    plt.xscale('log')
-                    plt.tight_layout()
-                    plt.legend()
-                    plt.savefig("best_fit_eclipse.pdf")
+                ln_likelihood += -0.5 * np.sum(residuals**2 / scaled_errors**2 + np.log(2 * np.pi * scaled_errors**2))                                
                 
         except AtmosphereError as e:
             print(e)
@@ -217,17 +179,17 @@ class CombinedRetriever:
         self.last_lnprob = fit_info._ln_prior(params) + ln_likelihood
         
         if ret_best_fit:
-            return ln_likelihood, calculated_transit_depths, calculated_eclipse_depths
+            return calculated_transit_depths, transit_info_dict, calculated_eclipse_depths, eclipse_info_dict
         return ln_likelihood
 
 
     def _ln_prob(self, params, transit_calc, eclipse_calc, fit_info, measured_transit_depths,
                  measured_transit_errors, measured_eclipse_depths,
-                 measured_eclipse_errors, plot=False):
+                 measured_eclipse_errors):
         
         ln_like = self._ln_like(params, transit_calc, eclipse_calc, fit_info, measured_transit_depths,
                                 measured_transit_errors, measured_eclipse_depths,
-                                measured_eclipse_errors, plot=plot)
+                                measured_eclipse_errors)
         return fit_info._ln_prior(params) + ln_like
 
     
@@ -237,7 +199,7 @@ class CombinedRetriever:
                   fit_info, nwalkers=50,
                   nsteps=1000, include_condensation=True,
                   rad_method="xsec",
-                  plot_best=False):
+                  num_final_samples=100):
         '''Runs affine-invariant MCMC to retrieve atmospheric parameters.
 
         Parameters
@@ -271,20 +233,10 @@ class CombinedRetriever:
             condensation.
         rad_method : string, optional
             "xsec" for opacity sampling, "ktables" for correlated k
-        plot_best : bool, optional
-            If True, plots the best fit model with the data
 
         Returns
         -------
-        result : EnsembleSampler object
-            This returns emcee's EnsembleSampler object.  The most useful
-            attributes in this item are result.chain, which is a (W x S X P)
-            array where W is the number of walkers, S is the number of steps,
-            and P is the number of parameters; and result.lnprobability, a
-            (W x S) array of log probabilities.  For your convenience, this
-            object also contains result.flatchain, which is a (WS x P) array
-            where WS = W x S is the number of samples; and
-            result.flatlnprobability, an array of length WS
+        result : RetrievalResult object
         '''
 
         initial_positions = fit_info._generate_rand_param_arrays(nwalkers)
@@ -320,7 +272,7 @@ class CombinedRetriever:
             np.max(sampler.flatlnprobability),
             fit_info.fit_param_names)
 
-        _, best_fit_transit_depths, best_fit_eclipse_depths = self._ln_like(
+        best_fit_transit_depths, best_fit_transit_info, best_fit_eclipse_depths, best_fit_eclipse_info = self._ln_like(
             best_params_arr, transit_calc, eclipse_calc, fit_info,
             transit_depths, transit_errors,
             eclipse_depths, eclipse_errors, ret_best_fit=True)
@@ -333,25 +285,34 @@ class CombinedRetriever:
             "emcee",
             transit_bins, transit_depths, transit_errors,
             eclipse_bins, eclipse_depths, eclipse_errors,
-            best_fit_transit_depths, best_fit_eclipse_depths,
+            best_fit_transit_depths, best_fit_transit_info,
+            best_fit_eclipse_depths, best_fit_eclipse_info,
             fit_info)
+        equal_samples = np.copy(sampler.flatchain)
+        np.random.shuffle(equal_samples)
+        retrieval_result.random_transit_depths = []
+        retrieval_result.random_eclipse_depths = []
+        for params in equal_samples[0:num_final_samples]:
+            _, transit_info, _, eclipse_info = self._ln_like(
+                params, transit_calc, eclipse_calc, fit_info,
+                transit_depths, transit_errors,
+                eclipse_depths, eclipse_errors, ret_best_fit=True)
+            if transit_depths is not None:
+                retrieval_result.random_transit_depths.append(transit_info["unbinned_depths"])
+            if eclipse_depths is not None:
+                retrieval_result.random_eclipse_depths.append(eclipse_info["unbinned_eclipse_depths"])
 
         with open("retrieval_result.pkl", "wb") as f:
-            pickle.dump(result, f)
+            pickle.dump(retrieval_result, f)
         
-        if plot_best:
-             self._ln_prob(best_params_arr, transit_calc, eclipse_calc, fit_info,
-                          transit_depths, transit_errors,
-                          eclipse_depths, eclipse_errors, plot=True)
-
         return retrieval_result
 
     def run_multinest(self, transit_bins, transit_depths, transit_errors,
                       eclipse_bins, eclipse_depths, eclipse_errors,
                       fit_info,
                       include_condensation=True, rad_method="xsec",
-                      plot_best=False,
                       maxiter=None, maxcall=None, nlive=100,
+                      num_final_samples=100,
                       **dynesty_kwargs):
         '''Runs nested sampling to retrieve atmospheric parameters.
 
@@ -381,26 +342,14 @@ class CombinedRetriever:
             When determining atmospheric abundances, whether to include
             condensation.
         rad_method : string, optional
-            "xsec" for opacity sampling, "ktables" for correlated k
-        plot_best : bool, optional
-            If True, plots the best fit model with the data
+            "xsec" for opacity sampling, "ktables" for correlated k       
         nlive : int
             Number of live points to use for nested sampling
         **dynesty_kwargs : keyword arguments to pass to dynesty's NestedSampler
 
         Returns
         -------
-        result : Result object
-            This returns dynesty's NestedSampler 'results' field, slightly
-            modified.  The object is
-            dictionary-like and has many useful items.  For example,
-            result.samples (or alternatively, result["samples"]) are the
-            parameter values of each sample, result.logwt contains the
-            log(weights), result.weights contains the normalized weights 
-            (this is added by PLATON), 
-            result.logl contains the ln likelihoods, and result.logp
-            contains the ln posteriors (this is added by PLATON).  result.logz
-            is the natural logarithm of the evidence.
+        result : RetrievalResult object
         '''
         transit_calc = None
         eclipse_calc = None
@@ -439,31 +388,42 @@ class CombinedRetriever:
         normalized_weights = np.exp(result.logwt - np.max(result.logwt))
         normalized_weights /= np.sum(normalized_weights)
         result.weights = normalized_weights                                
-        
+
+        equal_samples = dynesty.utils.resample_equal(result.samples, result.weights)
+        np.random.shuffle(equal_samples)
         write_param_estimates_file(
-            dynesty.utils.resample_equal(result.samples, normalized_weights),
+            equal_samples,
             best_params_arr,
             np.max(result.logp),
             fit_info.fit_param_names)
         
-        _, best_fit_transit_depths, best_fit_eclipse_depths = self._ln_like(
+        best_fit_transit_depths, best_fit_transit_info, best_fit_eclipse_depths, best_fit_eclipse_info = self._ln_like(
             best_params_arr, transit_calc, eclipse_calc, fit_info,
             transit_depths, transit_errors,
             eclipse_depths, eclipse_errors, ret_best_fit=True)
-        
-        retrieval_result = RetrievalResult(result, "dynesty",
+
+        retrieval_result = RetrievalResult(
+            result, "dynesty",
             transit_bins, transit_depths, transit_errors,
             eclipse_bins, eclipse_depths, eclipse_errors,
-            best_fit_transit_depths, best_fit_eclipse_depths,
+            best_fit_transit_depths, best_fit_transit_info,
+            best_fit_eclipse_depths, best_fit_eclipse_info,
             fit_info)
-
-        with open("retrieval_result.pkl", "wb") as f:
-            pickle.dump(retrieval_result, f)
         
-        if plot_best:
-            self._ln_like(best_params_arr, transit_calc, eclipse_calc, fit_info,
-                          transit_depths, transit_errors,
-                          eclipse_depths, eclipse_errors, plot=True)
+        retrieval_result.random_transit_depths = []
+        retrieval_result.random_eclipse_depths = []
+        for params in equal_samples[0:num_final_samples]:
+            _, transit_info, _, eclipse_info = self._ln_like(
+                params, transit_calc, eclipse_calc, fit_info,
+                transit_depths, transit_errors,
+                eclipse_depths, eclipse_errors, ret_best_fit=True)
+            if transit_depths is not None:
+                retrieval_result.random_transit_depths.append(transit_info["unbinned_depths"])
+            if eclipse_depths is not None:
+                retrieval_result.random_eclipse_depths.append(eclipse_info["unbinned_eclipse_depths"])
+                    
+        with open("retrieval_result.pkl", "wb") as f:
+            pickle.dump(retrieval_result, f)            
 
         return retrieval_result
 

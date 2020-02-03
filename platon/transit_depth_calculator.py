@@ -103,8 +103,9 @@ class TransitDepthCalculator:
         if self.atm.wavelength_bins is None:
             return intermediate_lambdas,\
                 intermediate_depths * intermediate_correction_factors,\
-                intermediate_stellar_spectrum
-        
+                intermediate_stellar_spectrum,\
+                intermediate_stellar_spectrum, intermediate_correction_factors
+                        
         binned_wavelengths = []
         binned_depths = []
         binned_stellar_spectrum = []
@@ -119,7 +120,7 @@ class TransitDepthCalculator:
             binned_depths.append(binned_depth)
             binned_stellar_spectrum.append(np.median(intermediate_stellar_spectrum[cond]))
 
-        return np.array(binned_wavelengths), np.array(binned_depths), np.array(binned_stellar_spectrum)
+        return np.array(binned_wavelengths), np.array(binned_depths), np.array(binned_stellar_spectrum), intermediate_stellar_spectrum, intermediate_correction_factors
 
     def _validate_params(self, T, logZ, CO_ratio, cloudtop_pressure):
         T_profile = np.ones(self.atm.num_profile_heights) * T
@@ -285,13 +286,14 @@ class TransitDepthCalculator:
 
         transit_depths = (np.min(radii) / star_radius)**2 \
             + 2 / star_radius**2 * absorption_fraction.dot(radii[1:] * dr)
-        binned_wavelengths, binned_depths, binned_stellar_spectrum = self._get_binned_corrected_depths(transit_depths, T_star, T_spot, spot_cov_frac, stellar_blackbody)
+        binned_wavelengths, binned_depths, binned_stellar_spectrum, unbinned_stellar_spectrum, unbinned_correction_factors = self._get_binned_corrected_depths(transit_depths, T_star, T_spot, spot_cov_frac, stellar_blackbody)
         
         if full_output:
             atm_info["tau_los"] = tau_los
             atm_info["binned_stellar_spectrum"] = binned_stellar_spectrum
             atm_info["unbinned_depths"] = transit_depths
-            
+            atm_info["unbinned_stellar_spectrum"] = unbinned_stellar_spectrum
+            atm_info["unbinned_correction_factors"] = unbinned_correction_factors
             return binned_wavelengths, binned_depths, atm_info
 
         return binned_wavelengths, binned_depths

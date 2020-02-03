@@ -96,7 +96,7 @@ fit_info.add_uniform_fit_param("error_multiple", 0.5, 5)
 #Use Nested Sampling to do the fitting
 result = retriever.run_multinest(bins, depths, errors,
                                  None, None, None,
-                                 fit_info, plot_best=True,
+                                 fit_info,
                                  rad_method="xsec") #"ktables" to use corr-k
 
 pickle.dump("my_dynesty_run.pkl", open("result", "wb"))
@@ -105,8 +105,5 @@ np.save("weights.npy", np.exp(result.logwt))
 np.save("ln_likelihood.npy", result.logl)
 np.save("ln_probability.npy", result.logp)
 
-fig = corner.corner(result.samples, weights=np.exp(result.logwt),
-                    range=[0.99] * result.samples.shape[1],
-                    labels=fit_info.fit_param_names)
-fig.savefig("multinest_corner.png")
-
+result.plot_spectrum("best_fit")
+result.plot_corner("multinest_corner.png")

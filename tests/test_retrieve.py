@@ -57,13 +57,14 @@ class TestRetriever(unittest.TestCase):
         nsteps = 20
         
         retriever = CombinedRetriever()
-        result = retriever.run_emcee(self.wavelength_bins, self.depths, self.errors, None, None, None, self.fit_info, nsteps=nsteps, nwalkers=nwalkers, include_condensation=False)
+        result = retriever.run_emcee(self.wavelength_bins, self.depths, self.errors, None, None, None, self.fit_info, nsteps=nsteps, nwalkers=nwalkers, include_condensation=False, num_final_samples=20)
         self.assertTrue(isinstance(result, RetrievalResult))
         self.assertTrue(result.chain.shape, (nwalkers, nsteps, len(self.fit_info.fit_param_names)))
         self.assertTrue(result.lnprobability.shape, (nwalkers, nsteps))
         
         retriever = CombinedRetriever()
-        result = retriever.run_emcee(self.wavelength_bins, self.depths, self.errors, None, None, None, self.fit_info, nsteps=nsteps, nwalkers=nwalkers, include_condensation=True, plot_best=True)
+        result = retriever.run_emcee(self.wavelength_bins, self.depths, self.errors, None, None, None, self.fit_info, nsteps=nsteps, nwalkers=nwalkers, include_condensation=True, num_final_samples=20)
+        result.plot_spectrum("test")
         self.assertTrue(isinstance(result, RetrievalResult))
         self.assertEqual(result.chain.shape, (nwalkers, nsteps, len(self.fit_info.fit_param_names)))
         self.assertEqual(result.lnprobability.shape, (nwalkers, nsteps))
@@ -72,7 +73,8 @@ class TestRetriever(unittest.TestCase):
     def test_multinest(self):
         self.initialize(False)
         retriever = CombinedRetriever()
-        result = retriever.run_multinest(self.wavelength_bins, self.depths, self.errors, None, None, None, self.fit_info, maxcall=200, include_condensation=False, plot_best=True)
+        result = retriever.run_multinest(self.wavelength_bins, self.depths, self.errors, None, None, None, self.fit_info, maxcall=200, include_condensation=False, num_final_samples=20)
+        result.plot_spectrum("test_plot")
         
         self.assertTrue(isinstance(result, RetrievalResult))
         self.assertEqual(result.samples.shape[1], len(self.fit_info.fit_param_names))
@@ -80,7 +82,7 @@ class TestRetriever(unittest.TestCase):
         retriever = CombinedRetriever()
         retriever.run_multinest(self.wavelength_bins, self.depths, self.errors,
                                 None, None, None, self.fit_info, maxiter=20,
-                                include_condensation=True)
+                                include_condensation=True, num_final_samples=20)
         self.assertTrue(isinstance(result, RetrievalResult))
         self.assertEqual(result.samples.shape[1], len(self.fit_info.fit_param_names))
 
@@ -88,7 +90,7 @@ class TestRetriever(unittest.TestCase):
         retriever.run_multinest(self.wavelength_bins, self.depths, self.errors,
                                 None, None, None, self.fit_info, maxiter=20,
                                 include_condensation=True,
-                                rad_method="ktables")
+                                rad_method="ktables", num_final_samples=20)
         self.assertTrue(isinstance(result, RetrievalResult))
         self.assertEqual(result.samples.shape[1], len(self.fit_info.fit_param_names))
 
@@ -105,10 +107,10 @@ class TestRetriever(unittest.TestCase):
             with self.assertRaises(expected_error):
                 retriever.run_multinest(self.wavelength_bins, self.depths,
                                         self.errors, None, None, None,
-                                        fit_info, maxiter=10)
+                                        fit_info, maxiter=10, num_final_samples=10)
                 retriever.run_emcee(self.wavelength_bins, self.depths,
                                     self.errors, None, None, None,
-                                    fit_info, nsteps=10)
+                                    fit_info, nsteps=10, num_final_samples=10)
 
         # All of these are invalid inputs
         run_both("T", 199, 1000, 2999, AtmosphereError)

@@ -5,6 +5,11 @@
  [![codecov](https://codecov.io/gh/ideasrule/platon/branch/devel/graph/badge.svg)](https://codecov.io/gh/ideasrule/platon) 
 [![arXiv](http://img.shields.io/badge/arXiv-1811.11761-orange.svg)](https://arxiv.org/abs/1811.11761)
 
+**February 2, 2020: PLEASE re-clone your repository if you cloned it before this
+date!  On this date, all data files were deleted from the repository, including
+from its history.  This shrank the repository's size from 1.2 GB to 36 MB,
+which respects GitHub's size limit.**
+
 **November 29, 2018: PLATON v3.0 is out!  Please check the release notes on GitHub for the list of new features.  Our paper actually describes v2.1, but v3 has a substantial number of improvements, and we strongly recommend everyone use it.**
 
 **NEW (October 1): Version 2 is out, with a huge number of changes! Make sure to check out the release notes, and upgrade.**

@@ -89,12 +89,12 @@ class EclipseDepthCalculator:
         return photosphere_radii
     
     def compute_depths(self, t_p_profile, star_radius, planet_mass,
-                       planet_radius, T_star, logZ=0, CO_ratio=0.53,
+                       planet_radius, T_star, atm_abundances,
                        add_gas_absorption=True, add_H_minus_absorption=False,
                        add_scattering=True, scattering_factor=1,
                        scattering_slope=4, scattering_ref_wavelength=1e-6,
                        add_collisional_absorption=True,
-                       cloudtop_pressure=np.inf, custom_abundances=None,
+                       cloudtop_pressure=np.inf, 
                        T_spot=None, spot_cov_frac=None,
                        ri = None, frac_scale_height=1,number_density=0,
                        part_size=1e-6, part_size_std=0.5, P_quench=1e-99,
@@ -111,9 +111,9 @@ class EclipseDepthCalculator:
         P_profile = t_p_profile.pressures
         atm_info = self.atm.compute_params(
             star_radius, planet_mass, planet_radius, P_profile, T_profile,
-            logZ, CO_ratio, add_gas_absorption, add_H_minus_absorption, add_scattering,
+            atm_abundances, add_gas_absorption, add_H_minus_absorption, add_scattering,
             scattering_factor, scattering_slope, scattering_ref_wavelength,
-            add_collisional_absorption, cloudtop_pressure, custom_abundances,
+            add_collisional_absorption, cloudtop_pressure,
             T_star, T_spot, spot_cov_frac,
             ri, frac_scale_height, number_density, part_size, part_size_std,
             P_quench)

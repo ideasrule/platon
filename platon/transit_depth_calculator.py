@@ -128,12 +128,12 @@ class TransitDepthCalculator:
         
     
     def compute_depths(self, star_radius, planet_mass, planet_radius,
-                       temperature, logZ=0, CO_ratio=0.53,
+                       temperature, atm_abundances,
                        add_gas_absorption=True, add_H_minus_absorption=False,
                        add_scattering=True, scattering_factor=1,
                        scattering_slope=4, scattering_ref_wavelength=1e-6,
                        add_collisional_absorption=True,
-                       cloudtop_pressure=np.inf, custom_abundances=None,
+                       cloudtop_pressure=np.inf,
                        custom_T_profile=None, custom_P_profile=None,
                        T_star=None, T_spot=None, spot_cov_frac=None,
                        ri=None, frac_scale_height=1, number_density=0,
@@ -271,10 +271,10 @@ class TransitDepthCalculator:
 
         atm_info = self.atm.compute_params(
             star_radius, planet_mass, planet_radius, P_profile, T_profile,
-            logZ, CO_ratio, add_gas_absorption, add_H_minus_absorption,
+            atm_abundances, add_gas_absorption, add_H_minus_absorption,
             add_scattering,
             scattering_factor, scattering_slope, scattering_ref_wavelength,
-            add_collisional_absorption, cloudtop_pressure, custom_abundances,
+            add_collisional_absorption, cloudtop_pressure,
             T_star, T_spot, spot_cov_frac, ri, frac_scale_height,
             number_density, part_size, part_size_std, P_quench)
 

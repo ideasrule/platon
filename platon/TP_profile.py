@@ -29,7 +29,8 @@ class Profile:
                                         
         
     def set_from_arrays(self, P_profile, T_profile):
-        interpolator = interp1d(np.log10(P_profile), T_profile)
+        interpolator = interp1d(np.log10(P_profile), T_profile,
+                                bounds_error=False, fill_value=(T_profile[0], T_profile[-1]))
         self.temperatures = interpolator(np.log10(self.pressures))
 
     def set_isothermal(self, T_day):

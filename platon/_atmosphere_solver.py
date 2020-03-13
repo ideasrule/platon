@@ -220,11 +220,18 @@ class AtmosphereSolver:
                 self.collisional_absorption_data[(s1, s2)][cond] = min_absorption
                 n1 = (atm_abundances[s1] * n)
                 n2 = (atm_abundances[s2] * n)
-                abs_data = 10.0 ** scipy.interpolate.interpn(
-                    [self.T_grid],
-                    np.log10(self.collisional_absorption_data[(s1, s2)]),
-                    T_profile)
-                    #np.array([T_profile]).T)
+
+                interp_collisional = scipy.interpolate.interp1d(
+                    self.low_res_lambdas, self.collisional_absorption_data[(s1,s2)])(self.lambda_grid)
+                abs_data = 10.00 ** scipy.interpolate.interp1d(
+                    self.T_grid,
+                    np.log10(interp_collisional), axis=0)(T_profile)
+                
+                #abs_data = 10.0 ** scipy.interpolate.interpn(
+                #    [self.T_grid],
+                #    np.log10(self.collisional_absorption_data[(s1, s2)]),
+                #    T_profile)
+                #    #np.array([T_profile]).T)
                         
                 absorption_coeff += abs_data * (n1 * n2)[:, np.newaxis]
 

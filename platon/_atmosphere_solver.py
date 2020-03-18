@@ -391,8 +391,8 @@ class AtmosphereSolver:
             logZ, CO_ratio, custom_abundances)
         
         for name in abundances:
-            low_abundances = abundances[name] < min_abundance
-            abundances[name][low_abundances] = min_abundance
+            abundances[name][np.isnan(abundances[name])] = min_abundance
+            abundances[name][abundances[name] < min_abundance] = min_abundance
             for t in range(abundances[name].shape[0]):
                 quench_abund = np.exp(np.interp(np.log(P_quench), np.log(self.P_grid), np.log(abundances[name][t])))
                 abundances[name][t, self.P_grid < P_quench] = quench_abund

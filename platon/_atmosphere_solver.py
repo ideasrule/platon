@@ -33,11 +33,8 @@ class AtmosphereSolver:
             resource_filename(__name__, "data/Absorption"),
             resource_filename(__name__, "data/species_info"),
             method)
-        #self.absorption_data["H2O"] *= 0
 
         self.low_res_lambdas = load_numpy("data/low_res_lambdas.npy")
-        self.collisional_absorption_data = load_dict_from_pickle(
-            "data/collisional_absorption.pkl")
 
         if method == "xsec":
             self.lambda_grid = load_numpy("data/wavelengths.npy")
@@ -48,7 +45,14 @@ class AtmosphereSolver:
             diffs = np.unique(self.lambda_grid)
             self.d_ln_lambda = np.median(np.diff(np.log(np.unique(self.lambda_grid))))
             self.stellar_spectra = load_dict_from_pickle("data/k_stellar_spectra.pkl")
-        
+
+        self.collisional_absorption_data = load_dict_from_pickle(
+            "data/collisional_absorption.pkl") 
+        for key in self.collisional_absorption_data:
+            self.collisional_absorption_data[key] = scipy.interpolate.interp1d(
+                self.low_res_lambdas,
+                self.collisional_absorption_data[key])(self.lambda_grid)
+            
         self.P_grid = load_numpy("data/pressures.npy")
         self.T_grid = load_numpy("data/temperatures.npy")
 
@@ -120,6 +124,9 @@ class AtmosphereSolver:
 
         for Teff in self.stellar_spectra:
             self.stellar_spectra[Teff] = self.stellar_spectra[Teff][cond]
+            
+        for key in self.collisional_absorption_data:
+            self.collisional_absorption_data[key] = self.collisional_absorption_data[key][:, cond]
   
     def _get_k(self, T, wavelengths):
         wavelengths = 1e6 * np.copy(wavelengths)
@@ -209,22 +216,14 @@ class AtmosphereSolver:
     def _get_collisional_absorption(self, abundances, P_cond, T_cond):
         absorption_coeff = np.zeros(
             (np.sum(T_cond), np.sum(P_cond), self.N_lambda))
-        n = self.P_grid[np.newaxis, P_cond] / (k_B * self.T_grid[T_cond, np.newaxis])
-        no_interp = len(self.lambda_grid) == len(self.low_res_lambdas) and np.allclose(self.lambda_grid, self.low_res_lambdas)
-        
+        n = self.P_grid[np.newaxis, P_cond] / (k_B * self.T_grid[T_cond, np.newaxis])        
         for s1, s2 in self.collisional_absorption_data:
             if s1 in abundances and s2 in abundances:
                 n1 = (abundances[s1][T_cond, :][:, P_cond] * n)
                 n2 = (abundances[s2][T_cond, :][:, P_cond] * n)
                 abs_data = self.collisional_absorption_data[(s1, s2)].reshape(
-                    (self.N_T, 1, len(self.low_res_lambdas)))[T_cond]
-
-                if no_interp:
-                    absorption_coeff += abs_data * (n1 * n2)[:, :, np.newaxis]
-                else:
-                    absorption_coeff += scipy.interpolate.interp1d(
-                        self.low_res_lambdas,
-                        abs_data * (n1 * n2)[:, :, np.newaxis])(self.lambda_grid)
+                    (self.N_T, 1, -1))[T_cond]
+                absorption_coeff += abs_data * (n1 * n2)[:, :, np.newaxis]
 
         return absorption_coeff
 

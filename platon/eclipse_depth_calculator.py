@@ -131,7 +131,7 @@ class EclipseDepthCalculator:
         reshaped_lambda_grid = lambda_grid.reshape((-1, 1))
         planck_function = 2*h*c**2/reshaped_lambda_grid**5/(np.exp(h*c/reshaped_lambda_grid/k_B/intermediate_T) - 1)
 
-        fluxes = 2 * np.pi * scipy.integrate.trapz(planck_function * self.exp2_interpolator(taus), taus, axis=1)
+        fluxes = 2 * np.pi * scipy.integrate.simps(planck_function * self.exp2_interpolator(taus), taus, axis=1)
 
         if not np.isinf(cloudtop_pressure):
             max_taus = np.max(taus, axis=1)

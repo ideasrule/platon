@@ -6,8 +6,8 @@ from platon import __data_url__, __md5sum__
 import sys
 import zipfile
 import os
-import shutil
 import hashlib
+import ssl
 
 def get_data_if_needed():
     if not os.path.isdir(resource_filename(__name__, "data/")):
@@ -24,7 +24,12 @@ def get_data(target_dir):
     MB_TO_BYTES = 2**20
     filename = "data.zip"
     print("Data URL", __data_url__)
-    u = urlopen(__data_url__)
+
+    #Bad! Dangerous! But necessary...get a real certificate, Caltech!
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    u = urlopen(__data_url__, context=ctx)
     f = open(filename, 'wb')
 
     #Only for Python 3, because we don't support Python 2 anymore

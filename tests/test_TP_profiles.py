@@ -1,5 +1,7 @@
 import unittest
 import numpy as np
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from platon.TP_profile import Profile

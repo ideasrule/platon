@@ -8,7 +8,7 @@ from platon.constants import R_sun, R_jup, M_jup
 bar_to_cgs = 1e6
 Pa_to_cgs = 10
 
-data_file = sys.argv[1]
+data_file = "example_custom_abundances.txt"
 
 data = np.loadtxt(data_file, skiprows=2)[::-1]
 P_profile = data[:,0] / Pa_to_cgs

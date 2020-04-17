@@ -36,6 +36,8 @@ class RetrievalResult:
 
         self.fit_info = fit_info
         self.__dict__.update(dict(results))
+
+        self.final_logz = self.logz[-1]
                  
             
     def __repr__(self):

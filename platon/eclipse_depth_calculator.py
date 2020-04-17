@@ -68,7 +68,7 @@ class EclipseDepthCalculator:
 
         
         if self.atm.wavelength_bins is None:
-            return intermediate_lambdas, intermediate_depths
+            return intermediate_lambdas, intermediate_depths, intermediate_lambdas, intermediate_depths
         
         binned_wavelengths = []
         binned_depths = []
@@ -81,7 +81,7 @@ class EclipseDepthCalculator:
                                       weights=intermediate_stellar_spectrum[cond])
             binned_depths.append(binned_depth)
             
-        return np.array(binned_wavelengths), np.array(binned_depths)
+        return intermediate_lambdas, intermediate_depths, np.array(binned_wavelengths), np.array(binned_depths)
 
     def _get_photosphere_radii(self, taus, radii):
         intermediate_radii = 0.5 * (radii[0:-1] + radii[1:])
@@ -146,12 +146,14 @@ class EclipseDepthCalculator:
         photosphere_radii = self._get_photosphere_radii(taus, atm_info["radii"])
         eclipse_depths = photon_fluxes / stellar_photon_fluxes * (photosphere_radii/star_radius)**2
 
-        binned_wavelengths, binned_depths = self._get_binned_depths(eclipse_depths, stellar_photon_fluxes)
+        #For correlated k, eclipse_depths has n_gauss points per wavelength, while unbinned_depths has 1 point per wavelength
+        unbinned_wavelengths, unbinned_depths, binned_wavelengths, binned_depths = self._get_binned_depths(eclipse_depths, stellar_photon_fluxes)
 
         if full_output:
             atm_info["stellar_spectrum"] = stellar_photon_fluxes
             atm_info["planet_spectrum"] = fluxes
-            atm_info["unbinned_eclipse_depths"] = eclipse_depths
+            atm_info["unbinned_wavelengths"] = unbinned_wavelengths
+            atm_info["unbinned_eclipse_depths"] = unbinned_depths
             atm_info["taus"] = taus
             atm_info["contrib"] = 2 * np.pi * planck_function * self.exp2_interpolator(taus) * d_taus / fluxes[:, np.newaxis]
             return binned_wavelengths, binned_depths, atm_info

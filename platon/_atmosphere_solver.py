@@ -42,7 +42,6 @@ class AtmosphereSolver:
             self.stellar_spectra = load_dict_from_pickle("data/stellar_spectra.pkl")
         else:
             self.lambda_grid = load_numpy("data/k_wavelengths.npy")
-            diffs = np.unique(self.lambda_grid)
             self.d_ln_lambda = np.median(np.diff(np.log(np.unique(self.lambda_grid))))
             self.stellar_spectra = load_dict_from_pickle("data/k_stellar_spectra.pkl")
 
@@ -454,7 +453,6 @@ class AtmosphereSolver:
                        "P_profile": P_profile,
                        "T_profile": T_profile,
                        "mu_profile": mu_profile,
-                       "atm_abundances": atm_abundances,
-                       "unbinned_wavelengths": self.lambda_grid}
+                       "atm_abundances": atm_abundances}
         
         return output_dict

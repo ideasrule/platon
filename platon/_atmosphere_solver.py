@@ -357,6 +357,8 @@ class AtmosphereSolver:
                 axis=0)
             unspotted_spectrum = interpolator(T_star)
             spot_spectrum = interpolator(T_spot)
+            if len(spot_spectrum) != len(lambdas):
+                raise ValueError("Stellar spectra has a different length ({}) than opacities ({})!  If you are using high resolution opacities, pass stellar_blackbody=True to compute_depths".format(len(spot_spectrum), len(lambdas)))
         else:
             d_lambda = self.d_ln_lambda * lambdas
             unspotted_spectrum = 2 * c * np.pi / lambdas**4 / \
@@ -382,7 +384,7 @@ class AtmosphereSolver:
                        ri=None, frac_scale_height=1, number_density=0,
                        part_size=1e-6, part_size_std=0.5,
                        P_quench=1e-99,
-                       min_abundance=1e-99, min_cross_sec=1e-99):       
+                       min_abundance=1e-99, min_cross_sec=1e-99):
         self._validate_params(T_profile, logZ, CO_ratio, cloudtop_pressure)
        
         abundances = self._get_abundances_array(

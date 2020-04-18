@@ -1,9 +1,6 @@
-import os
-
 import numpy as np
 import matplotlib.pyplot as plt
-import scipy.interpolate
-import corner
+import pickle
 
 from platon.fit_info import FitInfo
 from platon.combined_retriever import CombinedRetriever
@@ -101,8 +98,13 @@ result = retriever.run_emcee(bins, depths, errors,
                              rad_method="xsec" #"ktables" for corr-k
 )
 
-np.save("chain.npy", result.chain)
-np.save("logp.npy", result.lnprobability)
+with open("example_retrieval_result.pkl", "wb") as f:
+    pickle.dump(result, f)
 
+#Useful members: result.chain, result.lnprobability, result.flatchain, result.flatlnprobability
+
+#Plot the spectrum and save it to best_fit.png
 result.plot_spectrum("best_fit")
+
+#Plot the 2D posteriors with "corner" package and save it to multinest_corner.png
 result.plot_corner("emcee_corner.png")

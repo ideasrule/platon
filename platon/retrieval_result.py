@@ -45,6 +45,7 @@ class RetrievalResult:
         return str(self.__dict__)
 
     def plot_corner(self, filename="multinest_corner.png"):
+        plt.clf()
         if self.retrieval_type == "dynesty":
             fig = corner.corner(self.samples, weights=self.weights,
                           range=[0.99] * self.samples.shape[1],
@@ -59,6 +60,7 @@ class RetrievalResult:
             assert(False)
             
     def plot_spectrum(self, prefix="best_fit"):
+        plt.clf()
         if self.transit_bins is not None:    
             plt.figure(1, figsize=(16,6))
             lower_spectrum = np.percentile(self.random_transit_depths, 16, axis=0)
@@ -92,10 +94,10 @@ class RetrievalResult:
             plt.fill_between(METRES_TO_UM * self.best_fit_eclipse_dict["unbinned_wavelengths"],
                              lower_spectrum,
                              upper_spectrum,
-                             color="#f2c8c4") 
+                             color="#f2c8c4")
             plt.plot(METRES_TO_UM * self.best_fit_eclipse_dict["unbinned_wavelengths"],
                      self.best_fit_eclipse_dict["unbinned_eclipse_depths"],
-                     alpha=0.4, color='b', label="Calculated (unbinned)")
+                     alpha=0.4, color='r', label="Calculated (unbinned)")
             plt.errorbar(METRES_TO_UM * self.eclipse_wavelengths,
                          self.eclipse_depths,
                          yerr=self.eclipse_errors,

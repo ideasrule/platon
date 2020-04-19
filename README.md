@@ -5,6 +5,9 @@
  [![codecov](https://codecov.io/gh/ideasrule/platon/branch/devel/graph/badge.svg)](https://codecov.io/gh/ideasrule/platon) 
 [![arXiv](http://img.shields.io/badge/arXiv-1811.11761-orange.svg)](https://arxiv.org/abs/1811.11761)
 
+**April 18, 2020: PLATON v5.1 corresponds most closely to the version described
+in our second PLATON paper.**
+
 **February 2, 2020: PLEASE re-clone your repository if you cloned it before this
 date!  On this date, all data files were deleted from the repository, including
 from its history.  This shrank the repository's size from 1.2 GB to 36 MB,

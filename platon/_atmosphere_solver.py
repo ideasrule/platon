@@ -107,6 +107,12 @@ class AtmosphereSolver:
                or end < np.min(self.lambda_grid) \
                or end > np.max(self.lambda_grid):
                 raise ValueError("Invalid wavelength bin: {}-{} meters".format(start, end))
+            num_points = np.sum(np.logical_and(self.lambda_grid > start,
+                                               self.lambda_grid < end))
+            if num_points == 0:
+                raise ValueError("Wavelength bin too narrow: {}-{} meters".format(start, end))
+            if num_points <= 5:
+                print("WARNING: only {} points in {}-{} m bin. Results will be inaccurate".format(num_points, start, end))
         
         self.wavelength_rebinned = True
         self.wavelength_bins = bins

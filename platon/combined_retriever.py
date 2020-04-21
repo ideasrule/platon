@@ -289,6 +289,8 @@ class CombinedRetriever:
             best_fit_eclipse_depths, best_fit_eclipse_info,
             fit_info)
         equal_samples = np.copy(sampler.flatchain)
+        print("equal_samples.shape: {}, num_final_samples: {}".format(equal_samples.shape, num_final_samples))
+        print(equal_samples)
         np.random.shuffle(equal_samples)
         retrieval_result.random_transit_depths = []
         retrieval_result.random_eclipse_depths = []

@@ -114,7 +114,7 @@ in that order.
   sampling method.  In those cases, pass sample="rwalk" to run_multinest, which
   will cap the sampling efficiency at 1/25, 25 being the number of random walks to take.  According to the dynesty documentation, 25 should be sufficient
   at low dimensionality (<=10), but 50 might be necessary at
-  moderate dimensionality (10-20).  To change the number of random walks to 50, pass walk=50.
+  moderate dimensionality (10-20).  To change the number of random walks to 50, pass walks=50.
 
 * **How small can I set my wavelength bins?**
   The error in the opacity sampling calculation for a given reasonably small bin is equal to the standard deviation of the

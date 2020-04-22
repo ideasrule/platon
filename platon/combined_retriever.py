@@ -299,7 +299,7 @@ class CombinedRetriever:
                 params, transit_calc, eclipse_calc, fit_info,
                 transit_depths, transit_errors,
                 eclipse_depths, eclipse_errors, ret_best_fit=True)
-            if np.isinf(ret): continue
+            if ret == -np.inf: continue
             _, transit_info, _, eclipse_info = ret
                 
             if transit_depths is not None:

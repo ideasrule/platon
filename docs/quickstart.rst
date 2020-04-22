@@ -43,7 +43,7 @@ ExoTransmit format::
   calculator.compute_depths(Rs, Mp, Rp, T, logZ=None, CO_ratio=None,
                             custom_abundances=filename)
 
-To retrieve atmospheric parameters, look at retrieve_example.py, then go to
+To retrieve atmospheric parameters, look at retrieve_multinest.py, retrieve_emcee.py, or retrieve_eclipses.py, then go to
 :class:`.CombinedRetriever` for more info.  In short::
 
   from platon.fit_info import FitInfo
@@ -82,32 +82,29 @@ their errors.
 
 The example above retrieves the planetary radius (at a reference pressure
 of 100,000 Pa), the temperature of the isothermal atmosphere, and the
-metallicity.  Other parameters you can retrieve for are the stellar radius,
+metallicity.  Other parameters you can retrieve for include the stellar radius,
 the planetary mass, C/O ratio,
 the cloudtop pressure, the scattering factor, the scattering slope,
 and the error multiple--which multiplies all errors by a constant.  We recommend
 either fixing the stellar radius and planetary mass to the measured values, or
 setting Gaussian priors on them to account for measurement errors.
 
-Once you get the `result` object, you can make a corner plot::
+Once you get the `result` object, you should store the object, in addition
+to plotting the posterior distribution and the best fit::
 
-  fig = corner.corner(result.samples, weights=result.weights,
-                      range=[0.99] * result.samples.shape[1],
-                      labels=fit_info.fit_param_names)
-
-Additionally, result.logl stores the log likelihoods of the points in
-result.samples.
+  with open("example_retrieval_result.pkl", "wb") as f:
+     pickle.dump(result, f)
+     
+  result.plot_corner("my_corner.png")
+  result.plot_spectrum("my_best_fit") #leave off .png
 
 If you prefer using MCMC instead of Nested Sampling in your retrieval, you can
 use the run_emcee method instead of the run_multinest method. Do note that
-Nested Sampling tends to be much faster and it does not require specification
-of a termination point::
+Nested Sampling is recommended, as it is not trivial to deal with multi-modal
+posteriors or to check for convergence with emcee::
 
   result = retriever.run_emcee(bins, depths, errors, fit_info)
 
 For MCMC, the number of walkers and iterations/steps can also be specified. The
 `result` object returned by run_emcee is different from that returned
-by run_multinest. To make a corner plot with the result of run_emcee::
-
-  fig = corner.corner(result.flatchain, range=[0.99] * result.flatchain.shape[1],
-                      labels=fit_info.fit_param_names)
+by run_multinest, but still supports plot_corner and plot_spectrum.

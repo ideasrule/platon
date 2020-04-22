@@ -9,12 +9,8 @@ The two main modules are:
    1. :class:`.TransitDepthCalculator`: computes a transit spectrum for an
       exoplanet
    2. :class:`.EclipseDepthCalculator`: computes an eclipse spectrum   
-   3. :class:`.Retriever`:  retrieves atmospheric properties of an exoplanet,
-      given the observed transit spectrum.  The properties that can be retrieved
-      are metallicity, C/O ratio, cloudtop pressure, scattering strength,
-      and scattering slope
-   4. :class:`.CombinedRetriever`: can retrieve atmospheric properties for
-      eclipse depths, or a combination of transit and eclipse depths
+   3. :class:`.CombinedRetriever`: can retrieve atmospheric properties for
+      transit depths, eclipse depths, or a combination of the two.
 
 The transit spectrum is calculated from 300 nm to 30 um, taking into
 account gas absorption, collisionally induced gas absorption, clouds, 
@@ -35,6 +31,13 @@ a source of absorption.
 
 The retrievers use TransitDepthCalculator/EclipseDepthCalculator as a forward
 model, and can retrieve atmospheric properties using either MCMC or nested
-sampling. Typically, nestled sampling with only transit depths finishes in < 10 min.  MCMC relies on the
-user to specify the number of iterations, but typically reaches convergence in
-less than an hour.  Eclipse depths typically take longer to calculate by a factor of a few, resulting in longer retrievals.
+sampling.  The speed of these retrievals is highly dependent on the wavelength
+range, data precision, prior ranges, opacity resolution, and number of live points (nested sampling)
+or iterations/walkers (MCMC).  A very rough guideline is that a retrieval with
+200 live points and R=1000 (suitable for exploratory work) for
+STIS + WFC3 + IRAC 3.6 um + IRAC 4.5 um data takes <1 hour, while a
+retrieval with 1000 live points and R=10,000 (suitable for the final version)
+takes 1-2 days.  There are a variety of ways to speed up the retrieval, as
+described in our PLATON II paper.  These include using correlated-k instead of
+opacity sampling with R=10,000, or removing the opacity data files of
+unimportant molecules (thereby zeroing their opacities).

@@ -32,8 +32,8 @@ in that order.
     # These files are found in examples/custom_abundances.  They are equivalent
     # to the ExoTransmit EOS files, except that COS is renamed to OCS.  They provide
     # the abundance at every pressure and temperature grid point.  To create your
-    # own, see the documentation for custom_abundances in :func:`~platon.transit_depth_calculator.TransitDepthCalculator.compute_depths`
-    
+    # own, see the documentation for custom_abundances in
+    #:func:`~platon.transit_depth_calculator.TransitDepthCalculator.compute_depths`    
     abundances = AbundanceGetter.from_file("abund_1Xsolar_cond.dat")
 
   Alternatively, one can set vertically constant abundances for some species
@@ -57,7 +57,8 @@ in that order.
   Use the method above to zero out abundances of one species at a time.  
   Then call compute_depths with logZ and CO_ratio set to None: ::
 
-    calculator.compute_depths(star_radius, planet_mass, planet_radius, temperature, logZ=None, CO_ratio=None, custom_abundances=abundances)
+    calculator.compute_depths(star_radius, planet_mass, planet_radius, temperature,
+    logZ=None, CO_ratio=None, custom_abundances=abundances)
 
   Alternatively, you can delete absorption coefficients from PLATON_DIR/platon/data/Absorption,
   which has the effect of zeroing the opacity of those molecules.

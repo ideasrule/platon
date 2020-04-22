@@ -295,10 +295,13 @@ class CombinedRetriever:
         retrieval_result.random_transit_depths = []
         retrieval_result.random_eclipse_depths = []
         for params in equal_samples[0:num_final_samples]:
-            _, transit_info, _, eclipse_info = self._ln_like(
+            ret = self._ln_like(
                 params, transit_calc, eclipse_calc, fit_info,
                 transit_depths, transit_errors,
                 eclipse_depths, eclipse_errors, ret_best_fit=True)
+            if np.isinf(ret): continue
+            _, transit_info, _, eclipse_info = ret
+                
             if transit_depths is not None:
                 retrieval_result.random_transit_depths.append(transit_info["unbinned_depths"])
             if eclipse_depths is not None:

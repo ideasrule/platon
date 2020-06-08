@@ -28,12 +28,13 @@ class EclipseDepthCalculator:
         # scipy.special.expn is slow when called on millions of values, so
         # use interpolator to speed it up
         tau_cache = np.logspace(-6, 3, 1000)
-        self.exp2_interpolator = scipy.interpolate.interp1d(
+        self.exp3_interpolator = scipy.interpolate.interp1d(
             tau_cache,
-            scipy.special.expn(2, tau_cache),
+            scipy.special.expn(3, tau_cache),
             bounds_error=False,
-            fill_value=(1, 0))
+            fill_value=(0.5, 0))
 
+        
     def change_wavelength_bins(self, bins):        
         '''Same functionality as :func:`~platon.transit_depth_calculator.TransitDepthCalculator.change_wavelength_bins`'''
         self.atm.change_wavelength_bins(bins)
@@ -131,8 +132,12 @@ class EclipseDepthCalculator:
         reshaped_lambda_grid = lambda_grid.reshape((-1, 1))
         planck_function = 2*h*c**2/reshaped_lambda_grid**5/(np.exp(h*c/reshaped_lambda_grid/k_B/intermediate_T) - 1)
 
-        fluxes = 2 * np.pi * scipy.integrate.simps(planck_function * self.exp2_interpolator(taus), taus, axis=1)
-
+        #padded_taus: ensures 1st layer has 0 optical depth
+        padded_taus = np.zeros((taus.shape[0], taus.shape[1] + 1))
+        padded_taus[:, 1:] = taus
+        integrand = planck_function * np.diff(scipy.special.expn(3, padded_taus), axis=1)
+        fluxes = -2 * np.pi * np.sum(integrand, axis=1)
+                
         if not np.isinf(cloudtop_pressure):
             max_taus = np.max(taus, axis=1)
             fluxes_from_cloud = -np.pi * planck_function[:, -1] * (max_taus**2 * scipy.special.expi(-max_taus) + max_taus * np.exp(-max_taus) - np.exp(-max_taus))
@@ -153,7 +158,7 @@ class EclipseDepthCalculator:
             atm_info["planet_spectrum"] = fluxes
             atm_info["unbinned_eclipse_depths"] = eclipse_depths
             atm_info["taus"] = taus
-            atm_info["contrib"] = 2 * np.pi * planck_function * self.exp2_interpolator(taus) * d_taus / fluxes[:, np.newaxis]
+            atm_info["contrib"] = -integrand / fluxes[:, np.newaxis]
             return binned_wavelengths, binned_depths, atm_info
 
         return binned_wavelengths, binned_depths

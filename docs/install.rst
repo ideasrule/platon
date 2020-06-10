@@ -7,7 +7,9 @@ the heart of the radiative transfer code is a matrix multiplication operation
 conducted through numpy.dot, which in turn calls a BLAS library if it can find
 one.  If it can't find one, your code will be many times slower.
 
-On Linux, a good choice is OpenBLAS. You can install it on Ubuntu with::
+We recommend using Anaconda, which automatically installs BLAS libraries.
+If you don't want to use Anaconda, a good BLAS library to install on Linux is
+OpenBLAS.  You can install it on Ubuntu with::
   
   sudo apt install libopenblas-dev
 
@@ -41,10 +43,5 @@ The unit tests should also give you a good idea of how fast the code will be.
 On a decent Ubuntu machine with OpenBLAS, it takes 3 minutes.
 
 The default data files (in platon/data) have a wavelength resolution of R=1000,
-but if you want higher resolution, you can download R=2000 and R=10,000 data
-from `this webpage <http://astro.caltech.edu/~mz/absorption.html>`_
-
-If you have a CUDA-capable GPU and plan to use the eclipse depth calculator,
-you can take advantage of GPU acceleration.  Install CUDA, cudamat, and gnumpy,
-in that order, and the eclipse depth calculator should automatically use
-find and use gnumpy.
+but if you want higher resolution, you can download R=10,000 and
+R=375,000 data from `this webpage <http://astro.caltech.edu/~mz/absorption.html>`_

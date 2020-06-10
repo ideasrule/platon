@@ -1,10 +1,5 @@
-import os
-
 import numpy as np
 import matplotlib.pyplot as plt
-import scipy.interpolate
-import emcee
-import corner
 import pickle
 
 from platon.fit_info import FitInfo
@@ -98,12 +93,13 @@ result = retriever.run_multinest(bins, depths, errors,
                                  None, None, None,
                                  fit_info,
                                  rad_method="xsec") #"ktables" to use corr-k
+with open("example_retrieval_result.pkl", "wb") as f:
+    pickle.dump(result, f)
 
-pickle.dump("my_dynesty_run.pkl", open("result", "wb"))
-np.save("samples.npy", result.samples)
-np.save("weights.npy", np.exp(result.logwt))
-np.save("ln_likelihood.npy", result.logl)
-np.save("ln_probability.npy", result.logp)
+#Useful members: result.samples, result.weights, result.logl, result.logp    
 
+#Plot the spectrum and save it to best_fit.png
 result.plot_spectrum("best_fit")
+
+#Plot the 2D posteriors with "corner" package and save it to multinest_corner.png
 result.plot_corner("multinest_corner.png")

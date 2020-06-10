@@ -19,11 +19,22 @@ radius of 1 micron and standard deviation of 0.5.  They have a density of
 :math:`10^9/m^3` at the cloud-top pressure of :math:`10^5` Pa, declining with
 altitude with a scale height of 0.5 times the gas scale height.
 
-To retrieve Mie scattering parameters, make sure to set log_scatt_factor to 0, log_number_density to a finite value, and ri to the complex refractive
-index of the scattering particles (which cannot be a free parameter)::
+We also allow the computation of Mie scattering for three condensates using
+their actual, wavelength-dependent refractive indices, assuming a standard
+deviation in the lognormal size distribution of 0.5::
+
+  calculator.compute_depths(Rs, Mp, Rp, T,
+      ri = "TiO2", frac_scale_height = 0.5, number_density = 1e9,
+      part_size = 1e-6, cloudtop_pressure=1e5)
+
+The supported species are MgSiO3_sol, SiO2_amorph, and TiO2, using the
+refractive index data of `Kitzmann et al 2017 <https://arxiv.org/abs/1710.04946>`_.
+
+To retrieve Mie scattering parameters, make sure to set log_scatt_factor to 0,
+and log_number_density to a finite value.  n and log_k specify the real component and log10 of the imaginary component of the complex refractive index.  We recommend fixing at least n.  Example::
 
   fit_info = retriever.get_default_fit_info(Rs, Mp, Rp, T,
-      log_scatt_factor = -np.inf, log_number_density = 9, ri = 1.33-0.1j)
+      log_scatt_factor = 0, log_number_density = 9, n = 1.33, log_k=-1)
 
   fit_info.add_uniform_fit_param('log_number_density', 5, 15)
   fit_info.add_uniform_fit_param('log_part_size', -7, -4)

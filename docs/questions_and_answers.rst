@@ -9,26 +9,18 @@ in that order.
 
   We account for gas absorption, collisional absorption, an opaque
   cloud deck, and scattering with user-specified slope and amplitude
-  (or Rayleigh, if not specified).  34 chemical species are included
+  (or Rayleigh, if not specified).  H- bound-free and free-free absorption
+  is not enabled by default, but can be turned on by passing add_H_minus_absorption=True to compute_depths.  34 chemical species are included
   in our calculations, namely the ones listed in data/species_info.
   The abundances of these species were calculated using GGchem for a
   grid of metallicity, C/O ratio, temperature, and pressure, assuming
-  equilibrium chemistry.  Metallicity ranges from 0.1-1000x solar, C/O
-  ratio from 0.05 to 2, temperature from 300 to 3000 K, and pressure
+  equilibrium chemistry with or without condensation.  Condensation can be
+  toggled using include_condensation=True/False.  Metallicity ranges from 0.1-1000x solar, C/O
+  ratio from 0.05 to 2, temperature from 200 to 3000 K, and pressure
   from 10^-4 to 10^8 Pa.  If you wander outside these limits, PLATON
   will throw a ValueError.
   
-* **Why does PLATON not exactly agree with ExoTransmit?**
-
-  We have made many improvements to the ExoTransmit algorithm to enhance the
-  accuracy of our transit depth calculations.  Among the most consequential are
-  allowing the gravitational acceleration to vary with height, and truncating
-  the atmosphere at 10^-4 Pa instead of 0.1 Pa.  Both of these changes tend to
-  increase the transit depth.  Precise agreement with
-  ExoTransmit should not be expected.
-
-* **How do I use PLATON with ExoTransmit input files? Or: how do I specify
-  custom abundances and T/P profiles?**
+* **How do I specify custom abundances and T/P profiles?**
   
   By example: ::
     
@@ -38,19 +30,42 @@ in that order.
     _, pressures, temperatures = np.loadtxt("t_p_1200K.dat", skiprows=1, unpack=True)
 
     # These files are found in examples/custom_abundances.  They are equivalent
-    # to the ExoTransmit EOS files, except that COS is renamed to OCS
+    # to the ExoTransmit EOS files, except that COS is renamed to OCS.  They provide
+    # the abundance at every pressure and temperature grid point.  To create your
+    # own, see the documentation for custom_abundances in
+    #:func:`~platon.transit_depth_calculator.TransitDepthCalculator.compute_depths`    
     abundances = AbundanceGetter.from_file("abund_1Xsolar_cond.dat")
 
-    calculator = TransitDepthCalculator()
-    wavelengths, transit_depths = calculator.compute_depths(star_radius, planet_mass, planet_radius, temperature=None, logZ=None, CO_ratio=None, custom_abundances=abundances, custom_T_profile=temperatures, custom_P_profile=pressures)
+  Alternatively, one can set vertically constant abundances for some species
+  by getting the equilibrium abundances, then modifying them ::
 
-* **Should I use PLATON with ExoTransmit input files?**
+    from platon.abundance_getter import AbundanceGetter
+    getter = AbundanceGetter()
+    # Solar logZ and C/O ratio. Modify as required.
+    abundances = getter.get(0, 0.53)
 
-  No.  The recommended usage is much simpler, and is outlined in both the
-  examples/ directory and the Quick Start.
+    # Zero out CO.  (Note that if CO is a major component, you should probably
+    # renormalize the abundances of other species so that they add up to 1.)    
+    abundances["CO"] *= 0
+
+    # Set CH4 abundance to a constant throughout the atmosphere
+    abundances["CH4"] *= 0
+    abundances["CH4"] += 1e-5
+
+    
+* **How do I do check what effect a species has on the transit spectrum?**
+  Use the method above to zero out abundances of one species at a time.  
+  Then call compute_depths with logZ and CO_ratio set to None: ::
+
+    calculator.compute_depths(star_radius, planet_mass, planet_radius, temperature,
+    logZ=None, CO_ratio=None, custom_abundances=abundances)
+
+  Alternatively, you can delete absorption coefficients from PLATON_DIR/platon/data/Absorption,
+  which has the effect of zeroing the opacity of those molecules.
+
 
 * **Which parameters are supported in retrieval?**
-  See the documentation for :func:`~platon.retriever.Retriever.get_default_fit_info`.  All arguments to this method are possible fit parameters.  However, we
+  See the documentation for :func:`~platon.combined_retriever.CombinedRetriever.get_default_fit_info`.  All arguments to this method are possible fit parameters.  However, we
   recommend not fitting for T_star, as it has a very small effect on the result
   to begin with.  Mp and Rs are usually measured to greater precision than you
   can achieve in a fit, but we recommend fitting them with Gaussian priors to
@@ -58,11 +73,7 @@ in that order.
 
 * **Should I use run_multinest, or run_emcee?**
   
-  That depends on whether you like nested sampling or MCMC!  You should try
-  both and compare the results.  Nestled sampling is usually faster and has
-  an automatically determined stopping point, so we recommend starting with
-  that.  However, we have encountered cases where nested sampling stalls and
-  does not finish even after many weeks.  In such cases, use MCMC.
+  That depends on whether you like nested sampling or MCMC!  We recommend nested sampling because it handles multimodal distributions more robustly, and because it has a stopping criterion.  With emcee, checking for convergence is highly non-trivial.
    
 * **My corner plots look ugly.  What do I do?**
   
@@ -78,35 +89,6 @@ in that order.
 
   Look at BestFit.txt.  It'll have the 16th, 50th, and 84th percentiles of
   all parameters, as well as the best fit values.
-  
-* **How do I do check what effect a species has on the transit spectrum?**
-  You can tweak the atmospheric abundances and see what happens.  First, get
-  baseline abundances: ::
-
-    from platon.abundance_getter import AbundanceGetter
-    getter = AbundanceGetter()
-    # Solar logZ and C/O ratio. Modify as required.
-    abundances = getter.get(0, 0.53)
-
-  You can then modify this at will: ::
-
-    # Zero out CO.  (Note that if CO is a major component, you should probably
-    # renormalize the abundances of other species so that they add up to 1.)
-    
-    abundances["CO"] *= 0
-
-    # Set CH4 abundance to a constant throughout the atmosphere
-    abundances["CH4"] *= 0
-    abundances["CH4"] += 1e-5
-
-  Then call compute_depths with logZ and CO_ratio set to None: ::
-
-    calculator.compute_depths(star_radius, planet_mass, planet_radius, temperature, logZ=None, CO_ratio=None, custom_abundances=abundances)
-
-* **How do I specify custom abundances in the forward model?**
-  See the answer to the above question.  If you want to specify different
-  abundances for each temperature/pressure point instead of a constant
-  abundance, see the documentation for custom_abundances in :func:`~platon.transit_depth_calculator.TransitDepthCalculator.compute_depths`
     
 * **How do I retrieve individual species abundances?**
   You can't.  While this would be trivial to implement--and you can do so if
@@ -119,9 +101,7 @@ in that order.
   If you didn't follow the installation instructions, go back and re-read them.
   Make sure you have OpenBLAS, MKL, or another basic linear algebra library
   (BLAS) installed
-  and linked to numpy.  If you intend to use the eclipse depth calculator and
-  have a CUDA-capable GPU, install CUDA, cudamat, and gnumpy; the eclipse
-  depth calculator should detect gnumpy and use the GPU.
+  and linked to numpy.
 
   If PLATON is still too slow, try decreasing num_profile_heights in
   transit_depth_calculator.py (for transit depths) or
@@ -130,8 +110,22 @@ in that order.
   correspond to molecules which contribute negligible opacity.  This has the
   effect of setting their absorption cross section to 0.
   
-  We have experienced cases where the nested sampling retrieval seemingly gets
-  stuck, and doesn't finish even after many weeks.  In these cases, try MCMC
-  instead, as that is guaranteed to terminate in the number of steps you
-  specify.
-  
+  In some cases, nested sampling becomes extremely inefficient with the default
+  sampling method.  In those cases, pass sample="rwalk" to run_multinest, which
+  will cap the sampling efficiency at 1/25, 25 being the number of random walks to take.  According to the dynesty documentation, 25 should be sufficient
+  at low dimensionality (<=10), but 50 might be necessary at
+  moderate dimensionality (10-20).  To change the number of random walks to 50, pass walks=50.
+
+* **How small can I set my wavelength bins?**
+  The error in the opacity sampling calculation for a given reasonably small bin is equal to the standard deviation of the
+  transit/eclipse depths in that bin divided by sqrt(N), where N is the number of points in the bin.
+  With the default opacity resolution of R=1000, N = 1000 * (ln(max_wavelength/min_wavelength)).  We recommend that you
+  keep N above 10 to avoid unreasonably large errors.  PLATON will throw a
+  warning for N <= 5.
+
+* **What opacity resolution should I use?  How many live points**
+  This is a tradeoff between running time and accuracy.  Roughly speaking,
+  the running time is proportional to the resolution and to the number of live
+  points.
+
+  We recommend a staged approach to retrievals.  Exploratory data analysis can be done with R=1000 opacities and 200 live points.  In the process, intermittent spot checks should be performed with R=10,000 opacities and 200 live points to check the effect of resolution, and with R=1000 opacities and 1000 live points to check the effect of sparse sampling.  When one is satisfied with the exploratory data analysis and is ready to finalize the results, one should run a final retrieval with R=10,000 opacities and 1000 live points.  This is the approach we followed for HD 189733b, although had we stuck with the low-resolution, sparsely sampled retrieval, our posteriors would have been slightly broader, but none of our conclusions would have changed.

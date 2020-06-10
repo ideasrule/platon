@@ -42,7 +42,6 @@ class AtmosphereSolver:
             self.stellar_spectra = load_dict_from_pickle("data/stellar_spectra.pkl")
         else:
             self.lambda_grid = load_numpy("data/k_wavelengths.npy")
-            diffs = np.unique(self.lambda_grid)
             self.d_ln_lambda = np.median(np.diff(np.log(np.unique(self.lambda_grid))))
             self.stellar_spectra = load_dict_from_pickle("data/k_stellar_spectra.pkl")
 
@@ -108,6 +107,12 @@ class AtmosphereSolver:
                or end < np.min(self.lambda_grid) \
                or end > np.max(self.lambda_grid):
                 raise ValueError("Invalid wavelength bin: {}-{} meters".format(start, end))
+            num_points = np.sum(np.logical_and(self.lambda_grid > start,
+                                               self.lambda_grid < end))
+            if num_points == 0:
+                raise ValueError("Wavelength bin too narrow: {}-{} meters".format(start, end))
+            if num_points <= 5:
+                print("WARNING: only {} points in {}-{} m bin. Results will be inaccurate".format(num_points, start, end))
         
         self.wavelength_rebinned = True
         self.wavelength_bins = bins
@@ -358,6 +363,8 @@ class AtmosphereSolver:
                 axis=0)
             unspotted_spectrum = interpolator(T_star)
             spot_spectrum = interpolator(T_spot)
+            if len(spot_spectrum) != len(lambdas):
+                raise ValueError("Stellar spectra has a different length ({}) than opacities ({})!  If you are using high resolution opacities, pass stellar_blackbody=True to compute_depths".format(len(spot_spectrum), len(lambdas)))
         else:
             d_lambda = self.d_ln_lambda * lambdas
             unspotted_spectrum = 2 * c * np.pi / lambdas**4 / \
@@ -383,7 +390,7 @@ class AtmosphereSolver:
                        ri=None, frac_scale_height=1, number_density=0,
                        part_size=1e-6, part_size_std=0.5,
                        P_quench=1e-99,
-                       min_abundance=1e-99, min_cross_sec=1e-99):       
+                       min_abundance=1e-99, min_cross_sec=1e-99):
         self._validate_params(T_profile, logZ, CO_ratio, cloudtop_pressure)
        
         abundances = self._get_abundances_array(
@@ -454,7 +461,6 @@ class AtmosphereSolver:
                        "P_profile": P_profile,
                        "T_profile": T_profile,
                        "mu_profile": mu_profile,
-                       "atm_abundances": atm_abundances,
-                       "unbinned_wavelengths": self.lambda_grid}
+                       "atm_abundances": atm_abundances}
         
         return output_dict

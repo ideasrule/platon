@@ -9,6 +9,14 @@ profile::
 
   from platon.TP_profile import Profile
   p = Profile()
+  p.set_from_radiative_solution(T_star, Rs, a, Mp, Rp, beta, log_k_th, log_gamma, log_gamma2, alpha, T_int)
+
+This creates a parametric T-P profile according to `Line et al 2013 <https://arxiv.org/pdf/1304.5561.pdf>`_, which is an extension of the Guillot et al 2010 parameterization.  We recommend the use of this profile.
+
+Alternatively::
+  
+  from platon.TP_profile import Profile
+  p = Profile()
   p.set_parametric(1200, 500, 0.5, 0.6, 1e6, 1900)
 
 This creates a parametric T-P profile according to `Madhusudhan & Seager 2009 <https://arxiv.org/pdf/0910.1347.pdf>`_.  The parameters are: T\ :sub:`0`\, P\ :sub:`1`\, α\ :sub:`1`\, α\ :sub:`2`\, P\ :sub:`3`\, T\ :sub:`3`\.  P\ :sub:`0` \ is set to 10\ :sup:`-4` \ Pa, while P\ :sub:`2` \ and T\ :sub:`2` \ are derived from the six specified parameters.
@@ -41,5 +49,5 @@ It is also possible to retrieve on combined transit and eclipse depths::
 Here, T_limb is the temperature at the planetary limb (used for transit depths),
 while the T-P profile parameters are for the dayside (used for eclipse depths).
 
-  
+To do an eclipse-only retrieval, set transit_bins, transit_depths, and transit_errors to None, and likewise to do a transit-only retrieval.
 

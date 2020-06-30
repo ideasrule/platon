@@ -33,8 +33,8 @@ def _solve(P_profile, T_profile, ref_pressure, mu_profile,
 
     R_hill = star_radius * \
         (T_star / T_profile[0])**2 * (planet_mass / (3 * M_sun))**(1.0 / 3)
-    max_r_estimate = 1.0 / (1 / planet_radius + k_B * np.mean(T_profile) * np.log(
-        P_profile[0] / P_profile[-1]) / (G * planet_mass * np.mean(mu_profile) * AMU))
+    max_r_estimate = 1.0 / (1 / planet_radius + k_B * np.median(T_profile) * np.log(
+        P_profile[0] / ref_pressure) / (G * planet_mass * np.mean(mu_profile) * AMU))
     # The above equation is negative if the real answer is infinity
 
     if max_r_estimate < 0 or max_r_estimate > R_hill:

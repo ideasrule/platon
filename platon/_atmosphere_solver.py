@@ -242,7 +242,7 @@ class AtmosphereSolver:
                 scipy.interpolate.interp1d(self.all_radii, self.all_cross_secs[ri])(part_size))
         else:
             eff_cross_section = np.zeros(self.N_lambda)
-            z_scores = -np.logspace(np.log10(0.1), np.log10(max_zscore), num_integral_points/2)
+            z_scores = -np.logspace(np.log10(0.1), np.log10(max_zscore), int(num_integral_points/2))
             z_scores = np.append(z_scores[::-1], -z_scores)
 
             probs = np.exp(-z_scores**2/2) / np.sqrt(2 * np.pi)

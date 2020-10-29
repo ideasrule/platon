@@ -44,7 +44,8 @@ class TestTransitDepthCalculator(unittest.TestCase):
 
     def test_custom_file(self):
         custom_abundances = AbundanceGetter.from_file("tests/testing_data/abund_1Xsolar_cond.dat")
-        custom_abundances["SH"] *= 0
+        for key in ["HCl", "HF", "MgH", "SH", "SiH", "C2H2", "C2H4", "C2H6", "H2CO", "OCS"]:
+            del custom_abundances[key]
         frac_dev = self.get_frac_dev(None, None, custom_abundances)
 
         self.assertLess(np.percentile(frac_dev, 95), 0.03)
@@ -55,7 +56,7 @@ class TestTransitDepthCalculator(unittest.TestCase):
 
         #Some, but very few, individual lines are highly discrepant
         self.assertLess(np.percentile(frac_dev, 95), 0.03)
-        self.assertLess(np.max(frac_dev), 0.07)
+        self.assertLess(np.max(frac_dev), 0.1)
 
     def test_unbound_atmosphere(self):
         Rp = 6.378e6

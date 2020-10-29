@@ -25,7 +25,7 @@ class TestEclipseDepthCalculator(unittest.TestCase):
 
         rel_diffs = (info_dict["planet_spectrum"] - blackbody)/blackbody
 
-        plt.loglog(1e6 * wavelengths, 1e-3 * blackbody, label="Blackbody")
+        '''plt.loglog(1e6 * wavelengths, 1e-3 * blackbody, label="Blackbody")
         plt.loglog(1e6 * wavelengths, 1e-3 * info_dict["planet_spectrum"], label="PLATON")
         plt.xlabel("Wavelength (micron)", fontsize=12)
         plt.ylabel("Planet flux (erg/s/cm$^2$/micron)", fontsize=12)
@@ -36,7 +36,7 @@ class TestEclipseDepthCalculator(unittest.TestCase):
         plt.xlabel("Wavelength (micron)", fontsize=12)
         plt.ylabel("Relative difference (%)", fontsize=12)
         plt.tight_layout()
-        plt.show()
+        plt.show()'''
         
         # Should be exact, but in practice isn't, due to our discretization
         self.assertLess(np.percentile(np.abs(rel_diffs), 50), 0.02)
@@ -90,7 +90,7 @@ class TestEclipseDepthCalculator(unittest.TestCase):
         rel_diffs = np.abs(ktab_depths - xsec_depths)/ ktab_depths
         self.assertTrue(np.median(rel_diffs) < 0.03)
         self.assertTrue(np.percentile(rel_diffs, 95) < 0.15)
-        self.assertTrue(np.max(rel_diffs) < 0.2)
+        self.assertTrue(np.max(rel_diffs) < 0.3)
         
         '''print(np.median(rel_diffs), np.percentile(rel_diffs, 95), np.max(rel_diffs))
         plt.loglog(xsec_wavelengths, xsec_depths)

@@ -10,6 +10,7 @@ class RetrievalResult:
                  best_fit_transit_depths=None, best_fit_transit_dict=None,
                  best_fit_eclipse_depths=None, best_fit_eclipse_dict=None,
                  fit_info=None):
+        
         self.results = results
         self.retrieval_type = retrieval_type
         self.transit_bins = transit_bins
@@ -17,6 +18,7 @@ class RetrievalResult:
         self.transit_errors = transit_errors
 
         if transit_bins is not None:
+            transit_bins = np.array(transit_bins)
             self.transit_wavelengths = (transit_bins[:,0] + transit_bins[:,1]) / 2
             self.transit_chi_sqr = np.sum((transit_depths - best_fit_transit_depths)**2 / transit_errors**2)
             
@@ -26,6 +28,7 @@ class RetrievalResult:
         self.eclipse_errors = eclipse_errors
 
         if eclipse_bins is not None:
+            eclipse_bins = np.array(eclipse_bins)
             self.eclipse_wavelengths = (eclipse_bins[:,0] + eclipse_bins[:,1]) / 2
             self.eclipse_chi_sqr = np.sum((eclipse_bins[:,0] + eclipse_bins[:,1])**2 / eclipse_errors**2)
 

@@ -89,7 +89,12 @@ class Profile:
 
     def set_from_radiative_solution(self, T_star, Rs, a, Mp, Rp, beta, log_k_th, log_gamma, log_gamma2=None, alpha=0, T_int=100, **ignored_kwargs):
         '''From Line et al. 2013: http://adsabs.harvard.edu/abs/2013ApJ...775..137L, Equation 13 - 16'''
-
+        if T_star is None:
+            #these parameters only affect T_eq, which should be 0 if no star
+            T_star = 0.
+            a = 1.
+            beta = 0.
+            
         k_th = 10.0**log_k_th
         gamma = 10.0**log_gamma
         gamma2 = 10.0**log_gamma2

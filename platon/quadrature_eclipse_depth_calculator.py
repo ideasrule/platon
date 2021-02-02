@@ -28,20 +28,20 @@ class EclipseDepthCalculator:
         # scipy.special.expn is slow when called on millions of values, so
         # use interpolator to speed it up
         tau_cache = np.logspace(-6, 3, 1000)
-        self.exp3_interpolator = scipy.interpolate.interp1d(
+        self.exp2_interpolator = scipy.interpolate.interp1d(
             tau_cache,
-            scipy.special.expn(3, tau_cache),
+            scipy.special.expn(2, tau_cache),
             bounds_error=False,
-            fill_value=(0.5, 0))
+            fill_value=(1, 0))
+        plt.loglog(tau_cache, scipy.special.expn(2, tau_cache))
+        plt.show()
 
-        
     def change_wavelength_bins(self, bins):        
         '''Same functionality as :func:`~platon.transit_depth_calculator.TransitDepthCalculator.change_wavelength_bins`'''
         self.atm.change_wavelength_bins(bins)
 
 
-    def _get_binned_depths(self, depths, stellar_spectrum, is_brown_dwarf=False,
-                           n_gauss=10):
+    def _get_binned_depths(self, depths, stellar_spectrum, n_gauss=10):
         #Step 1: do a first binning if using k-coeffs; first binning is a
         #no-op otherwise
         if self.atm.method == "ktables":
@@ -70,7 +70,7 @@ class EclipseDepthCalculator:
 
         
         if self.atm.wavelength_bins is None:
-            return intermediate_lambdas, intermediate_depths, intermediate_lambdas, intermediate_depths
+            return intermediate_lambdas, intermediate_depths
         
         binned_wavelengths = []
         binned_depths = []
@@ -79,15 +79,11 @@ class EclipseDepthCalculator:
                 intermediate_lambdas >= start,
                 intermediate_lambdas < end)
             binned_wavelengths.append(np.mean(intermediate_lambdas[cond]))
-            if is_brown_dwarf:
-                #really the integrated flux
-                binned_depth = np.sum(intermediate_depths[cond])
-            else:
-                binned_depth = np.average(intermediate_depths[cond],
-                                          weights=intermediate_stellar_spectrum[cond])
+            binned_depth = np.average(intermediate_depths[cond],
+                                      weights=intermediate_stellar_spectrum[cond])
             binned_depths.append(binned_depth)
             
-        return intermediate_lambdas, intermediate_depths, np.array(binned_wavelengths), np.array(binned_depths)
+        return np.array(binned_wavelengths), np.array(binned_depths)
 
     def _get_photosphere_radii(self, taus, radii):
         intermediate_radii = 0.5 * (radii[0:-1] + radii[1:])
@@ -104,8 +100,6 @@ class EclipseDepthCalculator:
                        T_spot=None, spot_cov_frac=None,
                        ri = None, frac_scale_height=1,number_density=0,
                        part_size=1e-6, part_size_std=0.5, P_quench=1e-99,
-                       is_brown_dwarf=False,
-                       dist=None,
                        stellar_blackbody=False,
                        full_output=False):
         '''Most parameters are explained in :func:`~platon.transit_depth_calculator.TransitDepthCalculator.compute_depths`
@@ -117,8 +111,6 @@ class EclipseDepthCalculator:
         '''
         T_profile = t_p_profile.temperatures
         P_profile = t_p_profile.pressures
-        #plt.semilogy(T_profile, P_profile)
-        #plt.show()
         atm_info = self.atm.compute_params(
             star_radius, planet_mass, planet_radius, P_profile, T_profile,
             logZ, CO_ratio, add_gas_absorption, add_H_minus_absorption, add_scattering,
@@ -141,17 +133,44 @@ class EclipseDepthCalculator:
         reshaped_lambda_grid = lambda_grid.reshape((-1, 1))
         planck_function = 2*h*c**2/reshaped_lambda_grid**5/(np.exp(h*c/reshaped_lambda_grid/k_B/intermediate_T) - 1)
 
-        #padded_taus: ensures 1st layer has 0 optical depth
-        padded_taus = np.zeros((taus.shape[0], taus.shape[1] + 1))
-        padded_taus[:, 1:] = taus
-        integrand = planck_function * np.diff(scipy.special.expn(3, padded_taus), axis=1)
-        fluxes = -2 * np.pi * np.sum(integrand, axis=1)
-        #print("Flux", np.median(fluxes))
+        ngauss = 4
+        fluxes_gauss = 0.
+        points, weights = scipy.special.roots_legendre(ngauss)
+        points = (points + 1)/2
+        weights /= 2
+
+        '''ngauss = 4
+        points, weights = np.polynomial.legendre.leggauss(ngauss*2)
+        points = points[ngauss:]
+        weights = weights[ngauss:]'''
+        
+        print(points)
+        print(weights)
+
+        fluxes_gauss = 0.
+        for p in range(len(points)):
+            print(p)
+            if points[p] < 0: continue
+            mu = points[p]
+            #fluxes_gauss += 2 * np.pi * weights[p] * scipy.integrate.trapz(planck_function * np.exp(-taus / mu), taus, axis=1)
+            fluxes_gauss += 2 * np.pi * weights[p] * scipy.integrate.simps(planck_function * np.exp(-taus / mu), taus, axis=1)
+
+        
+        fluxes = 2 * np.pi * scipy.integrate.simps(planck_function * self.exp2_interpolator(taus), taus, axis=1)
+        plt.semilogx(1e6 * lambda_grid, 100 * (fluxes_gauss / fluxes - 1))
+        plt.xlabel("Wavelength ($\mu$m)", fontsize=12)
+        plt.ylabel("Quadrature/$E_2$ - 1 (%)", fontsize=12)
+        
+        #plt.semilogx(lambda_grid, fluxes / fluxes_gauss - 1)
+        plt.show()
+
         if not np.isinf(cloudtop_pressure):
             max_taus = np.max(taus, axis=1)
             fluxes_from_cloud = -np.pi * planck_function[:, -1] * (max_taus**2 * scipy.special.expi(-max_taus) + max_taus * np.exp(-max_taus) - np.exp(-max_taus))
             fluxes += fluxes_from_cloud
 
+        fluxes = fluxes_gauss
+            
         stellar_photon_fluxes, _ = self.atm.get_stellar_spectrum(
             lambda_grid, T_star, T_spot, spot_cov_frac, stellar_blackbody)
         d_lambda = self.atm.d_ln_lambda * lambda_grid
@@ -160,25 +179,17 @@ class EclipseDepthCalculator:
         photosphere_radii = self._get_photosphere_radii(taus, atm_info["radii"])
         eclipse_depths = photon_fluxes / stellar_photon_fluxes * (photosphere_radii/star_radius)**2
 
-        #For correlated k, eclipse_depths has n_gauss points per wavelength, while unbinned_depths has 1 point per wavelength
-        unbinned_wavelengths, unbinned_depths, binned_wavelengths, binned_depths = self._get_binned_depths(eclipse_depths, stellar_photon_fluxes, is_brown_dwarf=is_brown_dwarf)
-
-        _, unbinned_fluxes, _, binned_fluxes = self._get_binned_depths(fluxes, stellar_photon_fluxes)
-
-        if is_brown_dwarf:
-            ret_val = binned_fluxes
-        else:
-            ret_val = binned_depths
+        binned_wavelengths, binned_depths = self._get_binned_depths(eclipse_depths, stellar_photon_fluxes)
 
         if full_output:
             atm_info["stellar_spectrum"] = stellar_photon_fluxes
             atm_info["planet_spectrum"] = fluxes
-            atm_info["unbinned_wavelengths"] = unbinned_wavelengths
-            atm_info["unbinned_eclipse_depths"] = unbinned_depths
-            atm_info["unbinned_fluxes"] = unbinned_fluxes
-            atm_info["binned_fluxes"] = binned_fluxes
+            atm_info["unbinned_eclipse_depths"] = eclipse_depths
             atm_info["taus"] = taus
-            atm_info["contrib"] = -integrand / fluxes[:, np.newaxis]
-            return binned_wavelengths, ret_val, atm_info
+            atm_info["contrib"] = 2 * np.pi * planck_function * self.exp2_interpolator(taus) * d_taus / fluxes[:, np.newaxis]
+            return binned_wavelengths, binned_depths, atm_info
 
-        return binned_wavelengths, ret_val
+        return binned_wavelengths, binned_depths
+            
+
+

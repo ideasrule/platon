@@ -94,8 +94,9 @@ class CombinedRetriever:
                     10**fit_info._get("log_cloudtop_P"))
 
     def _ln_like(self, params, transit_calc, eclipse_calc, fit_info, measured_transit_depths,
-                 measured_transit_errors, measured_eclipse_depths,
-                 measured_eclipse_errors, wfc3_start=1e-6, wfc3_end=1.7e-6, ret_best_fit=False):
+                 measured_transit_errors, measured_eclipse_depths, 
+                 measured_eclipse_errors, wfc3_start=1e-6, wfc3_end=1.7e-6, is_brown_dwarf=False,
+                 ret_best_fit=False):
 
         if not fit_info._within_limits(params):
             return -np.inf
@@ -155,6 +156,7 @@ class CombinedRetriever:
             if measured_eclipse_depths is not None:
                 t_p_profile = Profile()
                 t_p_profile.set_from_params_dict(params_dict["profile_type"], params_dict)
+                t_p_profile.temperatures[t_p_profile.temperatures > 3000] = 3000
 
                 if np.any(np.isnan(t_p_profile.temperatures)):
                     raise AtmosphereError("Invalid T/P profile")
@@ -165,14 +167,24 @@ class CombinedRetriever:
                     cloudtop_pressure=cloudtop_P,
                     T_spot=T_spot, spot_cov_frac=spot_cov_frac,
                     frac_scale_height=frac_scale_height, number_density=number_density,
-                    part_size = part_size, ri=ri, P_quench=P_quench, full_output=True)
-                calculated_eclipse_depths[np.logical_and(eclipse_wavelengths >= wfc3_start, eclipse_wavelengths <= wfc3_end)] += params_dict["wfc3_offset_eclipse"] 
+                    part_size = part_size, ri=ri, P_quench=P_quench, full_output=True, is_brown_dwarf=is_brown_dwarf)
+                calculated_eclipse_depths[np.logical_and(eclipse_wavelengths >= wfc3_start, eclipse_wavelengths <= wfc3_end)] += params_dict["wfc3_offset_eclipse"]
+
+                if is_brown_dwarf:
+                    dist = params_dict["dist"]
+                    calculated_eclipse_depths *= (Rp / dist)**2
+                
                 residuals = calculated_eclipse_depths - measured_eclipse_depths
+                #print(np.median(calculated_eclipse_depths))
+                #plt.plot(calculated_eclipse_depths)
+                #plt.plot(measured_eclipse_depths, '.')
+                #plt.show()
+                
                 scaled_errors = error_multiple * measured_eclipse_errors
                 ln_likelihood += -0.5 * np.sum(residuals**2 / scaled_errors**2 + np.log(2 * np.pi * scaled_errors**2))                                
                 
         except AtmosphereError as e:
-            print(e)
+            #print(e)
             return -np.inf
         
         self.last_params = params
@@ -185,11 +197,11 @@ class CombinedRetriever:
 
     def _ln_prob(self, params, transit_calc, eclipse_calc, fit_info, measured_transit_depths,
                  measured_transit_errors, measured_eclipse_depths,
-                 measured_eclipse_errors):
+                 measured_eclipse_errors, is_brown_dwarf):
         
         ln_like = self._ln_like(params, transit_calc, eclipse_calc, fit_info, measured_transit_depths,
                                 measured_transit_errors, measured_eclipse_depths,
-                                measured_eclipse_errors)
+                                measured_eclipse_errors, is_brown_dwarf=is_brown_dwarf)
         return fit_info._ln_prior(params) + ln_like
 
     
@@ -198,7 +210,7 @@ class CombinedRetriever:
                   eclipse_bins, eclipse_depths, eclipse_errors,
                   fit_info, nwalkers=50,
                   nsteps=1000, include_condensation=True,
-                  rad_method="xsec",
+                  rad_method="xsec", is_brown_dwarf=False,
                   num_final_samples=100):
         '''Runs affine-invariant MCMC to retrieve atmospheric parameters.
 
@@ -275,7 +287,7 @@ class CombinedRetriever:
         best_fit_transit_depths, best_fit_transit_info, best_fit_eclipse_depths, best_fit_eclipse_info = self._ln_like(
             best_params_arr, transit_calc, eclipse_calc, fit_info,
             transit_depths, transit_errors,
-            eclipse_depths, eclipse_errors, ret_best_fit=True)
+            eclipse_depths, eclipse_errors, ret_best_fit=True, is_brown_dwarf=is_brown_dwarf)
         retrieval_result = RetrievalResult(
             {"acceptance_fraction": sampler.acceptance_fraction,
              "chain": sampler.chain,
@@ -298,7 +310,8 @@ class CombinedRetriever:
             ret = self._ln_like(
                 params, transit_calc, eclipse_calc, fit_info,
                 transit_depths, transit_errors,
-                eclipse_depths, eclipse_errors, ret_best_fit=True)
+                eclipse_depths, eclipse_errors, ret_best_fit=True,
+                is_brown_dwarf=is_brown_dwarf)
             if ret == -np.inf: continue
             _, transit_info, _, eclipse_info = ret
                 
@@ -317,7 +330,7 @@ class CombinedRetriever:
                       fit_info,
                       include_condensation=True, rad_method="xsec",
                       maxiter=None, maxcall=None, nlive=100,
-                      num_final_samples=100,
+                      num_final_samples=100, is_brown_dwarf=False,
                       **dynesty_kwargs):
         '''Runs nested sampling to retrieve atmospheric parameters.
 
@@ -376,7 +389,7 @@ class CombinedRetriever:
 
         def multinest_ln_like(cube):
             ln_like = self._ln_like(cube, transit_calc, eclipse_calc, fit_info, transit_depths, transit_errors,
-                                 eclipse_depths, eclipse_errors)
+                                    eclipse_depths, eclipse_errors, is_brown_dwarf=is_brown_dwarf)
             if np.random.randint(100) == 0:
                 print("\nEvaluated params: {}".format(self.pretty_print(fit_info)))
             return ln_like
@@ -405,7 +418,8 @@ class CombinedRetriever:
         best_fit_transit_depths, best_fit_transit_info, best_fit_eclipse_depths, best_fit_eclipse_info = self._ln_like(
             best_params_arr, transit_calc, eclipse_calc, fit_info,
             transit_depths, transit_errors,
-            eclipse_depths, eclipse_errors, ret_best_fit=True)
+            eclipse_depths, eclipse_errors, ret_best_fit=True,
+            is_brown_dwarf=is_brown_dwarf)
 
         retrieval_result = RetrievalResult(
             result, "dynesty",
@@ -421,11 +435,16 @@ class CombinedRetriever:
             _, transit_info, _, eclipse_info = self._ln_like(
                 params, transit_calc, eclipse_calc, fit_info,
                 transit_depths, transit_errors,
-                eclipse_depths, eclipse_errors, ret_best_fit=True)
+                eclipse_depths, eclipse_errors, ret_best_fit=True,
+                is_brown_dwarf=is_brown_dwarf)
             if transit_depths is not None:
                 retrieval_result.random_transit_depths.append(transit_info["unbinned_depths"])
             if eclipse_depths is not None:
-                retrieval_result.random_eclipse_depths.append(eclipse_info["unbinned_eclipse_depths"])
+                if is_brown_dwarf:
+                    unbinned = eclipse_info["unbinned_fluxes"]
+                else:
+                    unbinned = eclipse_info["unbinned_eclipse_depths"]
+                retrieval_result.random_eclipse_depths.append(unbinned)
                     
         with open("retrieval_result.pkl", "wb") as f:
             pickle.dump(retrieval_result, f)            
@@ -441,6 +460,7 @@ class CombinedRetriever:
                              log_number_density=-np.inf, log_part_size=-6,
                              n=None, log_k=-np.inf,
                              log_P_quench=-99,
+                             dist = None,
                              wfc3_offset_transit=0, wfc3_offset_eclipse=0,
                              profile_type = 'isothermal', **profile_kwargs):
         '''Get a :class:`.FitInfo` object filled with best guess values.  A few

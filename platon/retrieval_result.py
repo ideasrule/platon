@@ -9,7 +9,7 @@ class RetrievalResult:
                  eclipse_bins=None, eclipse_depths=None, eclipse_errors=None,
                  best_fit_transit_depths=None, best_fit_transit_dict=None,
                  best_fit_eclipse_depths=None, best_fit_eclipse_dict=None,
-                 fit_info=None):
+                 fit_info=None, is_brown_dwarf=False):
         
         self.results = results
         self.retrieval_type = retrieval_type
@@ -42,7 +42,8 @@ class RetrievalResult:
 
         if "logz" in results:
             self.final_logz = results["logz"][-1]
-                 
+
+        self.is_brown_dwarf = is_brown_dwarf
             
     def __repr__(self):
         return str(self.__dict__)
@@ -94,13 +95,13 @@ class RetrievalResult:
             plt.figure(2, figsize=(16,6))
             lower_spectrum = np.percentile(self.random_eclipse_depths, 16, axis=0)
             upper_spectrum = np.percentile(self.random_eclipse_depths, 84, axis=0)
-            plt.fill_between(METRES_TO_UM * self.best_fit_eclipse_dict["unbinned_wavelengths"],
+            '''plt.fill_between(METRES_TO_UM * self.best_fit_eclipse_dict["unbinned_wavelengths"],
                              lower_spectrum,
                              upper_spectrum,
                              color="#f2c8c4")
             plt.plot(METRES_TO_UM * self.best_fit_eclipse_dict["unbinned_wavelengths"],
                      self.best_fit_eclipse_dict["unbinned_eclipse_depths"],
-                     alpha=0.4, color='r', label="Calculated (unbinned)")
+                     alpha=0.4, color='r', label="Calculated (unbinned)")'''
             plt.errorbar(METRES_TO_UM * self.eclipse_wavelengths,
                          self.eclipse_depths,
                          yerr=self.eclipse_errors,

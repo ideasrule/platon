@@ -267,8 +267,8 @@ class AtmosphereSolver:
         return absorption_coeff
 
     def _get_above_cloud_profiles(self, P_profile, T_profile, abundances,
-                                  planet_mass, planet_radius, star_radius,
-                                  above_cloud_cond, T_star=None):
+                                  planet_mass, planet_radius,
+                                  above_cloud_cond):
         
         assert(len(P_profile) == len(T_profile))
         # First, get atmospheric weight profile
@@ -285,7 +285,7 @@ class AtmosphereSolver:
 
         radii, dr = _hydrostatic_solver._solve(
             P_profile, T_profile, self.ref_pressure, mu_profile, planet_mass,
-            planet_radius, star_radius, above_cloud_cond, T_star)
+            planet_radius, above_cloud_cond)
         
         for key in atm_abundances:
             atm_abundances[key] = atm_abundances[key][above_cloud_cond]
@@ -377,7 +377,7 @@ class AtmosphereSolver:
         correction_factors = unspotted_spectrum/stellar_spectrum
         return stellar_spectrum, correction_factors
             
-    def compute_params(self, star_radius, planet_mass, planet_radius,
+    def compute_params(self, planet_mass, planet_radius,
                        P_profile, T_profile,
                        logZ=0, CO_ratio=0.53,
                        add_gas_absorption=True,
@@ -386,7 +386,6 @@ class AtmosphereSolver:
                        scattering_slope=4, scattering_ref_wavelength=1e-6,
                        add_collisional_absorption=True,
                        cloudtop_pressure=np.inf, custom_abundances=None,
-                       T_star=None, T_spot=None, spot_cov_frac=None,
                        ri=None, frac_scale_height=1, number_density=0,
                        part_size=1e-6, part_size_std=0.5,
                        P_quench=1e-99,
@@ -407,7 +406,7 @@ class AtmosphereSolver:
 
         radii, dr, atm_abundances, mu_profile = self._get_above_cloud_profiles(
             P_profile, T_profile, abundances, planet_mass, planet_radius,
-            star_radius, above_clouds, T_star)
+            above_clouds)
 
         P_profile = P_profile[above_clouds]
         T_profile = T_profile[above_clouds]

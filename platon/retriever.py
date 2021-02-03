@@ -10,8 +10,7 @@ import dynesty.utils
 import copy
 import pickle
 
-from .transit_depth_calculator import TransitDepthCalculator
-from .eclipse_depth_calculator import EclipseDepthCalculator
+from .flux_calculator import FluxCalculator
 from .fit_info import FitInfo
 from .constants import METRES_TO_UM, M_jup, R_jup, R_sun
 from ._params import _UniformParam
@@ -20,7 +19,7 @@ from ._output_writer import write_param_estimates_file
 from .TP_profile import Profile
 from .retrieval_result import RetrievalResult
 
-class CombinedRetriever:
+class Retriever:
     def pretty_print(self, fit_info):
         if not hasattr(self, "last_lnprob"):
             return
@@ -93,9 +92,9 @@ class CombinedRetriever:
                     fit_info._get("CO_ratio"),
                     10**fit_info._get("log_cloudtop_P"))
 
-    def _ln_like(self, params, transit_calc, eclipse_calc, fit_info, measured_transit_depths,
-                 measured_transit_errors, measured_eclipse_depths, 
-                 measured_eclipse_errors, wfc3_start=1e-6, wfc3_end=1.7e-6, is_brown_dwarf=False,
+    def _ln_like(self, params, flux_calc, fit_info, measured_fluxes,
+                 measured_flux_errors,
+                 wfc3_start=1e-6, wfc3_end=1.7e-6,
                  ret_best_fit=False):
 
         if not fit_info._within_limits(params):
@@ -111,77 +110,50 @@ class CombinedRetriever:
         scatt_slope = params_dict["scatt_slope"]
         cloudtop_P = 10.0**params_dict["log_cloudtop_P"]
         error_multiple = params_dict["error_multiple"]
-        Rs = params_dict["Rs"]
         Mp = params_dict["Mp"]
-        T_star = params_dict["T_star"]
-        T_spot = params_dict["T_spot"]
-        spot_cov_frac = params_dict["spot_cov_frac"]
         frac_scale_height = params_dict["frac_scale_height"]
         number_density = 10.0**params_dict["log_number_density"]
         part_size = 10.0**params_dict["log_part_size"]
-        P_quench = 10 ** params_dict["log_P_quench"]        
+        P_quench = 10 ** params_dict["log_P_quench"]
+        dist = params_dict["dist"]
 
         if "n" in params_dict and params_dict["n"] is not None and "log_k" in params_dict:
             ri = params_dict["n"] - 1j * 10**params_dict["log_k"]
         else:
             ri = None
-
             
-        if Rs <= 0 or Mp <= 0:
+        if Mp <= 0:
             return -np.inf
 
         ln_likelihood = 0
-        calculated_transit_depths = None
-        transit_info_dict = None
-        calculated_eclipse_depths = None
-        eclipse_info_dict = None
+        calculated_fluxes = None
+        flux_info_dict = None
         
-        try:
-            if measured_transit_depths is not None:
-                if T is None:
-                    raise ValueError("Must fit for T if using transit depths")
-                
-                transit_wavelengths, calculated_transit_depths, transit_info_dict = transit_calc.compute_depths(
-                    Rs, Mp, Rp, T, logZ, CO_ratio,
-                    scattering_factor=scatt_factor, scattering_slope=scatt_slope,
-                    cloudtop_pressure=cloudtop_P, T_star=T_star,
-                    T_spot=T_spot, spot_cov_frac=spot_cov_frac,
-                    frac_scale_height=frac_scale_height, number_density=number_density,
-                    part_size=part_size, ri=ri, P_quench=P_quench, full_output=True)
-                calculated_transit_depths[np.logical_and(transit_wavelengths >= wfc3_start, transit_wavelengths <= wfc3_end)] += params_dict["wfc3_offset_transit"]
-                residuals = calculated_transit_depths - measured_transit_depths
-                scaled_errors = error_multiple * measured_transit_errors
-                ln_likelihood += -0.5 * np.sum(residuals**2 / scaled_errors**2 + np.log(2 * np.pi * scaled_errors**2))
-                
-            if measured_eclipse_depths is not None:
-                t_p_profile = Profile()
-                t_p_profile.set_from_params_dict(params_dict["profile_type"], params_dict)
-                t_p_profile.temperatures[t_p_profile.temperatures > 3000] = 3000
+        try:            
+            t_p_profile = Profile()
+            t_p_profile.set_from_params_dict(params_dict["profile_type"], params_dict)
+            t_p_profile.temperatures[t_p_profile.temperatures > 3000] = 3000
 
-                if np.any(np.isnan(t_p_profile.temperatures)):
-                    raise AtmosphereError("Invalid T/P profile")
-                
-                eclipse_wavelengths, calculated_eclipse_depths, eclipse_info_dict = eclipse_calc.compute_depths(
-                    t_p_profile, Rs, Mp, Rp, T_star, logZ, CO_ratio,
-                    scattering_factor=scatt_factor, scattering_slope=scatt_slope,
-                    cloudtop_pressure=cloudtop_P,
-                    T_spot=T_spot, spot_cov_frac=spot_cov_frac,
-                    frac_scale_height=frac_scale_height, number_density=number_density,
-                    part_size = part_size, ri=ri, P_quench=P_quench, full_output=True, is_brown_dwarf=is_brown_dwarf)
-                calculated_eclipse_depths[np.logical_and(eclipse_wavelengths >= wfc3_start, eclipse_wavelengths <= wfc3_end)] += params_dict["wfc3_offset_eclipse"]
+            if np.any(np.isnan(t_p_profile.temperatures)):
+                raise AtmosphereError("Invalid T/P profile")
 
-                if is_brown_dwarf:
-                    dist = params_dict["dist"]
-                    calculated_eclipse_depths *= (Rp / dist)**2
-                
-                residuals = calculated_eclipse_depths - measured_eclipse_depths
-                #print(np.median(calculated_eclipse_depths))
-                #plt.plot(calculated_eclipse_depths)
-                #plt.plot(measured_eclipse_depths, '.')
-                #plt.show()
-                
-                scaled_errors = error_multiple * measured_eclipse_errors
-                ln_likelihood += -0.5 * np.sum(residuals**2 / scaled_errors**2 + np.log(2 * np.pi * scaled_errors**2))                                
+            wavelengths, calculated_fluxes, flux_info_dict = flux_calc.compute_fluxes(
+                t_p_profile, Mp, Rp, dist, logZ, CO_ratio,
+                scattering_factor=scatt_factor, scattering_slope=scatt_slope,
+                cloudtop_pressure=cloudtop_P,
+                frac_scale_height=frac_scale_height, number_density=number_density,
+                part_size = part_size, ri=ri, P_quench=P_quench, full_output=True)
+            calculated_fluxes[np.logical_and(wavelengths >= wfc3_start, wavelengths <= wfc3_end)] += params_dict["wfc3_offset_eclipse"]
+
+
+            residuals = calculated_fluxes - measured_fluxes
+            #print(np.median(calculated_eclipse_depths))
+            #plt.plot(calculated_eclipse_depths)
+            #plt.plot(measured_eclipse_depths, '.')
+            #plt.show()
+
+            scaled_errors = error_multiple * measured_flux_errors
+            ln_likelihood += -0.5 * np.sum(residuals**2 / scaled_errors**2 + np.log(2 * np.pi * scaled_errors**2))                                
                 
         except AtmosphereError as e:
             #print(e)
@@ -191,47 +163,37 @@ class CombinedRetriever:
         self.last_lnprob = fit_info._ln_prior(params) + ln_likelihood
         
         if ret_best_fit:
-            return calculated_transit_depths, transit_info_dict, calculated_eclipse_depths, eclipse_info_dict
+            return calculated_fluxes, flux_info_dict
         return ln_likelihood
 
 
-    def _ln_prob(self, params, transit_calc, eclipse_calc, fit_info, measured_transit_depths,
-                 measured_transit_errors, measured_eclipse_depths,
-                 measured_eclipse_errors, is_brown_dwarf):
+    def _ln_prob(self, params, flux_calc, fit_info,
+                 measured_fluxes,
+                 measured_flux_errors):
         
-        ln_like = self._ln_like(params, transit_calc, eclipse_calc, fit_info, measured_transit_depths,
-                                measured_transit_errors, measured_eclipse_depths,
-                                measured_eclipse_errors, is_brown_dwarf=is_brown_dwarf)
+        ln_like = self._ln_like(params, flux_calc, fit_info, measured_fluxes,
+                                measured_flux_errors)
         return fit_info._ln_prior(params) + ln_like
 
     
     
-    def run_emcee(self, transit_bins, transit_depths, transit_errors,
-                  eclipse_bins, eclipse_depths, eclipse_errors,
+    def run_emcee(self, flux_bins, fluxes, flux_errors,
                   fit_info, nwalkers=50,
                   nsteps=1000, include_condensation=True,
-                  rad_method="xsec", is_brown_dwarf=False,
+                  rad_method="xsec",
                   num_final_samples=100):
         '''Runs affine-invariant MCMC to retrieve atmospheric parameters.
 
         Parameters
         ----------
-        transit_bins : array_like, shape (N,2)
+        flux_bins : array_like, shape (N,2)
             Wavelength bins, where wavelength_bins[i][0] is the start
             wavelength and wavelength_bins[i][1] is the end wavelength for
             bin i.
-        transit_depths : array_like, length N
-            Measured transit depths for the specified wavelength bins
-        transit_errors : array_like, length N
-            Errors on the aforementioned transit depths
-        eclipse_bins : array_like, shape (N,2)
-            Wavelength bins, where wavelength_bins[i][0] is the start
-            wavelength and wavelength_bins[i][1] is the end wavelength for
-            bin i.
-        eclipse_depths : array_like, length N
-            Measured eclipse depths for the specified wavelength bins
-        eclipse_errors : array_like, length N
-            Errors on the aforementioned eclipse depths
+        fluxes : array_like, length N
+            Measured fluxes (on Earth, in SI) for the specified wavelength bins
+        flux_errors : array_like, length N
+            Errors on the aforementioned transit depths        
         fit_info : :class:`.FitInfo` object
             Tells the method what parameters to
             freely vary, and in what range those parameters can vary. Also
@@ -252,23 +214,14 @@ class CombinedRetriever:
         '''
 
         initial_positions = fit_info._generate_rand_param_arrays(nwalkers)
-        transit_calc = None
-        eclipse_calc = None
-
-        if transit_bins is not None:
-            transit_calc = TransitDepthCalculator(
-                include_condensation=include_condensation, method=rad_method)
-            transit_calc.change_wavelength_bins(transit_bins)
-            self._validate_params(fit_info, transit_calc)
-        if eclipse_bins is not None:
-            eclipse_calc = EclipseDepthCalculator(
-                include_condensation=include_condensation, method=rad_method)
-            eclipse_calc.change_wavelength_bins(eclipse_bins)       
+       
+        flux_calc = FluxCalculator(
+            include_condensation=include_condensation, method=rad_method)
+        flux_calc.change_wavelength_bins(flux_bins)       
 
         sampler = emcee.EnsembleSampler(
             nwalkers, fit_info._get_num_fit_params(), self._ln_prob,
-            args=(transit_calc, eclipse_calc, fit_info, transit_depths, transit_errors,
-                                 eclipse_depths, eclipse_errors))
+            args=(flux_calc, fit_info, fluxes, flux_errors))
 
         for i, result in enumerate(sampler.sample(
                 initial_positions, iterations=nsteps)):
@@ -284,74 +237,58 @@ class CombinedRetriever:
             np.max(sampler.flatlnprobability),
             fit_info.fit_param_names)
 
-        best_fit_transit_depths, best_fit_transit_info, best_fit_eclipse_depths, best_fit_eclipse_info = self._ln_like(
-            best_params_arr, transit_calc, eclipse_calc, fit_info,
-            transit_depths, transit_errors,
-            eclipse_depths, eclipse_errors, ret_best_fit=True, is_brown_dwarf=is_brown_dwarf)
+        best_fit_fluxes, best_fit_flux_info = self._ln_like(
+            best_params_arr, flux_calc, fit_info,
+            fluxes, flux_errors, ret_best_fit=True)
         retrieval_result = RetrievalResult(
             {"acceptance_fraction": sampler.acceptance_fraction,
              "chain": sampler.chain,
              "flatchain": sampler.flatchain,
              "lnprobability": sampler.lnprobability,
              "flatlnprobability": sampler.flatlnprobability},             
-            "emcee",
-            transit_bins, transit_depths, transit_errors,
-            eclipse_bins, eclipse_depths, eclipse_errors,
-            best_fit_transit_depths, best_fit_transit_info,
-            best_fit_eclipse_depths, best_fit_eclipse_info,
+            "emcee",            
+            flux_bins, fluxes, flux_errors,
+            best_fit_fluxes, best_fit_flux_info,
             fit_info)
         equal_samples = np.copy(sampler.flatchain)
         print("equal_samples.shape: {}, num_final_samples: {}".format(equal_samples.shape, num_final_samples))
         print(equal_samples)
         np.random.shuffle(equal_samples)
-        retrieval_result.random_transit_depths = []
-        retrieval_result.random_eclipse_depths = []
+        
+        retrieval_result.random_fluxes = []
         for params in equal_samples[0:num_final_samples]:
             ret = self._ln_like(
-                params, transit_calc, eclipse_calc, fit_info,
-                transit_depths, transit_errors,
-                eclipse_depths, eclipse_errors, ret_best_fit=True,
-                is_brown_dwarf=is_brown_dwarf)
+                params, flux_calc, fit_info,
+                fluxes, flux_errors,
+                ret_best_fit=True)
             if ret == -np.inf: continue
-            _, transit_info, _, eclipse_info = ret
+            _, flux_info = ret
                 
-            if transit_depths is not None:
-                retrieval_result.random_transit_depths.append(transit_info["unbinned_depths"])
-            if eclipse_depths is not None:
-                retrieval_result.random_eclipse_depths.append(eclipse_info["unbinned_eclipse_depths"])
+            retrieval_result.random_fluxes.append(flux_info["unbinned_fluxes"])
 
         with open("retrieval_result.pkl", "wb") as f:
             pickle.dump(retrieval_result, f)
         
         return retrieval_result
 
-    def run_multinest(self, transit_bins, transit_depths, transit_errors,
-                      eclipse_bins, eclipse_depths, eclipse_errors,
+    def run_multinest(self, flux_bins, fluxes, flux_errors,
                       fit_info,
                       include_condensation=True, rad_method="xsec",
                       maxiter=None, maxcall=None, nlive=100,
-                      num_final_samples=100, is_brown_dwarf=False,
+                      num_final_samples=100,
                       **dynesty_kwargs):
         '''Runs nested sampling to retrieve atmospheric parameters.
 
         Parameters
         ----------
-        transit_bins : array_like, shape (N,2)
+        flux_bins : array_like, shape (N,2)
             Wavelength bins, where wavelength_bins[i][0] is the start
             wavelength and wavelength_bins[i][1] is the end wavelength for
             bin i.
-        transit_depths : array_like, length N
-            Measured transit depths for the specified wavelength bins
-        transit_errors : array_like, length N
-            Errors on the aforementioned transit depths
-        eclipse_bins : array_like, shape (N,2)
-            Wavelength bins, where wavelength_bins[i][0] is the start
-            wavelength and wavelength_bins[i][1] is the end wavelength for
-            bin i.
-        eclipse_depths : array_like, length N
-            Measured eclipse depths for the specified wavelength bins
-        eclipse_errors : array_like, length N
-            Errors on the aforementioned eclipse depths
+        fluxes : array_like, length N
+            Measured fluxes (on Earth, in SI) for the specified wavelength bins
+        flux_errors : array_like, length N
+            Errors on the aforementioned transit depths   
         fit_info : :class:`.FitInfo` object
             Tells us what parameters to
             freely vary, and in what range those parameters can vary. Also
@@ -369,17 +306,10 @@ class CombinedRetriever:
         -------
         result : RetrievalResult object
         '''
-        transit_calc = None
-        eclipse_calc = None
-        if transit_bins is not None:
-            transit_calc = TransitDepthCalculator(
-                include_condensation=include_condensation, method=rad_method)
-            transit_calc.change_wavelength_bins(transit_bins)
-            self._validate_params(fit_info, transit_calc)
-        if eclipse_bins is not None:
-            eclipse_calc = EclipseDepthCalculator(
-                include_condensation=include_condensation, method=rad_method)
-            eclipse_calc.change_wavelength_bins(eclipse_bins)
+        
+        flux_calc = FluxCalculator(
+            include_condensation=include_condensation, method=rad_method)
+        flux_calc.change_wavelength_bins(flux_bins)
 
         def transform_prior(cube):
             new_cube = np.zeros(len(cube))
@@ -388,8 +318,7 @@ class CombinedRetriever:
             return new_cube
 
         def multinest_ln_like(cube):
-            ln_like = self._ln_like(cube, transit_calc, eclipse_calc, fit_info, transit_depths, transit_errors,
-                                    eclipse_depths, eclipse_errors, is_brown_dwarf=is_brown_dwarf)
+            ln_like = self._ln_like(cube, flux_calc, fit_info, fluxes, flux_errors)
             if np.random.randint(100) == 0:
                 print("\nEvaluated params: {}".format(self.pretty_print(fit_info)))
             return ln_like
@@ -415,36 +344,23 @@ class CombinedRetriever:
             np.max(result.logp),
             fit_info.fit_param_names)
         
-        best_fit_transit_depths, best_fit_transit_info, best_fit_eclipse_depths, best_fit_eclipse_info = self._ln_like(
-            best_params_arr, transit_calc, eclipse_calc, fit_info,
-            transit_depths, transit_errors,
-            eclipse_depths, eclipse_errors, ret_best_fit=True,
-            is_brown_dwarf=is_brown_dwarf)
+        best_fit_fluxes, best_fit_flux_info = self._ln_like(
+            best_params_arr, flux_calc, fit_info,
+            fluxes, flux_errors, ret_best_fit=True)
 
         retrieval_result = RetrievalResult(
             result, "dynesty",
-            transit_bins, transit_depths, transit_errors,
-            eclipse_bins, eclipse_depths, eclipse_errors,
-            best_fit_transit_depths, best_fit_transit_info,
-            best_fit_eclipse_depths, best_fit_eclipse_info,
+            flux_bins, fluxes, flux_errors,
+            best_fit_fluxes, best_fit_flux_info,
             fit_info)
         
-        retrieval_result.random_transit_depths = []
-        retrieval_result.random_eclipse_depths = []
+        retrieval_result.random_fluxes = []
         for params in equal_samples[0:num_final_samples]:
-            _, transit_info, _, eclipse_info = self._ln_like(
-                params, transit_calc, eclipse_calc, fit_info,
-                transit_depths, transit_errors,
-                eclipse_depths, eclipse_errors, ret_best_fit=True,
-                is_brown_dwarf=is_brown_dwarf)
-            if transit_depths is not None:
-                retrieval_result.random_transit_depths.append(transit_info["unbinned_depths"])
-            if eclipse_depths is not None:
-                if is_brown_dwarf:
-                    unbinned = eclipse_info["unbinned_fluxes"]
-                else:
-                    unbinned = eclipse_info["unbinned_eclipse_depths"]
-                retrieval_result.random_eclipse_depths.append(unbinned)
+            _, flux_info = self._ln_like(
+                params, flux_calc, fit_info,
+                fluxes, flux_errors,
+                ret_best_fit=True)
+            retrieval_result.random_fluxes.append(flux_info["unbinned_fluxes"])
                     
         with open("retrieval_result.pkl", "wb") as f:
             pickle.dump(retrieval_result, f)            
@@ -452,10 +368,9 @@ class CombinedRetriever:
         return retrieval_result
 
     @staticmethod
-    def get_default_fit_info(Rs, Mp, Rp, T=None, logZ=0, CO_ratio=0.53,
+    def get_default_fit_info(Mp, Rp, T=None, logZ=0, CO_ratio=0.53,
                              log_cloudtop_P=np.inf, log_scatt_factor=0,
-                             scatt_slope=4, error_multiple=1, T_star=None,
-                             T_spot=None, spot_cov_frac=None,
+                             scatt_slope=4, error_multiple=1,
                              frac_scale_height=1,
                              log_number_density=-np.inf, log_part_size=-6,
                              n=None, log_k=-np.inf,

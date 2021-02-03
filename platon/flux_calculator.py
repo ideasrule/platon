@@ -6,7 +6,7 @@ import time
 from .constants import h, c, k_B, R_jup, M_jup, R_sun
 from ._atmosphere_solver import AtmosphereSolver
 
-class EclipseDepthCalculator:
+class FluxCalculator:
     def __init__(self, include_condensation=True, method="xsec"):
         '''
         All physical parameters are in SI.
@@ -40,8 +40,7 @@ class EclipseDepthCalculator:
         self.atm.change_wavelength_bins(bins)
 
 
-    def _get_binned_depths(self, depths, stellar_spectrum, is_brown_dwarf=False,
-                           n_gauss=10):
+    def _get_binned_fluxes(self, fluxes, n_gauss=10):
         #Step 1: do a first binning if using k-coeffs; first binning is a
         #no-op otherwise
         if self.atm.method == "ktables":
@@ -52,50 +51,41 @@ class EclipseDepthCalculator:
             assert(len(depths) % n_gauss == 0)
             num_binned = int(len(depths) / n_gauss)
             intermediate_lambdas = np.zeros(num_binned)
-            intermediate_depths = np.zeros(num_binned)
-            intermediate_stellar_spectrum = np.zeros(num_binned)
+            intermediate_fluxes = np.zeros(num_binned)
 
             for chunk in range(num_binned):
                 start = chunk * n_gauss
                 end = (chunk + 1 ) * n_gauss
                 intermediate_lambdas[chunk] = np.median(self.atm.lambda_grid[start : end])
-                intermediate_depths[chunk] = np.sum(depths[start : end] * weights)
-                intermediate_stellar_spectrum[chunk] = np.median(stellar_spectrum[start : end])
+                intermediate_fluxes[chunk] = np.sum(fluxes[start : end] * weights)
         elif self.atm.method == "xsec":
             intermediate_lambdas = self.atm.lambda_grid
-            intermediate_depths = depths
-            intermediate_stellar_spectrum = stellar_spectrum
+            intermediate_fluxes = fluxes
         else:
             assert(False)
 
         
         if self.atm.wavelength_bins is None:
-            return intermediate_lambdas, intermediate_depths, intermediate_lambdas, intermediate_depths
+            return intermediate_lambdas, intermediate_fluxes, intermediate_lambdas, intermediate_fluxes
         
         binned_wavelengths = []
-        binned_depths = []
+        binned_fluxes = []
         for (start, end) in self.atm.wavelength_bins:
             cond = np.logical_and(
                 intermediate_lambdas >= start,
                 intermediate_lambdas < end)
             binned_wavelengths.append(np.mean(intermediate_lambdas[cond]))
-            if is_brown_dwarf:
-                #really the integrated flux
-                binned_depth = np.sum(intermediate_depths[cond])
-            else:
-                binned_depth = np.average(intermediate_depths[cond],
-                                          weights=intermediate_stellar_spectrum[cond])
-            binned_depths.append(binned_depth)
+            binned_fluxes.append(np.mean(intermediate_fluxes[cond]))
             
-        return intermediate_lambdas, intermediate_depths, np.array(binned_wavelengths), np.array(binned_depths)
+        return intermediate_lambdas, intermediate_fluxes, np.array(binned_wavelengths), np.array(binned_fluxes)
 
     def _get_photosphere_radii(self, taus, radii):
         intermediate_radii = 0.5 * (radii[0:-1] + radii[1:])
         photosphere_radii = np.array([np.interp(1, t, intermediate_radii) for t in taus])
         return photosphere_radii
     
-    def compute_depths(self, t_p_profile, star_radius, planet_mass,
-                       planet_radius, T_star, logZ=0, CO_ratio=0.53,
+    def compute_fluxes(self, t_p_profile, planet_mass,
+                       planet_radius, dist, logZ=0, CO_ratio=0.53,
                        add_gas_absorption=True, add_H_minus_absorption=False,
                        add_scattering=True, scattering_factor=1,
                        scattering_slope=4, scattering_ref_wavelength=1e-6,
@@ -104,8 +94,6 @@ class EclipseDepthCalculator:
                        T_spot=None, spot_cov_frac=None,
                        ri = None, frac_scale_height=1,number_density=0,
                        part_size=1e-6, part_size_std=0.5, P_quench=1e-99,
-                       is_brown_dwarf=False,
-                       dist=None,
                        stellar_blackbody=False,
                        full_output=False):
         '''Most parameters are explained in :func:`~platon.transit_depth_calculator.TransitDepthCalculator.compute_depths`
@@ -120,11 +108,10 @@ class EclipseDepthCalculator:
         #plt.semilogy(T_profile, P_profile)
         #plt.show()
         atm_info = self.atm.compute_params(
-            star_radius, planet_mass, planet_radius, P_profile, T_profile,
+            planet_mass, planet_radius, P_profile, T_profile,
             logZ, CO_ratio, add_gas_absorption, add_H_minus_absorption, add_scattering,
             scattering_factor, scattering_slope, scattering_ref_wavelength,
             add_collisional_absorption, cloudtop_pressure, custom_abundances,
-            T_star, T_spot, spot_cov_frac,
             ri, frac_scale_height, number_density, part_size, part_size_std,
             P_quench)
 
@@ -152,33 +139,18 @@ class EclipseDepthCalculator:
             fluxes_from_cloud = -np.pi * planck_function[:, -1] * (max_taus**2 * scipy.special.expi(-max_taus) + max_taus * np.exp(-max_taus) - np.exp(-max_taus))
             fluxes += fluxes_from_cloud
 
-        stellar_photon_fluxes, _ = self.atm.get_stellar_spectrum(
-            lambda_grid, T_star, T_spot, spot_cov_frac, stellar_blackbody)
-        d_lambda = self.atm.d_ln_lambda * lambda_grid
-        photon_fluxes = fluxes * d_lambda / (h * c / lambda_grid)
-
-        photosphere_radii = self._get_photosphere_radii(taus, atm_info["radii"])
-        eclipse_depths = photon_fluxes / stellar_photon_fluxes * (photosphere_radii/star_radius)**2
-
-        #For correlated k, eclipse_depths has n_gauss points per wavelength, while unbinned_depths has 1 point per wavelength
-        unbinned_wavelengths, unbinned_depths, binned_wavelengths, binned_depths = self._get_binned_depths(eclipse_depths, stellar_photon_fluxes, is_brown_dwarf=is_brown_dwarf)
-
-        _, unbinned_fluxes, _, binned_fluxes = self._get_binned_depths(fluxes, stellar_photon_fluxes)
-
-        if is_brown_dwarf:
-            ret_val = binned_fluxes
-        else:
-            ret_val = binned_depths
+        fluxes *= (planet_radius / dist)**2
+        
+        #For correlated k, fluxes has n_gauss points per wavelength, while unbinned_fluxes has 1 point per wavelength        
+        unbinned_wavelengths, unbinned_fluxes, binned_wavelengths, binned_fluxes = self._get_binned_fluxes(fluxes)
 
         if full_output:
-            atm_info["stellar_spectrum"] = stellar_photon_fluxes
             atm_info["planet_spectrum"] = fluxes
             atm_info["unbinned_wavelengths"] = unbinned_wavelengths
-            atm_info["unbinned_eclipse_depths"] = unbinned_depths
             atm_info["unbinned_fluxes"] = unbinned_fluxes
             atm_info["binned_fluxes"] = binned_fluxes
             atm_info["taus"] = taus
             atm_info["contrib"] = -integrand / fluxes[:, np.newaxis]
-            return binned_wavelengths, ret_val, atm_info
+            return binned_wavelengths, binned_fluxes, atm_info
 
-        return binned_wavelengths, ret_val
+        return binned_wavelengths, binned_fluxes

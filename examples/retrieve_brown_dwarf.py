@@ -4,7 +4,7 @@ import pickle
 import sys
 
 from platon.fit_info import FitInfo
-from platon.combined_retriever import CombinedRetriever
+from platon.retriever import Retriever
 from platon.constants import R_sun, R_jup, M_jup, AU, PC, h, c
 from scipy.ndimage import uniform_filter
 
@@ -38,21 +38,21 @@ bins = np.array([wavelengths - width/2, wavelengths + width/2]).T
 plt.errorbar(wavelengths, fluxes, yerr=errors, fmt='.')
 #plt.figure()
 #plt.plot(np.diff(wavelengths))
-plt.show()
+#plt.show()
 
 #create a Retriever object
-retriever = CombinedRetriever()
+retriever = Retriever()
 
 #create a FitInfo object and set best guess parameters
 fit_info = retriever.get_default_fit_info(
-    Rs=0.75 * R_sun, Mp=9 * M_jup, Rp=2.43 * R_jup,
+    Mp=9 * M_jup, Rp=2.43 * R_jup,
     logZ=0, CO_ratio=0.53, log_cloudtop_P=np.inf,
-    log_scatt_factor=0, scatt_slope=4, error_multiple=1, T_star=None,
+    log_scatt_factor=0, scatt_slope=4, error_multiple=1,
     dist=144.159*PC,
     a = None,
     T_int=100,
     log_k_th = -2.52, log_gamma=-0.8, log_gamma2=-0.8, alpha=0.5, beta=None,
-    profile_type="isothermal" #"isothermal" for isothermal fitting
+    profile_type="radiative_solution" #"isothermal" for isothermal fitting
     )
 
 #Add fitting parameters - this specifies which parameters you want to fit
@@ -67,21 +67,19 @@ fit_info.add_uniform_fit_param("Rp", 1*R_jup, 4*R_jup)
 #fit_info.add_uniform_fit_param("CO_ratio", 0.2, 2)
 
 #T/P profile parameters
-fit_info.add_uniform_fit_param("T", 100, 3000)
-#fit_info.add_uniform_fit_param("T_int", 100, 2500)
-#fit_info.add_uniform_fit_param("log_k_th", -5, 0)
+#fit_info.add_uniform_fit_param("T", 100, 3000)
+fit_info.add_uniform_fit_param("T_int", 100, 2500)
+fit_info.add_uniform_fit_param("log_k_th", -5, 0)
 #fit_info.add_uniform_fit_param("log_gamma", -4, 1)
 #fit_info.add_uniform_fit_param("log_gamma2", -4, 1)
 #fit_info.add_uniform_fit_param("alpha", 0, 0.5)
 
 
 #Use Nested Sampling to do the fitting
-result = retriever.run_multinest(None, None, None,
-                                 bins, fluxes, errors,
-                                 fit_info, plot_best=True, nlive=100,
+result = retriever.run_multinest(bins, fluxes, errors,
+                                 fit_info, plot_best=True, nlive=200,
                                  sample="rwalk",
-                                 rad_method="xsec",
-                                 is_brown_dwarf=True) #"ktables" instead of "xsec" for correlated k
+                                 rad_method="xsec") #"ktables" instead of "xsec" for correlated k
 
 with open("example_retrieval_result.pkl", "wb") as f:
     pickle.dump(result, f)

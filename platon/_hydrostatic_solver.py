@@ -22,22 +22,15 @@ def _get_radii(ln_Ps, planet_mass, planet_radius,
 
 
 def _solve(P_profile, T_profile, ref_pressure, mu_profile,
-           planet_mass, planet_radius, star_radius,
-           above_cloud_cond, T_star=None):
+           planet_mass, planet_radius,
+           above_cloud_cond):
     assert(len(P_profile) == len(T_profile))
 
-    # Ensure that the atmosphere is bound by making rough estimates of the
-    # Hill radius and atmospheric height
-    if T_star is None:
-        T_star = Teff_sun
-
-    R_hill = star_radius * \
-        (T_star / T_profile[0])**2 * (planet_mass / (3 * M_sun))**(1.0 / 3)
     max_r_estimate = 1.0 / (1 / planet_radius + k_B * np.median(T_profile) * np.log(
         P_profile[0] / ref_pressure) / (G * planet_mass * np.mean(mu_profile) * AMU))
     # The above equation is negative if the real answer is infinity
 
-    if max_r_estimate < 0 or max_r_estimate > R_hill:
+    if max_r_estimate < 0:
         raise AtmosphereError("Atmosphere unbound: height > hill radius")
 
     mu_interpolator = UnivariateSpline(np.log(P_profile), mu_profile, s=0)

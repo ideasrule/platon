@@ -128,9 +128,9 @@ class Retriever:
         ln_likelihood = 0
         calculated_fluxes = None
         flux_info_dict = None
+        t_p_profile = Profile()
         
         try:            
-            t_p_profile = Profile()
             t_p_profile.set_from_params_dict(params_dict["profile_type"], params_dict)
             t_p_profile.temperatures[t_p_profile.temperatures > 3000] = 3000
 
@@ -256,6 +256,7 @@ class Retriever:
         np.random.shuffle(equal_samples)
         
         retrieval_result.random_fluxes = []
+        retrieval_result.random_TP_profiles = []
         for params in equal_samples[0:num_final_samples]:
             ret = self._ln_like(
                 params, flux_calc, fit_info,
@@ -265,6 +266,7 @@ class Retriever:
             _, flux_info = ret
                 
             retrieval_result.random_fluxes.append(flux_info["unbinned_fluxes"])
+            retrieval_result.random_TP_profiles.append(flux_info["TP_profile"])
 
         with open("retrieval_result.pkl", "wb") as f:
             pickle.dump(retrieval_result, f)
@@ -355,12 +357,14 @@ class Retriever:
             fit_info)
         
         retrieval_result.random_fluxes = []
+        retrieval_result.random_TP_profiles = []
         for params in equal_samples[0:num_final_samples]:
             _, flux_info = self._ln_like(
                 params, flux_calc, fit_info,
                 fluxes, flux_errors,
-                ret_best_fit=True)
+                ret_best_fit=True)            
             retrieval_result.random_fluxes.append(flux_info["unbinned_fluxes"])
+            retrieval_result.random_TP_profiles.append(flux_info["TP_profile"])
                     
         with open("retrieval_result.pkl", "wb") as f:
             pickle.dump(retrieval_result, f)            

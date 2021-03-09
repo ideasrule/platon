@@ -151,6 +151,7 @@ class FluxCalculator:
             atm_info["binned_fluxes"] = binned_fluxes
             atm_info["taus"] = taus
             atm_info["contrib"] = -integrand / fluxes[:, np.newaxis]
+            atm_info["TP_profile"] = t_p_profile
             return binned_wavelengths, binned_fluxes, atm_info
 
         return binned_wavelengths, binned_fluxes

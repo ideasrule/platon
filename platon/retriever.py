@@ -257,6 +257,7 @@ class Retriever:
         
         retrieval_result.random_fluxes = []
         retrieval_result.random_TP_profiles = []
+        retrieval_result.random_params = equal_samples[0:num_final_samples]
         for params in equal_samples[0:num_final_samples]:
             ret = self._ln_like(
                 params, flux_calc, fit_info,
@@ -267,6 +268,7 @@ class Retriever:
                 
             retrieval_result.random_fluxes.append(flux_info["unbinned_fluxes"])
             retrieval_result.random_TP_profiles.append(flux_info["TP_profile"])
+            
 
         with open("retrieval_result.pkl", "wb") as f:
             pickle.dump(retrieval_result, f)

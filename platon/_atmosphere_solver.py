@@ -394,13 +394,16 @@ class AtmosphereSolver:
        
         abundances = self._get_abundances_array(
             logZ, CO_ratio, custom_abundances)
-        
+
+        T_quench = np.interp(np.log(P_quench), np.log(P_profile), T_profile)        
         for name in abundances:
             abundances[name][np.isnan(abundances[name])] = min_abundance
             abundances[name][abundances[name] < min_abundance] = min_abundance
-            for t in range(abundances[name].shape[0]):
-                quench_abund = np.exp(np.interp(np.log(P_quench), np.log(self.P_grid), np.log(abundances[name][t])))
-                abundances[name][t, self.P_grid < P_quench] = quench_abund
+            interpolator = RectBivariateSpline(
+                self.T_grid, np.log10(self.P_grid),
+                np.log10(abundances[name]), kx=1, ky=1)
+            quench_abund = 10**interpolator.ev(T_quench, np.log10(P_quench))
+            abundances[name][:, self.P_grid <= P_quench] = quench_abund
             
         above_clouds = P_profile < cloudtop_pressure
 

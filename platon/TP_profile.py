@@ -8,7 +8,7 @@ from pkg_resources import resource_filename
 from .constants import h, c, k_B, AMU, G
 
 class Profile:
-    def __init__(self, num_profile_heights=250, min_P=1e-4, max_P=1e8):
+    def __init__(self, num_profile_heights=100, min_P=1e-4, max_P=1e8):
         self.pressures = np.logspace(
                 np.log10(min_P),
                 np.log10(max_P),

@@ -22,7 +22,7 @@ from ._mie_cache import MieCache
 from .errors import AtmosphereError
 
 class AtmosphereSolver:
-    def __init__(self, include_condensation=True, num_profile_heights=250,
+    def __init__(self, include_condensation=True, num_profile_heights=100,
                  ref_pressure=1e5, method='xsec'):        
         self.arguments = locals()
         del self.arguments["self"]
@@ -399,11 +399,6 @@ class AtmosphereSolver:
         for name in abundances:
             abundances[name][np.isnan(abundances[name])] = min_abundance
             abundances[name][abundances[name] < min_abundance] = min_abundance
-            interpolator = RectBivariateSpline(
-                self.T_grid, np.log10(self.P_grid),
-                np.log10(abundances[name]), kx=1, ky=1)
-            quench_abund = 10**interpolator.ev(T_quench, np.log10(P_quench))
-            abundances[name][:, self.P_grid <= P_quench] = quench_abund
             
         above_clouds = P_profile < cloudtop_pressure
 
@@ -411,6 +406,10 @@ class AtmosphereSolver:
             P_profile, T_profile, abundances, planet_mass, planet_radius,
             above_clouds)
 
+        for name in atm_abundances:
+            quench_abund = 10**np.interp(np.log10(P_quench), np.log10(P_profile), np.log10(atm_abundances[name]))
+            atm_abundances[name][P_profile < P_quench] = quench_abund
+        
         P_profile = P_profile[above_clouds]
         T_profile = T_profile[above_clouds]
 

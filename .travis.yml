@@ -3,11 +3,11 @@ matrix:
     include:
         - os: linux
           sudo: required
-          python: 3.6
+          python: 3.7
           env: TOXENV=py36 
         - os: osx
           language: generic
-          env: TOXENV=py36 PATH=/usr/local/opt/python/libexec/bin:$PATH
+          env: TOXENV=py37 PATH=/usr/local/opt/python/libexec/bin:$PATH
 
 cache: pip
 before_install:  |

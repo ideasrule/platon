@@ -23,7 +23,7 @@ This creates a parametric T-P profile according to `Madhusudhan & Seager 2009 <h
 
 Then, call the eclipse depth calculator::
 
-  from eclipse_depth_calculator import EclipseDepthCalculator
+  from platon.eclipse_depth_calculator import EclipseDepthCalculator
   calc = EclipseDepthCalculator(method="xsec") #"ktables" for correlated k
   wavelengths, depths = calc.compute_depths(p, Rs, Mp, Rp, Tstar)
   

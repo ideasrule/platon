@@ -39,11 +39,9 @@ class AtmosphereSolver:
         if method == "xsec":
             self.lambda_grid = load_numpy("data/wavelengths.npy")
             self.d_ln_lambda = np.median(np.diff(np.log(self.lambda_grid)))
-            self.stellar_spectra = load_dict_from_pickle("data/stellar_spectra.pkl")
         else:
             self.lambda_grid = load_numpy("data/k_wavelengths.npy")
             self.d_ln_lambda = np.median(np.diff(np.log(np.unique(self.lambda_grid))))
-            self.stellar_spectra = load_dict_from_pickle("data/k_stellar_spectra.pkl")
 
         self.collisional_absorption_data = load_dict_from_pickle(
             "data/collisional_absorption.pkl") 
@@ -127,9 +125,6 @@ class AtmosphereSolver:
         self.lambda_grid = self.lambda_grid[cond]
         self.N_lambda = len(self.lambda_grid)
 
-        for Teff in self.stellar_spectra:
-            self.stellar_spectra[Teff] = self.stellar_spectra[Teff][cond]
-            
         for key in self.collisional_absorption_data:
             self.collisional_absorption_data[key] = self.collisional_absorption_data[key][:, cond]
   
@@ -325,38 +320,7 @@ class AtmosphereSolver:
                 raise ValueError(
                     "Cloudtop pressure is {} Pa, but must be between {} and {} Pa unless it is np.inf".format(
                         cloudtop_pressure, minimum, maximum))
-
-    def get_stellar_spectrum(self, lambdas, T_star, T_spot, spot_cov_frac, blackbody=False):
-        if spot_cov_frac is None:
-            spot_cov_frac = 0
-
-        if T_spot is None:
-            T_spot = T_star
             
-        temperatures = list(self.stellar_spectra.keys()) #NOT sorted!
-        if T_star is None:
-            unspotted_spectrum = np.ones(len(lambdas))
-            spot_spectrum = np.ones(len(lambdas))
-        elif T_star >= np.min(temperatures) and T_star <= np.max(temperatures) and not blackbody:
-            interpolator = scipy.interpolate.interp1d(
-                temperatures, list(self.stellar_spectra.values()),
-                assume_sorted=False,
-                axis=0)
-            unspotted_spectrum = interpolator(T_star)
-            spot_spectrum = interpolator(T_spot)
-            if len(spot_spectrum) != len(lambdas):
-                raise ValueError("Stellar spectra has a different length ({}) than opacities ({})!  If you are using high resolution opacities, pass stellar_blackbody=True to compute_depths".format(len(spot_spectrum), len(lambdas)))
-        else:
-            d_lambda = self.d_ln_lambda * lambdas
-            unspotted_spectrum = 2 * c * np.pi / lambdas**4 / \
-                (np.exp(h * c / lambdas / k_B / T_star) - 1) * d_lambda
-            spot_spectrum = 2 * c * np.pi / lambdas**4 / \
-                (np.exp(h * c / lambdas / k_B / T_spot) - 1) * d_lambda
-
-        stellar_spectrum = spot_cov_frac * spot_spectrum + \
-                           (1 - spot_cov_frac) * unspotted_spectrum
-        correction_factors = unspotted_spectrum/stellar_spectrum
-        return stellar_spectrum, correction_factors
             
     def compute_params(self, planet_mass, planet_radius,
                        P_profile, T_profile,

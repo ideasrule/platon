@@ -48,8 +48,8 @@ class FluxCalculator:
             points, weights = scipy.special.roots_legendre(n_gauss)
             percentiles = 100 * (points + 1) / 2
             weights /= 2
-            assert(len(depths) % n_gauss == 0)
-            num_binned = int(len(depths) / n_gauss)
+            assert(len(fluxes) % n_gauss == 0)
+            num_binned = int(len(fluxes) / n_gauss)
             intermediate_lambdas = np.zeros(num_binned)
             intermediate_fluxes = np.zeros(num_binned)
 

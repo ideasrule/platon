@@ -83,7 +83,8 @@ class FluxCalculator:
         intermediate_radii = 0.5 * (radii[0:-1] + radii[1:])
         photosphere_radii = np.array([np.interp(1, t, intermediate_radii) for t in taus])
         return photosphere_radii
-    
+
+    #@profile
     def compute_fluxes(self, t_p_profile, planet_mass,
                        planet_radius, dist, logZ=0, CO_ratio=0.53,
                        add_gas_absorption=True, add_H_minus_absorption=False,
@@ -133,7 +134,7 @@ class FluxCalculator:
         #padded_taus: ensures 1st layer has 0 optical depth
         padded_taus = np.zeros((taus.shape[0], taus.shape[1] + 1))
         padded_taus[:, 1:] = taus
-        integrand = planck_function * np.diff(scipy.special.expn(3, padded_taus), axis=1)
+        integrand = planck_function * np.diff(self.exp3_interpolator(padded_taus), axis=1)
         fluxes = -2 * np.pi * np.sum(integrand, axis=1)
         #print("Flux", np.median(fluxes))
         if not np.isinf(cloudtop_pressure):

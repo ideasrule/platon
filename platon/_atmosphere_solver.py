@@ -346,7 +346,7 @@ class AtmosphereSolver:
                         
         above_clouds = np.all([P_profile < cloudtop_pressure,
                                P_profile >= min_P,
-                               P_profile <= max_P])
+                               P_profile <= max_P], axis=0)
         radii, dr, atm_abundances, mu_profile = self._get_above_cloud_profiles(
             P_profile, T_profile, abundances, custom_atm_abundances, planet_mass,
             planet_radius, above_clouds)

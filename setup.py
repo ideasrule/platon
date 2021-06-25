@@ -26,5 +26,5 @@ setuptools.setup(
         "scipy",
         "emcee", "dynesty", "corner",
         "future", "nose", "setuptools", "configparser",
-        "matplotlib"]
+        "matplotlib", "numexpr"]
 )

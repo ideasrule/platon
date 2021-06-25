@@ -28,11 +28,10 @@ class AbundanceGetter:
 
         abundances_path = "data/abundances/{}".format(filename)
 
-        self.log_abundances = np.log10(np.load(
+        self.log_abundances = np.log(np.load(
             resource_filename(__name__, abundances_path)))
 
-        
-    def get(self, logZ, CO_ratio=0.53):
+    def get(self, logZ, CO_ratio=0.53, min_abundance=1e-99):
         '''Get an abundance grid at the specified logZ and C/O ratio.  This
         abundance grid can be passed to TransitDepthCalculator, with or without
         modifications.  The end user should not need to call this except in
@@ -46,14 +45,16 @@ class AbundanceGetter:
             pressure.'''
 
         N_Z, N_CO, N_species, N_T, N_P = self.log_abundances.shape
-        interp_log_abund = 10 ** scipy.interpolate.interpn(
-            (self.logZs, np.log10(self.CO_ratios)),
+        interp_abund = np.exp(scipy.interpolate.interpn(
+            (self.logZs, np.log(self.CO_ratios)),
             self.log_abundances,
-            [logZ, np.log10(CO_ratio)])[0]
+            [logZ, np.log(CO_ratio)])[0])
+        interp_abund[np.isnan(interp_abund)] = min_abundance
+        interp_abund[interp_abund < min_abundance] = min_abundance       
         
         abund_dict = {}
         for i, s in enumerate(self.included_species):
-            abund_dict[s] = interp_log_abund[i]
+            abund_dict[s] = interp_abund[i]
 
         return abund_dict
 

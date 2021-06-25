@@ -91,6 +91,7 @@ class FluxCalculator:
                        scattering_slope=4, scattering_ref_wavelength=1e-6,
                        add_collisional_absorption=True,
                        cloudtop_pressure=np.inf, custom_abundances=None,
+                       custom_atm_abundances=None,
                        T_spot=None, spot_cov_frac=None,
                        ri = None, frac_scale_height=1,number_density=0,
                        part_size=1e-6, part_size_std=0.5, P_quench=1e-99,
@@ -112,6 +113,7 @@ class FluxCalculator:
             logZ, CO_ratio, add_gas_absorption, add_H_minus_absorption, add_scattering,
             scattering_factor, scattering_slope, scattering_ref_wavelength,
             add_collisional_absorption, cloudtop_pressure, custom_abundances,
+            custom_atm_abundances,
             ri, frac_scale_height, number_density, part_size, part_size_std,
             P_quench)
 

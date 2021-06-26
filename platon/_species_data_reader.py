@@ -28,6 +28,7 @@ def read_species_data(absorption_dir, species_info_file, method, min_abs=1e-99):
                 absorption_data[name] = np.load(absorption_filename)
                 absorption_data[name][absorption_data[name] < min_abs] = min_abs
                 absorption_data[name] = np.log(absorption_data[name])
+                absorption_data[name] = np.copy(absorption_data[name], order='C')
             mass_data[name] = mass
 
             if polarizability != 0:

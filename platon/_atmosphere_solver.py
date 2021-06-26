@@ -52,7 +52,7 @@ class AtmosphereSolver:
                 self.low_res_lambdas,
                 self.collisional_absorption_data[key])(self.lambda_grid)
             val[val < min_collisional_absorption] = min_collisional_absorption
-            self.collisional_absorption_data[key] = np.log(val)
+            self.collisional_absorption_data[key] = np.copy(np.log(val), order="C")
             
         self.P_grid = load_numpy("data/pressures.npy")
         self.T_grid = load_numpy("data/temperatures.npy")

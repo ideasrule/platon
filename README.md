@@ -1,7 +1,6 @@
 # PLanetary Atmospheric Transmission for Observer Noobs
 <img src="logo.png" height="315">
 
-[![Build Status](https://travis-ci.com/ideasrule/platon.svg?token=CWfZwAJHKDPous7mJixf&branch=master)](https://travis-ci.com/ideasrule/platon) 
  [![codecov](https://codecov.io/gh/ideasrule/platon/branch/devel/graph/badge.svg)](https://codecov.io/gh/ideasrule/platon)
 [![arXiv](http://img.shields.io/badge/arXiv-2004.09513-orange.svg)](https://arxiv.org/abs/2004.09513) 
 [![arXiv](http://img.shields.io/badge/arXiv-1811.11761-orange.svg)](https://arxiv.org/abs/1811.11761)

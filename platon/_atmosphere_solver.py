@@ -178,18 +178,14 @@ class AtmosphereSolver:
         #1e-4 to convert from cm^4/dyne to m^4/N
         return k * 1e-4    
 
-    def _get_H_minus_absorption(self, abundances, P_cond, T_cond):
+    def _get_H_minus_absorption(self, atm_abundances, P_profile, T_profile):
         absorption_coeff = np.zeros(
-            (np.sum(T_cond), np.sum(P_cond), self.N_lambda))
+            (len(T_profile), self.N_lambda))
         
-        valid_Ts = self.T_grid[T_cond]
-        trunc_el_abundances = abundances["el"][T_cond][:, P_cond]
-        trunc_H_abundances = abundances["H"][T_cond][:, P_cond]
-        
-        for t in range(len(valid_Ts)):
-            k = self._get_k(valid_Ts[t], self.lambda_grid)          
-            absorption_coeff[t] = k * (trunc_el_abundances[t] * trunc_H_abundances[t] * self.P_grid[P_cond]**2)[:, np.newaxis] / (k_B * valid_Ts[t])
-                  
+        for i in range(len(T_profile)):
+            k = self._get_k(T_profile[i], self.lambda_grid)          
+            absorption_coeff[i] = k * (atm_abundances["el"][i] * atm_abundances["H"][i] * P_profile[i]**2) / (k_B * T_profile[i])
+
         return absorption_coeff
 
     def _get_gas_absorption(self, atm_abundances, P_profile, T_profile):
@@ -237,7 +233,42 @@ class AtmosphereSolver:
                 absorption_coeff += absorb * (n1 * n2)[:, np.newaxis]
 
         return absorption_coeff
-       
+
+    def _get_mie_scattering_absorption(self, P_profile, ri, part_size,
+                                       frac_scale_height, max_number_density,
+                                       sigma = 0.5, max_zscore = 5, num_integral_points = 100):
+        if isinstance(ri, str):
+            eff_cross_section = np.interp(
+                self.lambda_grid,
+                self.low_res_lambdas,
+                scipy.interpolate.interp1d(self.all_radii, self.all_cross_secs[ri])(part_size))
+        else:
+            eff_cross_section = np.zeros(self.N_lambda)
+            z_scores = -np.logspace(np.log10(0.1), np.log10(max_zscore), int(num_integral_points/2))
+            z_scores = np.append(z_scores[::-1], -z_scores)
+
+            probs = np.exp(-z_scores**2/2) / np.sqrt(2 * np.pi)
+            radii = part_size * np.exp(z_scores * sigma)
+            geometric_cross_section = np.pi * radii**2
+
+            dense_xs = 2*np.pi*radii[np.newaxis,:] / self.lambda_grid[:,np.newaxis]
+            dense_xs = dense_xs.flatten()
+
+            x_hist = np.histogram(dense_xs, bins='auto')[1]
+            Qext_hist = self._mie_cache.get_and_update(ri, x_hist) 
+
+            spl = scipy.interpolate.splrep(x_hist, Qext_hist)
+            Qext_intpl = scipy.interpolate.splev(dense_xs, spl)
+            Qext_intpl = np.reshape(Qext_intpl, (self.N_lambda, len(radii)))
+
+            eff_cross_section = np.trapz(probs*geometric_cross_section*Qext_intpl, z_scores)
+
+        n = max_number_density * np.power(P_profile / self.ref_pressure, 1.0/frac_scale_height)
+        absorption_coeff = n[:, np.newaxis] * eff_cross_section[np.newaxis, :]
+        
+        return absorption_coeff
+
+    
     def _get_above_cloud_profiles(self, P_profile, T_profile, abundances,
                                   custom_atm_abundances,
                                   planet_mass, planet_radius,
@@ -368,11 +399,12 @@ class AtmosphereSolver:
         if add_gas_absorption:
             absorption_coeff += self._get_gas_absorption(atm_abundances, P_profile, T_profile)
         if add_H_minus_absorption:
-            raise ValueError("Not implemented")
-            absorption_coeff += self._get_H_minus_absorption(abundances, P_cond, T_cond)
+            absorption_coeff += self._get_H_minus_absorption(atm_abundances, P_profile, T_profile)
         if add_scattering:
             if ri is not None:
-                raise ValueError("Not implemented")
+                absorption_coeff += self._get_mie_scattering_absorption(
+                    P_profile, ri, part_size,
+                    frac_scale_height, number_density, sigma=part_size_std)
             else:
                 absorption_coeff += self._get_scattering_absorption(
                     atm_abundances, P_profile, T_profile,

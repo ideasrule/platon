@@ -388,7 +388,7 @@ class Retriever:
         parameters are required, but others can be set to default values if you
         do not want to specify them.  All parameters are in SI.  For 
         information on the parameters not described below, see the documentation
-        for :func:`~platon.transit_depth_calculator.TransitDepthCalculator.compute_depths` and :func:`~platon.eclipse_depth_calculator.EclipseDepthCalculator.compute_depths`
+        for :func:`~platon.flux_calculator.FluxCalculator.compute_fluxes`
 
         Parameters
         ----------

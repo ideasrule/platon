@@ -23,7 +23,7 @@ from .errors import AtmosphereError
 
 class AtmosphereSolver:
     def __init__(self, include_condensation=True, num_profile_heights=250,
-                 ref_pressure=1e5, method='xsec'):        
+                 ref_pressure=1e5, method='xsec'):
         self.arguments = locals()
         del self.arguments["self"]
 
@@ -48,9 +48,10 @@ class AtmosphereSolver:
         self.collisional_absorption_data = load_dict_from_pickle(
             "data/collisional_absorption.pkl") 
         for key in self.collisional_absorption_data:
-            self.collisional_absorption_data[key] = scipy.interpolate.interp1d(
+            val = scipy.interpolate.interp1d(
                 self.low_res_lambdas,
                 self.collisional_absorption_data[key])(self.lambda_grid)
+            self.collisional_absorption_data[key] = np.copy(val, order="C")
             
         self.P_grid = load_numpy("data/pressures.npy")
         self.T_grid = load_numpy("data/temperatures.npy")

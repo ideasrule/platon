@@ -77,7 +77,7 @@ fit_info.add_gaussian_fit_param("wfc3_offset_eclipse", 39e-6)
 #Use Nested Sampling to do the fitting
 result = retriever.run_multinest(None, None, None,
                                  eclipse_bins, eclipse_depths, eclipse_errors,
-                                 fit_info, plot_best=True, nlive=200,
+                                 fit_info, nlive=200,
                                  sample="rwalk",
                                  rad_method="xsec") #"ktables" instead of "xsec" for correlated k
 

@@ -19,6 +19,7 @@ from .errors import AtmosphereError
 from ._output_writer import write_param_estimates_file
 from .TP_profile import Profile
 from .retrieval_result import RetrievalResult
+from .custom_dynesty_result import CustomDynestyResult
 
 class CombinedRetriever:
     def pretty_print(self, fit_info):
@@ -385,7 +386,7 @@ class CombinedRetriever:
         sampler = NestedSampler(multinest_ln_like, transform_prior, num_dim, bound='multi',
                                 update_interval=float(num_dim), nlive=nlive, **dynesty_kwargs)
         sampler.run_nested(maxiter=maxiter, maxcall=maxcall)
-        result = sampler.results
+        result = CustomDynestyResult(sampler.results)
         
         result.logp = result.logl + np.array([fit_info._ln_prior(params) for params in result.samples])
         best_params_arr = result.samples[np.argmax(result.logp)]

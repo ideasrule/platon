@@ -38,7 +38,7 @@ class RetrievalResult:
         self.best_fit_eclipse_dict = best_fit_eclipse_dict
 
         self.fit_info = fit_info
-        self.__dict__.update(dict(results))
+        self.__dict__.update(results)
 
         if "logz" in results:
             self.final_logz = results["logz"][-1]

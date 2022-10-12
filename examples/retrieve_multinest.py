@@ -92,6 +92,7 @@ fit_info.add_uniform_fit_param("error_multiple", 0.5, 5)
 result = retriever.run_multinest(bins, depths, errors,
                                  None, None, None,
                                  fit_info,
+                                 sample="rwalk",
                                  rad_method="xsec") #"ktables" to use corr-k
 with open("example_retrieval_result.pkl", "wb") as f:
     pickle.dump(result, f)

@@ -30,7 +30,7 @@ class RetrievalResult:
         if eclipse_bins is not None:
             eclipse_bins = np.array(eclipse_bins)
             self.eclipse_wavelengths = (eclipse_bins[:,0] + eclipse_bins[:,1]) / 2
-            self.eclipse_chi_sqr = np.sum((eclipse_bins[:,0] + eclipse_bins[:,1])**2 / eclipse_errors**2)
+            self.eclipse_chi_sqr = np.sum((eclipse_depths - best_fit_eclipse_depths)**2 / eclipse_errors**2)
 
         self.best_fit_transit_depths = best_fit_transit_depths
         self.best_fit_transit_dict = best_fit_transit_dict

@@ -1,10 +1,12 @@
 import cupy as np
+import numpy as cnp
 import matplotlib.pyplot as plt
 from cupyx.scipy.special import expn
 import time
 
 from .constants import h, c, k_B, R_jup, M_jup, R_sun
 from ._atmosphere_solver import AtmosphereSolver
+from ._interpolator_3D import interp1d, regular_grid_interp
 
 class EclipseDepthCalculator:
     def __init__(self, include_condensation=True, method="xsec"):
@@ -24,8 +26,15 @@ class EclipseDepthCalculator:
             "xsec" for opacity sampling, "ktables" for correlated k
         '''
         self.atm = AtmosphereSolver(include_condensation=include_condensation, method=method)
+        self.tau_cache = np.logspace(-6, 3, 1000)
+        self.exp3_cache = expn(3, self.tau_cache)
 
-
+    def _exp3(self, x):
+        shape = x.shape
+        result = np.interp(x.flatten(), self.tau_cache, self.exp3_cache,
+                           left=0.5, right=0
+                           )
+        return result.reshape(shape)
         
     def change_wavelength_bins(self, bins):        
         '''Same functionality as :func:`~platon.transit_depth_calculator.TransitDepthCalculator.change_wavelength_bins`'''
@@ -77,8 +86,9 @@ class EclipseDepthCalculator:
         return intermediate_lambdas, intermediate_depths, np.array(binned_wavelengths), np.array(binned_depths)
 
     def _get_photosphere_radii(self, taus, radii):
-        intermediate_radii = 0.5 * (radii[0:-1] + radii[1:])
-        photosphere_radii = np.array([np.interp(np.array([1]), t, intermediate_radii)[0] for t in taus])
+        #Cheat by transfering to CPU, because I don't know how else to do it
+        intermediate_radii = 0.5 * (radii[0:-1] + radii[1:]).get()
+        photosphere_radii = np.array([cnp.interp(1, t, intermediate_radii) for t in taus.get()], dtype="single")
         return photosphere_radii
 
     #@profile
@@ -128,12 +138,12 @@ class EclipseDepthCalculator:
         #padded_taus: ensures 1st layer has 0 optical depth
         padded_taus = np.zeros((taus.shape[0], taus.shape[1] + 1))
         padded_taus[:, 1:] = taus
-        integrand = planck_function * np.diff(expn(3, padded_taus), axis=1)
+        integrand = planck_function * np.diff(self._exp3(padded_taus), axis=1)
         fluxes = -2 * np.pi * np.sum(integrand, axis=1)
                 
         if not np.isinf(cloudtop_pressure):
             max_taus = np.max(taus, axis=1)
-            fluxes_from_cloud = -np.pi * planck_function[:, -1] * (max_taus**2 * -expn(max_taus) + max_taus * np.exp(-max_taus) - np.exp(-max_taus))
+            fluxes_from_cloud = -np.pi * planck_function[:, -1] * (max_taus**2 * -expn(1, max_taus) + max_taus * np.exp(-max_taus) - np.exp(-max_taus))
             fluxes += fluxes_from_cloud
 
         stellar_photon_fluxes, _ = self.atm.get_stellar_spectrum(
@@ -155,9 +165,9 @@ class EclipseDepthCalculator:
             atm_info["unbinned_eclipse_depths"] = unbinned_depths
             atm_info["taus"] = taus
             atm_info["contrib"] = -integrand / fluxes[:, np.newaxis]
-            return binned_wavelengths, binned_depths, atm_info
+            return binned_wavelengths.get(), binned_depths.get(), atm_info
 
-        return binned_wavelengths, binned_depths
+        return binned_wavelengths.get(), binned_depths.get()
             
 
 

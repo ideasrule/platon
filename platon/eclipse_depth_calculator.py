@@ -1,6 +1,6 @@
-import numpy as np
+import cupy as np
 import matplotlib.pyplot as plt
-import scipy.special
+from cupyx.scipy.special import expn
 import time
 
 from .constants import h, c, k_B, R_jup, M_jup, R_sun
@@ -25,14 +25,6 @@ class EclipseDepthCalculator:
         '''
         self.atm = AtmosphereSolver(include_condensation=include_condensation, method=method)
 
-        # scipy.special.expn is slow when called on millions of values, so
-        # use interpolator to speed it up
-        tau_cache = np.logspace(-6, 3, 1000)
-        self.exp3_interpolator = scipy.interpolate.interp1d(
-            tau_cache,
-            scipy.special.expn(3, tau_cache),
-            bounds_error=False,
-            fill_value=(0.5, 0))
 
         
     def change_wavelength_bins(self, bins):        
@@ -86,9 +78,10 @@ class EclipseDepthCalculator:
 
     def _get_photosphere_radii(self, taus, radii):
         intermediate_radii = 0.5 * (radii[0:-1] + radii[1:])
-        photosphere_radii = np.array([np.interp(1, t, intermediate_radii) for t in taus])
+        photosphere_radii = np.array([np.interp(np.array([1]), t, intermediate_radii)[0] for t in taus])
         return photosphere_radii
-    
+
+    #@profile
     def compute_depths(self, t_p_profile, star_radius, planet_mass,
                        planet_radius, T_star, logZ=0, CO_ratio=0.53,
                        add_gas_absorption=True, add_H_minus_absorption=False,
@@ -135,20 +128,21 @@ class EclipseDepthCalculator:
         #padded_taus: ensures 1st layer has 0 optical depth
         padded_taus = np.zeros((taus.shape[0], taus.shape[1] + 1))
         padded_taus[:, 1:] = taus
-        integrand = planck_function * np.diff(scipy.special.expn(3, padded_taus), axis=1)
+        integrand = planck_function * np.diff(expn(3, padded_taus), axis=1)
         fluxes = -2 * np.pi * np.sum(integrand, axis=1)
                 
         if not np.isinf(cloudtop_pressure):
             max_taus = np.max(taus, axis=1)
-            fluxes_from_cloud = -np.pi * planck_function[:, -1] * (max_taus**2 * scipy.special.expi(-max_taus) + max_taus * np.exp(-max_taus) - np.exp(-max_taus))
+            fluxes_from_cloud = -np.pi * planck_function[:, -1] * (max_taus**2 * -expn(max_taus) + max_taus * np.exp(-max_taus) - np.exp(-max_taus))
             fluxes += fluxes_from_cloud
 
         stellar_photon_fluxes, _ = self.atm.get_stellar_spectrum(
-            lambda_grid, T_star, T_spot, spot_cov_frac, stellar_blackbody)
+            lambda_grid, T_star, T_spot, spot_cov_frac, False)
+        
         d_lambda = self.atm.d_ln_lambda * lambda_grid
         photon_fluxes = fluxes * d_lambda / (h * c / lambda_grid)
 
-        photosphere_radii = self._get_photosphere_radii(taus, atm_info["radii"])
+        photosphere_radii = planet_radius #self._get_photosphere_radii(taus, atm_info["radii"])
         eclipse_depths = photon_fluxes / stellar_photon_fluxes * (photosphere_radii/star_radius)**2
 
         #For correlated k, eclipse_depths has n_gauss points per wavelength, while unbinned_depths has 1 point per wavelength

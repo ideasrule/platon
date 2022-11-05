@@ -1,7 +1,6 @@
 import sys
-import numpy as np
+import cupy as np
 import time
-import scipy.linalg
 import matplotlib.pyplot as plt
 
 

@@ -1,13 +1,12 @@
-import numpy as np
+import cupy as np
 import os
-import scipy
 from io import open
 import time
 import configparser
 from pkg_resources import resource_filename
 
 from ._loader import load_dict_from_pickle
-
+from ._interpolator_3D import regular_grid_interp
 
 class AbundanceGetter:
     def __init__(self, include_condensation=True):
@@ -18,7 +17,7 @@ class AbundanceGetter:
         self.logZs = np.linspace(float(properties["min_logZ"]),
                                  float(properties["max_logZ"]),
                                  int(properties["num_logZ"]))
-        self.CO_ratios = eval(properties["CO_ratios"])
+        self.CO_ratios = np.array(eval(properties["CO_ratios"]))
         self.included_species = eval(properties["included_species"])
 
         if include_condensation:
@@ -30,7 +29,7 @@ class AbundanceGetter:
 
         self.log_abundances = np.log10(np.load(
             resource_filename(__name__, abundances_path)))
-
+                 
         
     def get(self, logZ, CO_ratio=0.53):
         '''Get an abundance grid at the specified logZ and C/O ratio.  This
@@ -44,13 +43,8 @@ class AbundanceGetter:
             A dictionary mapping species name to a 2D abundance array, specifying
             the number fraction of the species at a certain temperature and
             pressure.'''
+        interp_log_abund = 10**regular_grid_interp(self.logZs, self.CO_ratios, self.log_abundances, logZ, CO_ratio)
 
-        N_Z, N_CO, N_species, N_T, N_P = self.log_abundances.shape
-        interp_log_abund = 10 ** scipy.interpolate.interpn(
-            (self.logZs, np.log10(self.CO_ratios)),
-            self.log_abundances,
-            [logZ, np.log10(CO_ratio)])[0]
-        
         abund_dict = {}
         for i, s in enumerate(self.included_species):
             abund_dict[s] = interp_log_abund[i]

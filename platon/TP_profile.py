@@ -1,7 +1,6 @@
-from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
-import scipy.special
-import numpy as np
+from cupyx.scipy.special import expn
+import cupy as np
 
 from pkg_resources import resource_filename
 
@@ -29,8 +28,7 @@ class Profile:
                                         
         
     def set_from_arrays(self, P_profile, T_profile):
-        interpolator = interp1d(np.log10(P_profile), T_profile)
-        self.temperatures = interpolator(np.log10(self.pressures))
+        self.temperatures = np.interp(np.log10(self.pressures), np.log10(P_profile), T_profile)
 
     def set_isothermal(self, T_day):
         self.temperatures = np.ones(len(self.pressures)) * T_day
@@ -82,7 +80,7 @@ class Profile:
         d_taus = sigma_th * intermediate_n * dr
         taus = np.cumsum(d_taus)
 
-        e2 = scipy.special.expn(2, gamma*taus)
+        e2 = expn(2, gamma*taus)
         T4 = 3.0/4 * T_int**4 * (2.0/3 + taus) + 3.0/4 * T_irr**4 * (2.0/3 + 2.0/3/gamma * (1 + (gamma*taus/2 - 1)*np.exp(-gamma * taus)) + 2.0*gamma/3 * (1 - taus**2/2) * e2)
         T = T4 ** 0.25
         self.temperatures = np.append(T[0], T)
@@ -99,7 +97,7 @@ class Profile:
         taus = k_th * self.pressures / g
 
         def incoming_stream_contribution(gamma):
-            return 3.0/4 * T_eq**4 * (2.0/3 + 2.0/3/gamma * (1 + (gamma*taus/2 - 1)*np.exp(-gamma * taus)) + 2.0*gamma/3 * (1 - taus**2/2) * scipy.special.expn(2, gamma*taus))
+            return 3.0/4 * T_eq**4 * (2.0/3 + 2.0/3/gamma * (1 + (gamma*taus/2 - 1)*np.exp(-gamma * taus)) + 2.0*gamma/3 * (1 - taus**2/2) * expn(2, gamma*taus))
 
         e1 = incoming_stream_contribution(gamma)
         T4 = 3.0/4 * T_int**4 * (2.0/3 + taus) + (1 - alpha) * e1

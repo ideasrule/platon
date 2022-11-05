@@ -2,13 +2,8 @@ import os
 import sys
 
 from pkg_resources import resource_filename
-from scipy.interpolate import RectBivariateSpline, UnivariateSpline, RegularGridInterpolator
-import numpy as np
+import cupy as np
 import matplotlib.pyplot as plt
-from scipy import integrate
-import scipy.interpolate
-import scipy.ndimage
-from scipy.stats import lognorm
 
 from . import _hydrostatic_solver
 from ._loader import load_dict_from_pickle, load_numpy
@@ -20,6 +15,7 @@ from .constants import k_B, AMU, M_sun, Teff_sun, G, h, c
 from ._get_data import get_data_if_needed
 from ._mie_cache import MieCache
 from .errors import AtmosphereError
+from ._interpolator_3D import regular_grid_interp, interp1d
 
 class AtmosphereSolver:
     def __init__(self, include_condensation=True, num_profile_heights=250,
@@ -39,18 +35,23 @@ class AtmosphereSolver:
         if method == "xsec":
             self.lambda_grid = load_numpy("data/wavelengths.npy")
             self.d_ln_lambda = np.median(np.diff(np.log(self.lambda_grid)))
-            self.stellar_spectra = load_dict_from_pickle("data/stellar_spectra.pkl")
+            self.stellar_spectra_dict = load_dict_from_pickle("data/stellar_spectra.pkl")            
         else:
             self.lambda_grid = load_numpy("data/k_wavelengths.npy")
             self.d_ln_lambda = np.median(np.diff(np.log(np.unique(self.lambda_grid))))
-            self.stellar_spectra = load_dict_from_pickle("data/k_stellar_spectra.pkl")
+            self.stellar_spectra_dict = load_dict_from_pickle("data/k_stellar_spectra.pkl")
 
+        #We stored these stellar spectra in a suboptimal way, but for backward compatibility...
+        self.stellar_spectra_temps = np.array(list(self.stellar_spectra_dict.keys()), dtype="single")
+        argsort = np.argsort(self.stellar_spectra_temps)
+        self.stellar_spectra_temps = self.stellar_spectra_temps[argsort]
+        self.stellar_spectra = np.array(list(self.stellar_spectra_dict.values()), dtype="single")[argsort]
+        
         self.collisional_absorption_data = load_dict_from_pickle(
-            "data/collisional_absorption.pkl") 
+            "data/collisional_absorption.pkl")
+        
         for key in self.collisional_absorption_data:
-            val = scipy.interpolate.interp1d(
-                self.low_res_lambdas,
-                self.collisional_absorption_data[key])(self.lambda_grid)
+            val = interp1d(self.lambda_grid, self.low_res_lambdas, self.collisional_absorption_data[key].T).T
             self.collisional_absorption_data[key] = np.copy(val, order="C")
             
         self.P_grid = load_numpy("data/pressures.npy")
@@ -128,8 +129,7 @@ class AtmosphereSolver:
         self.lambda_grid = self.lambda_grid[cond]
         self.N_lambda = len(self.lambda_grid)
 
-        for Teff in self.stellar_spectra:
-            self.stellar_spectra[Teff] = self.stellar_spectra[Teff][cond]
+        self.stellar_spectra = self.stellar_spectra[:,cond]
             
         for key in self.collisional_absorption_data:
             self.collisional_absorption_data[key] = self.collisional_absorption_data[key][:, cond]
@@ -194,10 +194,9 @@ class AtmosphereSolver:
                   
         return absorption_coeff
 
-    
     def _get_gas_absorption(self, abundances, P_cond, T_cond):
         absorption_coeff = np.zeros(
-            (np.sum(T_cond), np.sum(P_cond), self.N_lambda))
+            (int(np.sum(T_cond)), int(np.sum(P_cond)), self.N_lambda))
         
         for species_name, species_abundance in abundances.items():
             assert(species_abundance.shape == (self.N_T, self.N_P))
@@ -209,7 +208,7 @@ class AtmosphereSolver:
 
     def _get_scattering_absorption(self, abundances, P_cond, T_cond,
                                    multiple=1, slope=4, ref_wavelength=1e-6):
-        sum_polarizability_sqr = np.zeros((np.sum(T_cond), np.sum(P_cond)))
+        sum_polarizability_sqr = np.zeros((int(np.sum(T_cond)), int(np.sum(P_cond))))
 
         for species_name in abundances:
             if species_name in self.polarizability_data:
@@ -221,7 +220,7 @@ class AtmosphereSolver:
 
     def _get_collisional_absorption(self, abundances, P_cond, T_cond):
         absorption_coeff = np.zeros(
-            (np.sum(T_cond), np.sum(P_cond), self.N_lambda))
+            (int(np.sum(T_cond)), int(np.sum(P_cond)), self.N_lambda))
         n = self.P_grid[np.newaxis, P_cond] / (k_B * self.T_grid[T_cond, np.newaxis])        
         for s1, s2 in self.collisional_absorption_data:
             if s1 in abundances and s2 in abundances:
@@ -277,10 +276,7 @@ class AtmosphereSolver:
         atm_abundances = {}
         
         for species_name in abundances:
-            interpolator = RectBivariateSpline(
-                self.T_grid, np.log10(self.P_grid),
-                np.log10(abundances[species_name]), kx=1, ky=1)
-            abund = 10**interpolator.ev(T_profile, np.log10(P_profile))
+            abund = 10**regular_grid_interp(self.T_grid, np.log10(self.P_grid), np.log10(abundances[species_name]), T_profile, np.log10(P_profile))
             atm_abundances[species_name] = abund
             mu_profile += abund * self.mass_data[species_name]
 
@@ -346,6 +342,7 @@ class AtmosphereSolver:
                     "Cloudtop pressure is {} Pa, but must be between {} and {} Pa unless it is np.inf".format(
                         cloudtop_pressure, minimum, maximum))
 
+    #@profile
     def get_stellar_spectrum(self, lambdas, T_star, T_spot, spot_cov_frac, blackbody=False):
         if spot_cov_frac is None:
             spot_cov_frac = 0
@@ -353,17 +350,13 @@ class AtmosphereSolver:
         if T_spot is None:
             T_spot = T_star
             
-        temperatures = list(self.stellar_spectra.keys()) #NOT sorted!
         if T_star is None:
             unspotted_spectrum = np.ones(len(lambdas))
             spot_spectrum = np.ones(len(lambdas))
-        elif T_star >= np.min(temperatures) and T_star <= np.max(temperatures) and not blackbody:
-            interpolator = scipy.interpolate.interp1d(
-                temperatures, list(self.stellar_spectra.values()),
-                assume_sorted=False,
-                axis=0)
-            unspotted_spectrum = interpolator(T_star)
-            spot_spectrum = interpolator(T_spot)
+            
+        elif T_star >= np.min(self.stellar_spectra_temps) and T_star <= np.max(self.stellar_spectra_temps) and not blackbody:            
+            unspotted_spectrum = interp1d(T_star, self.stellar_spectra_temps, self.stellar_spectra)
+            spot_spectrum = interp1d(T_star, self.stellar_spectra_temps, self.stellar_spectra)
             if len(spot_spectrum) != len(lambdas):
                 raise ValueError("Stellar spectra has a different length ({}) than opacities ({})!  If you are using high resolution opacities, pass stellar_blackbody=True to compute_depths".format(len(spot_spectrum), len(lambdas)))
         else:
@@ -377,7 +370,8 @@ class AtmosphereSolver:
                            (1 - spot_cov_frac) * unspotted_spectrum
         correction_factors = unspotted_spectrum/stellar_spectrum
         return stellar_spectrum, correction_factors
-            
+
+    #@profile
     def compute_params(self, star_radius, planet_mass, planet_radius,
                        P_profile, T_profile,
                        logZ=0, CO_ratio=0.53,
@@ -401,10 +395,7 @@ class AtmosphereSolver:
         for name in abundances:
             abundances[name][np.isnan(abundances[name])] = min_abundance
             abundances[name][abundances[name] < min_abundance] = min_abundance
-            interpolator = RectBivariateSpline(
-                self.T_grid, np.log10(self.P_grid),
-                np.log10(abundances[name]), kx=1, ky=1)
-            quench_abund = 10**interpolator.ev(T_quench, np.log10(P_quench))
+            quench_abund = 10**regular_grid_interp(self.T_grid, np.log10(self.P_grid), np.log10(abundances[name]), T_quench, np.log10(P_quench))
             abundances[name][:, self.P_grid <= P_quench] = quench_abund
 
         above_clouds = P_profile < cloudtop_pressure
@@ -419,7 +410,8 @@ class AtmosphereSolver:
         T_cond = _interpolator_3D.get_condition_array(T_profile, self.T_grid)
         P_cond = _interpolator_3D.get_condition_array(
             P_profile, self.P_grid, cloudtop_pressure)
-        absorption_coeff = np.zeros((np.sum(T_cond), np.sum(P_cond), len(self.lambda_grid)))
+
+        absorption_coeff = np.zeros((int(np.sum(T_cond)), int(np.sum(P_cond)), len(self.lambda_grid)))
         if add_gas_absorption:
             absorption_coeff += self._get_gas_absorption(abundances, P_cond, T_cond)
         if add_H_minus_absorption:
@@ -451,12 +443,15 @@ class AtmosphereSolver:
         
         if len(self.T_grid[T_cond]) == 1:
             cross_secs_atm = np.exp(scipy.interpolate.interpn((np.log(self.P_grid[P_cond]),), np.log(cross_secs[0]), np.log(P_profile)))
-        else:
-            # log(sigma) goes linearly with 1/T more than with T
-            cross_secs_atm = np.exp(scipy.interpolate.interpn(
-                (1.0/self.T_grid[T_cond][::-1], np.log(self.P_grid[P_cond])),
+        else:            
+            ln_cross = regular_grid_interp(
+                1.0/self.T_grid[T_cond][::-1],
+                np.log(self.P_grid[P_cond]),
                 np.log(cross_secs[::-1]),
-                np.array([1.0/T_profile, np.log(P_profile)]).T))
+                1.0 / T_profile,
+                np.log(P_profile))
+         
+            cross_secs_atm = np.exp(ln_cross)
 
         absorption_coeff_atm = cross_secs_atm * (P_profile / k_B / T_profile)[:, np.newaxis]
         output_dict = {"absorption_coeff_atm": absorption_coeff_atm,

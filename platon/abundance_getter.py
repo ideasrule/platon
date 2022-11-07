@@ -7,7 +7,6 @@ from pkg_resources import resource_filename
 
 from ._loader import load_dict_from_pickle
 from ._interpolator_3D import regular_grid_interp
-from . import __dtype__
 
 class AbundanceGetter:
     def __init__(self, include_condensation=True):
@@ -17,8 +16,8 @@ class AbundanceGetter:
         self.min_temperature = float(properties["min_temperature"])
         self.logZs = np.linspace(float(properties["min_logZ"]),
                                  float(properties["max_logZ"]),
-                                 int(properties["num_logZ"])).astype(__dtype__)
-        self.CO_ratios = np.array(eval(properties["CO_ratios"]), dtype=__dtype__)
+                                 int(properties["num_logZ"]))
+        self.CO_ratios = np.array(eval(properties["CO_ratios"]))
         self.included_species = eval(properties["included_species"])
 
         if include_condensation:
@@ -28,8 +27,8 @@ class AbundanceGetter:
 
         abundances_path = "data/abundances/{}".format(filename)
 
-        self.log_abundances = np.array(np.log10(np.load(
-            resource_filename(__name__, abundances_path))), dtype=__dtype__)
+        self.log_abundances = np.log10(np.load(
+            resource_filename(__name__, abundances_path)))
                  
         
     def get(self, logZ, CO_ratio=0.53):

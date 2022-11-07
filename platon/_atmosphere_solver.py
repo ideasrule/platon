@@ -16,7 +16,6 @@ from ._get_data import get_data_if_needed
 from ._mie_cache import MieCache
 from .errors import AtmosphereError
 from ._interpolator_3D import regular_grid_interp, interp1d
-from . import __dtype__
 
 class AtmosphereSolver:
     def __init__(self, include_condensation=True, num_profile_heights=250,
@@ -43,10 +42,10 @@ class AtmosphereSolver:
             self.stellar_spectra_dict = load_dict_from_pickle("data/k_stellar_spectra.pkl")
 
         #We stored these stellar spectra in a suboptimal way, but for backward compatibility...
-        self.stellar_spectra_temps = np.array(list(self.stellar_spectra_dict.keys()), dtype=__dtype__)
+        self.stellar_spectra_temps = np.array(list(self.stellar_spectra_dict.keys()))
         argsort = np.argsort(self.stellar_spectra_temps)
         self.stellar_spectra_temps = self.stellar_spectra_temps[argsort]
-        self.stellar_spectra = np.array(list(self.stellar_spectra_dict.values()), dtype=__dtype__)[argsort]
+        self.stellar_spectra = np.array(list(self.stellar_spectra_dict.values()))[argsort]
         
         self.collisional_absorption_data = load_dict_from_pickle(
             "data/collisional_absorption.pkl")
@@ -197,7 +196,7 @@ class AtmosphereSolver:
 
     def _get_gas_absorption(self, abundances, P_cond, T_cond):
         absorption_coeff = np.zeros(
-            (int(np.sum(T_cond)), int(np.sum(P_cond)), self.N_lambda), dtype=__dtype__)
+            (int(np.sum(T_cond)), int(np.sum(P_cond)), self.N_lambda))
 
         for species_name, species_abundance in abundances.items():
             assert(species_abundance.shape == (self.N_T, self.N_P))

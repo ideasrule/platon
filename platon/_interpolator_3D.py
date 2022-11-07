@@ -1,7 +1,6 @@
 import cupy as np
 import sys
 import time
-from . import __dtype__
 
 def get_condition_array(target_data, interp_data, max_cutoff=np.inf):
     cond = np.zeros(len(interp_data), dtype=bool)

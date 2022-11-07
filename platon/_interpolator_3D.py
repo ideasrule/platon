@@ -1,6 +1,4 @@
 import cupy as np
-import sys
-import time
 
 def get_condition_array(target_data, interp_data, max_cutoff=np.inf):
     cond = np.zeros(len(interp_data), dtype=bool)
@@ -34,8 +32,7 @@ def interp1d(target_xs, xs, data, assume_sorted=True):
     x_indices_lower = np.floor(x_indices).astype(int)
     x_indices_upper = np.ceil(x_indices).astype(int)
     x_indices_frac = x_indices - x_indices_lower
-    #import pdb
-    #pdb.set_trace()
+
     if not np.isscalar(target_xs):
         x_indices_frac = x_indices_frac[:,np.newaxis]
 

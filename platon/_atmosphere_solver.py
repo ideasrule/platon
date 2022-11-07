@@ -72,7 +72,6 @@ class AtmosphereSolver:
         self.all_cross_secs = load_dict_from_pickle("data/all_cross_secs.pkl")
         self.all_radii = load_numpy("data/mie_radii.npy")
 
-
     def change_wavelength_bins(self, bins):
         """Specify wavelength bins, instead of using the full wavelength grid
         in self.lambda_grid.  This makes the code much faster, as
@@ -129,7 +128,7 @@ class AtmosphereSolver:
             
         for key in self.collisional_absorption_data:
             self.collisional_absorption_data[key] = self.collisional_absorption_data[key][:, cond]
-  
+            
     def _get_k(self, T, wavelengths):
         wavelengths = 1e6 * np.copy(wavelengths)
         alpha = 14391
@@ -264,8 +263,7 @@ class AtmosphereSolver:
 
     def _get_above_cloud_profiles(self, P_profile, T_profile, abundances,
                                   planet_mass, planet_radius, star_radius,
-                                  above_cloud_cond, T_star=None):
-        
+                                  above_cloud_cond, T_star=None):        
         assert(len(P_profile) == len(T_profile))
         # First, get atmospheric weight profile
         mu_profile = np.zeros(len(P_profile))
@@ -338,7 +336,6 @@ class AtmosphereSolver:
                     "Cloudtop pressure is {} Pa, but must be between {} and {} Pa unless it is np.inf".format(
                         cloudtop_pressure, minimum, maximum))
 
-    #@profile
     def get_stellar_spectrum(self, lambdas, T_star, T_spot, spot_cov_frac, blackbody=False):
         if spot_cov_frac is None:
             spot_cov_frac = 0
@@ -367,7 +364,6 @@ class AtmosphereSolver:
         correction_factors = unspotted_spectrum/stellar_spectrum
         return stellar_spectrum, correction_factors
 
-    #@profile
     def compute_params(self, star_radius, planet_mass, planet_radius,
                        P_profile, T_profile,
                        logZ=0, CO_ratio=0.53,

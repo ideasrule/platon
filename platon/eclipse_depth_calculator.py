@@ -89,8 +89,6 @@ class EclipseDepthCalculator:
         result = radii[np.argmin(np.abs(taus - 1), axis=1)]
         return result
               
-
-    #@profile
     def compute_depths(self, t_p_profile, star_radius, planet_mass,
                        planet_radius, T_star, logZ=0, CO_ratio=0.53,
                        add_gas_absorption=True, add_H_minus_absorption=False,
@@ -146,7 +144,7 @@ class EclipseDepthCalculator:
             fluxes += fluxes_from_cloud
 
         stellar_photon_fluxes, _ = self.atm.get_stellar_spectrum(
-            lambda_grid, T_star, T_spot, spot_cov_frac, False)
+            lambda_grid, T_star, T_spot, spot_cov_frac, stellar_blackbody)
         
         d_lambda = self.atm.d_ln_lambda * lambda_grid
         photon_fluxes = fluxes * d_lambda / (h * c / lambda_grid)

@@ -11,5 +11,4 @@ def load_dict_from_pickle(filename):
         return dictionary
     
 def load_numpy(filename):
-    result = np.load(resource_filename(__name__, filename))
-    return result
+    return np.load(resource_filename(__name__, filename))

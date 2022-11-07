@@ -1,6 +1,7 @@
 import cupy as np
 import sys
 import time
+from . import __dtype__
 
 def get_condition_array(target_data, interp_data, max_cutoff=np.inf):
     cond = np.zeros(len(interp_data), dtype=bool)
@@ -56,9 +57,6 @@ def regular_grid_interp(ys, xs, data, target_ys, target_xs):
     
     x_indices = np.interp(target_xs, xs, np.arange(len(xs)))
     y_indices = np.interp(target_ys, ys, np.arange(len(ys)))
-    #if not np.isscalar(target_ys):
-    #    x_indices = x_indices[:, np.newaxis]
-    #    y_indices = y_indices[:, np.newaxis]
         
     x_indices_lower = np.floor(x_indices).astype(int)
     x_indices_upper = np.ceil(x_indices).astype(int)
@@ -68,10 +66,6 @@ def regular_grid_interp(ys, xs, data, target_ys, target_xs):
     y_indices_upper = np.ceil(y_indices).astype(int)
     y_indices_frac = y_indices - y_indices_lower
 
-    #import pdb
-    #pdb.set_trace()
-    #if not np.isscalar(target_ys):
-    #    y_indices_
     if data.ndim > 2 and not np.isscalar(target_ys):
         x_indices_frac = x_indices_frac[:, np.newaxis]
         y_indices_frac = y_indices_frac[:, np.newaxis]

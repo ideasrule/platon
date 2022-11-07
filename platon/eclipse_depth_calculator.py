@@ -86,10 +86,10 @@ class EclipseDepthCalculator:
         return intermediate_lambdas, intermediate_depths, np.array(binned_wavelengths), np.array(binned_depths)
 
     def _get_photosphere_radii(self, taus, radii):
-        #Cheat by transfering to CPU, because I don't know how else to do it
-        intermediate_radii = 0.5 * (radii[0:-1] + radii[1:]).get()
-        photosphere_radii = np.array([cnp.interp(1, t, intermediate_radii) for t in taus.get()], dtype="single")
-        return photosphere_radii
+        intermediate_radii = 0.5 * (radii[0:-1] + radii[1:])
+        result = radii[np.argmin(np.abs(taus - 1), axis=1)]
+        return result
+              
 
     #@profile
     def compute_depths(self, t_p_profile, star_radius, planet_mass,
@@ -152,7 +152,7 @@ class EclipseDepthCalculator:
         d_lambda = self.atm.d_ln_lambda * lambda_grid
         photon_fluxes = fluxes * d_lambda / (h * c / lambda_grid)
 
-        photosphere_radii = planet_radius #self._get_photosphere_radii(taus, atm_info["radii"])
+        photosphere_radii = self._get_photosphere_radii(taus, atm_info["radii"])
         eclipse_depths = photon_fluxes / stellar_photon_fluxes * (photosphere_radii/star_radius)**2
 
         #For correlated k, eclipse_depths has n_gauss points per wavelength, while unbinned_depths has 1 point per wavelength

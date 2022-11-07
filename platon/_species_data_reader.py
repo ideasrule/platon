@@ -1,5 +1,6 @@
 import cupy as np
 import os
+from . import __dtype__
 
 def read_species_data(absorption_dir, species_info_file, method):
     if method == "xsec":
@@ -24,7 +25,7 @@ def read_species_data(absorption_dir, species_info_file, method):
             absorption_filename = os.path.join(
                 absorption_dir, absorption_file_prefix + name + ".npy")
             if os.path.isfile(absorption_filename):
-                absorption_data[name] = np.array(np.load(absorption_filename), dtype="single")
+                absorption_data[name] = np.array(np.load(absorption_filename), dtype=__dtype__)
                 absorption_data[name] = np.copy(absorption_data[name], order='C')
             mass_data[name] = mass
 

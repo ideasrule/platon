@@ -16,6 +16,7 @@ from ._get_data import get_data_if_needed
 from ._mie_cache import MieCache
 from .errors import AtmosphereError
 from ._interpolator_3D import regular_grid_interp, interp1d
+from . import __dtype__
 
 class AtmosphereSolver:
     def __init__(self, include_condensation=True, num_profile_heights=250,
@@ -42,10 +43,10 @@ class AtmosphereSolver:
             self.stellar_spectra_dict = load_dict_from_pickle("data/k_stellar_spectra.pkl")
 
         #We stored these stellar spectra in a suboptimal way, but for backward compatibility...
-        self.stellar_spectra_temps = np.array(list(self.stellar_spectra_dict.keys()), dtype="single")
+        self.stellar_spectra_temps = np.array(list(self.stellar_spectra_dict.keys()), dtype=__dtype__)
         argsort = np.argsort(self.stellar_spectra_temps)
         self.stellar_spectra_temps = self.stellar_spectra_temps[argsort]
-        self.stellar_spectra = np.array(list(self.stellar_spectra_dict.values()), dtype="single")[argsort]
+        self.stellar_spectra = np.array(list(self.stellar_spectra_dict.values()), dtype=__dtype__)[argsort]
         
         self.collisional_absorption_data = load_dict_from_pickle(
             "data/collisional_absorption.pkl")
@@ -196,13 +197,29 @@ class AtmosphereSolver:
 
     def _get_gas_absorption(self, abundances, P_cond, T_cond):
         absorption_coeff = np.zeros(
-            (int(np.sum(T_cond)), int(np.sum(P_cond)), self.N_lambda))
-        
+            (int(np.sum(T_cond)), int(np.sum(P_cond)), self.N_lambda), dtype=__dtype__)
+
         for species_name, species_abundance in abundances.items():
             assert(species_abundance.shape == (self.N_T, self.N_P))
             
             if species_name in self.absorption_data:
                 absorption_coeff += self.absorption_data[species_name][T_cond][:,P_cond] * species_abundance[T_cond][:,P_cond,np.newaxis]
+                #test1.append(self.absorption_data[species_name][T_cond][:,P_cond])
+                #test2.append(species_abundance[T_cond][:,P_cond,np.newaxis])
+
+        #end1 = time.time()
+        #print(absorption_coeff.get())
+        #print("Original took", end1 - start)
+        #test1 = np.array(test1)
+        #test2 = np.array(test2)
+
+        #start2 = time.time()
+        #result = (test1 * test2).sum(axis=0)
+        #print(result.get())
+        #print("new took", time.time() - start2)
+        
+        #import pdb
+        #pdb.set_trace()
 
         return absorption_coeff
 

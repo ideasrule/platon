@@ -1,4 +1,4 @@
-import cupy as np
+from . import _cupy_numpy as xp
 from io import open
 import configparser
 from pkg_resources import resource_filename
@@ -11,10 +11,10 @@ class AbundanceGetter:
         config.read(resource_filename(__name__, "data/abundances/properties.cfg"))
         properties = config["DEFAULT"]
         self.min_temperature = float(properties["min_temperature"])
-        self.logZs = np.linspace(float(properties["min_logZ"]),
+        self.logZs = xp.linspace(float(properties["min_logZ"]),
                                  float(properties["max_logZ"]),
                                  int(properties["num_logZ"]))
-        self.CO_ratios = np.array(eval(properties["CO_ratios"]))
+        self.CO_ratios = xp.array(eval(properties["CO_ratios"]))
         self.included_species = eval(properties["included_species"])
 
         if include_condensation:
@@ -24,7 +24,7 @@ class AbundanceGetter:
 
         abundances_path = "data/abundances/{}".format(filename)
 
-        self.log_abundances = np.log10(np.load(
+        self.log_abundances = xp.log10(xp.load(
             resource_filename(__name__, abundances_path)))
                  
         
@@ -36,11 +36,11 @@ class AbundanceGetter:
 
         Returns
         -------
-        abundances : dict of np.ndarray
+        abundances : dict of xp.ndarray
             A dictionary mapping species name to a 2D abundance array, specifying
             the number fraction of the species at a certain temperature and
             pressure.'''
-        interp_log_abund = 10**regular_grid_interp(self.logZs, self.CO_ratios, self.log_abundances, np.float32(logZ), np.float32(CO_ratio))
+        interp_log_abund = 10**regular_grid_interp(self.logZs, self.CO_ratios, self.log_abundances, xp.float32(logZ), xp.float32(CO_ratio))
 
         abund_dict = {}
         for i, s in enumerate(self.included_species):
@@ -53,10 +53,10 @@ class AbundanceGetter:
         combination is within the supported bounds'''
         if T <= self.min_temperature:
             return False
-        if logZ <= np.min(self.logZs) or logZ >= np.max(self.logZs):
+        if logZ <= xp.min(self.logZs) or logZ >= xp.max(self.logZs):
             return False
-        if CO_ratio <= np.min(self.CO_ratios) or \
-           CO_ratio >= np.max(self.CO_ratios):
+        if CO_ratio <= xp.min(self.CO_ratios) or \
+           CO_ratio >= xp.max(self.CO_ratios):
             return False
         return True
 
@@ -81,19 +81,19 @@ class AbundanceGetter:
                     assert(elements[1] == 'P')
                     species = elements[2:]
                 elif len(elements) > 1:
-                    elements = np.array([float(e) for e in elements])
+                    elements = xp.array([float(e) for e in elements])
                     temperatures.append(elements[0])
                     pressures.append(elements[1])
                     compositions.append(elements[2:])
 
                 line_counter += 1
 
-        temperatures = np.array(temperatures)
-        pressures = np.array(pressures)
-        compositions = np.array(compositions)
+        temperatures = xp.array(temperatures)
+        pressures = xp.array(pressures)
+        compositions = xp.array(compositions)
 
-        N_temperatures = len(np.unique(temperatures))
-        N_pressures = len(np.unique(pressures))
+        N_temperatures = len(xp.unique(temperatures))
+        N_pressures = len(xp.unique(pressures))
 
         for i in range(len(species)):
             c = compositions[:, i].reshape((N_pressures, N_temperatures)).T

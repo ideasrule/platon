@@ -1,4 +1,4 @@
-import cupy as np
+from . import _cupy_numpy as xp
 import os
 
 def read_species_data(absorption_dir, species_info_file, method):
@@ -24,8 +24,8 @@ def read_species_data(absorption_dir, species_info_file, method):
             absorption_filename = os.path.join(
                 absorption_dir, absorption_file_prefix + name + ".npy")
             if os.path.isfile(absorption_filename):
-                absorption_data[name] = np.load(absorption_filename)
-                absorption_data[name] = np.copy(absorption_data[name], order='C')
+                absorption_data[name] = xp.load(absorption_filename)
+                absorption_data[name] = xp.copy(absorption_data[name], order='C')
             mass_data[name] = mass
 
             if polarizability != 0:

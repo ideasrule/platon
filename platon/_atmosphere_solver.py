@@ -61,8 +61,8 @@ class AtmosphereSolver:
         self.wavelength_bins = None
 
         self.abundance_getter = AbundanceGetter(include_condensation)
-        self.min_temperature = max(xp.min(self.T_grid), self.abundance_getter.min_temperature)
-        self.max_temperature = xp.max(self.T_grid)
+        self.min_temperature = max(self.T_grid.min(), self.abundance_getter.min_temperature)
+        self.max_temperature = xp.amax(self.T_grid)
 
         self.num_profile_heights = num_profile_heights
         self.ref_pressure = ref_pressure
@@ -100,10 +100,10 @@ class AtmosphereSolver:
             return
 
         for start, end in bins:
-            if start < xp.min(self.lambda_grid) \
-               or start > xp.max(self.lambda_grid) \
-               or end < xp.min(self.lambda_grid) \
-               or end > xp.max(self.lambda_grid):
+            if start < self.lambda_grid.min() \
+               or start > self.lambda_grid.max() \
+               or end < self.lambda_grid.min() \
+               or end > self.lambda_grid.max():
                 raise ValueError("Invalid wavelength bin: {}-{} meters".format(start, end))
             num_points = xp.sum(xp.logical_and(self.lambda_grid > start,
                                                self.lambda_grid < end))
@@ -310,28 +310,28 @@ class AtmosphereSolver:
    
 
     def _validate_params(self, T_profile, logZ, CO_ratio, cloudtop_pressure):
-        if xp.min(T_profile) < self.min_temperature or\
-           xp.max(T_profile) > self.max_temperature:
+        if T_profile.min() < self.min_temperature or\
+           T_profile.max() > self.max_temperature:
             raise AtmosphereError("Invalid temperatures in T/P profile")
             
         if logZ is not None:
-            minimum = xp.min(self.abundance_getter.logZs)
-            maximum = xp.max(self.abundance_getter.logZs)
+            minimum = self.abundance_getter.logZs.min()
+            maximum = self.abundance_getter.logZs.max()
             if logZ < minimum or logZ > maximum:
                 raise ValueError(
                     "logZ {} is out of bounds ({} to {})".format(
                         logZ, minimum, maximum))
 
         if CO_ratio is not None:
-            minimum = xp.min(self.abundance_getter.CO_ratios)
-            maximum = xp.max(self.abundance_getter.CO_ratios)
+            minimum = self.abundance_getter.CO_ratios.min()
+            maximum = self.abundance_getter.CO_ratios.max()
             if CO_ratio < minimum or CO_ratio > maximum:
                 raise ValueError(
                     "C/O ratio {} is out of bounds ({} to {})".format(CO_ratio, minimum, maximum))
 
         if not xp.isinf(cloudtop_pressure):
-            minimum = xp.min(self.P_grid)
-            maximum = xp.max(self.P_grid)
+            minimum = self.P_grid.min()
+            maximum = self.P_grid.max()
             if cloudtop_pressure <= minimum or cloudtop_pressure > maximum:
                 raise ValueError(
                     "Cloudtop pressure is {} Pa, but must be between {} and {} Pa unless it is xp.inf".format(
@@ -348,7 +348,7 @@ class AtmosphereSolver:
             unspotted_spectrum = xp.ones(len(lambdas))
             spot_spectrum = xp.ones(len(lambdas))
             
-        elif T_star >= xp.min(self.stellar_spectra_temps) and T_star <= xp.max(self.stellar_spectra_temps) and not blackbody:            
+        elif T_star >= self.stellar_spectra_temps.min() and T_star <= self.stellar_spectra_temps.max() and not blackbody:            
             unspotted_spectrum = interp1d(T_star, self.stellar_spectra_temps, self.stellar_spectra)
             spot_spectrum = interp1d(T_star, self.stellar_spectra_temps, self.stellar_spectra)
             if len(spot_spectrum) != len(lambdas):

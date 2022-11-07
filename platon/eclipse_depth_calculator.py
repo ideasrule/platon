@@ -85,7 +85,7 @@ class EclipseDepthCalculator:
 
     def _get_photosphere_radii(self, taus, radii):
         intermediate_radii = 0.5 * (radii[0:-1] + radii[1:])
-        result = radii[xp.argmin(xp.abs(xp.log(taus)), axis=1)]
+        result = radii[xp.argmin(xp.absolute(xp.log(taus)), axis=1)]
         return result
               
     def compute_depths(self, t_p_profile, star_radius, planet_mass,
@@ -118,7 +118,7 @@ class EclipseDepthCalculator:
             ri, frac_scale_height, number_density, part_size, part_size_std,
             P_quench)
 
-        assert(xp.max(atm_info["P_profile"]) <= cloudtop_pressure)
+        assert(atm_info["P_profile"].max() <= cloudtop_pressure)
         absorption_coeff = atm_info["absorption_coeff_atm"]
         intermediate_coeff = 0.5 * (absorption_coeff[0:-1] + absorption_coeff[1:])
         intermediate_T = 0.5 * (atm_info["T_profile"][0:-1] + atm_info["T_profile"][1:])
@@ -138,7 +138,7 @@ class EclipseDepthCalculator:
         fluxes = -2 * xp.pi * xp.sum(integrand, axis=1)
                 
         if not xp.isinf(cloudtop_pressure):
-            max_taus = xp.max(taus, axis=1)
+            max_taus = taus.max(axis=1)
             fluxes_from_cloud = -xp.pi * planck_function[:, -1] * (max_taus**2 * -expn(1, max_taus) + max_taus * xp.exp(-max_taus) - xp.exp(-max_taus))
             fluxes += fluxes_from_cloud
 
@@ -163,7 +163,4 @@ class EclipseDepthCalculator:
             atm_info["contrib"] = xp.cpu(-integrand / fluxes[:, xp.newaxis])
             return xp.cpu(binned_wavelengths), xp.cpu(binned_depths), atm_info
 
-        return xp.cpu(binned_wavelengths), xp.cpu(binned_depths)
-            
-
-
+        return xp.cpu(binned_wavelengths), xp.cpu(binned_depths), None

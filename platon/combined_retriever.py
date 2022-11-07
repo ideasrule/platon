@@ -166,7 +166,7 @@ class CombinedRetriever:
                     cloudtop_pressure=cloudtop_P,
                     T_spot=T_spot, spot_cov_frac=spot_cov_frac,
                     frac_scale_height=frac_scale_height, number_density=number_density,
-                    part_size = part_size, ri=ri, P_quench=P_quench, full_output=True)
+                    part_size = part_size, ri=ri, P_quench=P_quench, full_output=ret_best_fit)
                 calculated_eclipse_depths[np.logical_and(eclipse_wavelengths >= wfc3_start, eclipse_wavelengths <= wfc3_end)] += params_dict["wfc3_offset_eclipse"] 
                 residuals = calculated_eclipse_depths - measured_eclipse_depths
                 scaled_errors = error_multiple * measured_eclipse_errors

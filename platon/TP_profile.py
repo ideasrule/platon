@@ -35,7 +35,7 @@ class Profile:
 
     def set_parametric(self, T0, P1, alpha1, alpha2, P3, T3):
         '''Parametric model from https://arxiv.org/pdf/0910.1347.pdf'''
-        P0 = xp.min(self.pressures)
+        P0 = xp.amin(self.pressures)
 
         ln_P2 = alpha2**2*(T0+xp.log(P1/P0)**2/alpha1**2 - T3) - xp.log(P1)**2 + xp.log(P3)**2
         ln_P2 /= 2 * xp.log(P3/P1)

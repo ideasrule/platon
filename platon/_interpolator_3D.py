@@ -8,12 +8,12 @@ def get_condition_array(target_data, interp_data, max_cutoff=xp.inf):
 
     for i in range(len(cond)):
         if start_index is None:
-            if interp_data[i] > xp.min(target_data):
+            if interp_data[i] > target_data.min():
                 start_index = i-1
-            if interp_data[i] == xp.min(target_data):
+            if interp_data[i] == target_data.min():
                 start_index = i
         if end_index is None:
-            if interp_data[i] >= xp.max(target_data) or \
+            if interp_data[i] >= target_data.max() or \
                interp_data[i] >= max_cutoff:
                 end_index = i + 1
                 

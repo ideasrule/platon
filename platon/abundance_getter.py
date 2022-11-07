@@ -53,10 +53,10 @@ class AbundanceGetter:
         combination is within the supported bounds'''
         if T <= self.min_temperature:
             return False
-        if logZ <= xp.min(self.logZs) or logZ >= xp.max(self.logZs):
+        if logZ <= self.logZs.min() or logZ >= self.logZs.max():
             return False
-        if CO_ratio <= xp.min(self.CO_ratios) or \
-           CO_ratio >= xp.max(self.CO_ratios):
+        if CO_ratio <= self.CO_ratios.min() or \
+           CO_ratio >= self.CO_ratios.max():
             return False
         return True
 

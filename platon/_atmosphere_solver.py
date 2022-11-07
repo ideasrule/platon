@@ -1,9 +1,5 @@
-import os
-import sys
-
 from pkg_resources import resource_filename
 import cupy as np
-import matplotlib.pyplot as plt
 
 from . import _hydrostatic_solver
 from ._loader import load_dict_from_pickle, load_numpy
@@ -203,22 +199,6 @@ class AtmosphereSolver:
             
             if species_name in self.absorption_data:
                 absorption_coeff += self.absorption_data[species_name][T_cond][:,P_cond] * species_abundance[T_cond][:,P_cond,np.newaxis]
-                #test1.append(self.absorption_data[species_name][T_cond][:,P_cond])
-                #test2.append(species_abundance[T_cond][:,P_cond,np.newaxis])
-
-        #end1 = time.time()
-        #print(absorption_coeff.get())
-        #print("Original took", end1 - start)
-        #test1 = np.array(test1)
-        #test2 = np.array(test2)
-
-        #start2 = time.time()
-        #result = (test1 * test2).sum(axis=0)
-        #print(result.get())
-        #print("new took", time.time() - start2)
-        
-        #import pdb
-        #pdb.set_trace()
 
         return absorption_coeff
 

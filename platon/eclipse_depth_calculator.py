@@ -2,7 +2,6 @@ import cupy as np
 import numpy as cnp
 import matplotlib.pyplot as plt
 from cupyx.scipy.special import expn
-import time
 
 from .constants import h, c, k_B, R_jup, M_jup, R_sun
 from ._atmosphere_solver import AtmosphereSolver

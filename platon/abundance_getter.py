@@ -1,11 +1,8 @@
 import cupy as np
-import os
 from io import open
-import time
 import configparser
 from pkg_resources import resource_filename
 
-from ._loader import load_dict_from_pickle
 from ._interpolator_3D import regular_grid_interp
 
 class AbundanceGetter:
@@ -43,8 +40,6 @@ class AbundanceGetter:
             A dictionary mapping species name to a 2D abundance array, specifying
             the number fraction of the species at a certain temperature and
             pressure.'''
-        #import pdb
-        #pdb.set_trace()
         interp_log_abund = 10**regular_grid_interp(self.logZs, self.CO_ratios, self.log_abundances, np.float32(logZ), np.float32(CO_ratio))
 
         abund_dict = {}

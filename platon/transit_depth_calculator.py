@@ -302,6 +302,6 @@ class TransitDepthCalculator:
                     atm_info[key] = xp.cpu(atm_info[key])
             return xp.cpu(binned_wavelengths), xp.cpu(binned_depths), atm_info
 
-        return xp.cpu(binned_wavelengths), xp.cpu(binned_depths)
+        return xp.cpu(binned_wavelengths), xp.cpu(binned_depths), None
         
         

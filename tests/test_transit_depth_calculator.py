@@ -107,16 +107,14 @@ class TestTransitDepthCalculator(unittest.TestCase):
         H = k_B * T / (2 * AMU * g)
         gamma = 0.57721
         polarizability = 0.8059e-30
-        sigma = 128. * np.pi**5/3 * polarizability**2 / depth_calculator.atm.lambda_grid**4
+        sigma = 128. * np.pi**5/3 * polarizability**2 / depth_calculator.atm.get_lambda_grid()**4
         kappa = sigma / (2 * AMU)
 
         P_surface = 1e8
         R_surface = info_dict["radii"][-1]
         tau_surface = P_surface/g * np.sqrt(2*np.pi*R_surface/H) * kappa
         analytic_R = R_surface + H*(gamma + np.log(tau_surface) + scipy.special.expn(1, tau_surface))
-        
         analytic_depths = analytic_R**2 / Rs**2
-        
         ratios = analytic_depths / transit_depths
         relative_diffs = np.abs(ratios - 1)
         self.assertTrue(np.all(relative_diffs < 0.001))

@@ -1,6 +1,7 @@
 from . import _cupy_numpy as xp
 expn=xp.scipy.special.expn
 import matplotlib.pyplot as plt
+import scipy.special
 
 from .constants import h, c, k_B, R_jup, M_jup, R_sun
 from ._atmosphere_solver import AtmosphereSolver
@@ -44,7 +45,7 @@ class EclipseDepthCalculator:
         #no-op otherwise
         if self.atm.method == "ktables":
             #Do a first binning based on ktables
-            points, weights = scipy.special.roots_legendre(n_gauss)
+            points, weights = xp.array(scipy.special.roots_legendre(n_gauss))
             percentiles = 100 * (points + 1) / 2
             weights /= 2
             assert(len(depths) % n_gauss == 0)
@@ -155,12 +156,20 @@ class EclipseDepthCalculator:
         unbinned_wavelengths, unbinned_depths, binned_wavelengths, binned_depths = self._get_binned_depths(eclipse_depths, stellar_photon_fluxes)
 
         if full_output:
-            atm_info["stellar_spectrum"] = xp.cpu(stellar_photon_fluxes)
-            atm_info["planet_spectrum"] = xp.cpu(fluxes)
-            atm_info["unbinned_wavelengths"] = xp.cpu(unbinned_wavelengths)
-            atm_info["unbinned_eclipse_depths"] = xp.cpu(unbinned_depths)
-            atm_info["taus"] = xp.cpu(taus)
-            atm_info["contrib"] = xp.cpu(-integrand / fluxes[:, xp.newaxis])
+            atm_info["stellar_spectrum"] = stellar_photon_fluxes
+            atm_info["planet_spectrum"] = fluxes
+            atm_info["unbinned_wavelengths"] = unbinned_wavelengths
+            atm_info["unbinned_eclipse_depths"] = unbinned_depths
+            atm_info["taus"] = taus
+            atm_info["contrib"] = -integrand / fluxes[:, xp.newaxis]
+            
+            for key in atm_info:
+                if type(atm_info[key]) == dict:
+                    for subkey in atm_info[key]:
+                        atm_info[key][subkey] = xp.cpu(atm_info[key][subkey])
+                else:
+                    atm_info[key] = xp.cpu(atm_info[key])
+                
             return xp.cpu(binned_wavelengths), xp.cpu(binned_depths), atm_info
 
         return xp.cpu(binned_wavelengths), xp.cpu(binned_depths), None

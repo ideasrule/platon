@@ -76,6 +76,9 @@ class AtmosphereSolver:
         self.all_cross_secs = load_dict_from_pickle("data/all_cross_secs.pkl")
         self.all_radii = load_numpy("data/mie_radii.npy")
 
+    def get_lambda_grid(self):
+        return xp.cpu(self.lambda_grid)
+        
     def change_wavelength_bins(self, bins):
         """Specify wavelength bins, instead of using the full wavelength grid
         in self.lambda_grid.  This makes the code much faster, as

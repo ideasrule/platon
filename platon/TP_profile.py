@@ -53,22 +53,22 @@ class Profile:
         return P2, T2
 
     def set_from_opacity(self, T_irr, info_dict, visible_cutoff=0.8e-6, T_int=100):
-        wavelengths = info_dict["unbinned_wavelengths"]
+        wavelengths = xp.array(info_dict["unbinned_wavelengths"])
         d_lambda = xp.diff(wavelengths)
         d_lambda = xp.append(d_lambda[0], d_lambda)
 
         # Convert stellar spectrum from photons/time to energy/time
-        stellar_spectrum = info_dict["stellar_spectrum"] * h * c / wavelengths
+        stellar_spectrum = xp.array(info_dict["stellar_spectrum"]) * h * c / wavelengths
 
         # Convert planetary spectrum from energy/time/wavelength to energy/time
-        planet_spectrum = info_dict["planet_spectrum"] * d_lambda
-        absorption_coeffs = info_dict["absorption_coeff_atm"]
-        radii = info_dict["radii"]
+        planet_spectrum = xp.array(info_dict["planet_spectrum"]) * d_lambda
+        absorption_coeffs = xp.array(info_dict["absorption_coeff_atm"])
+        radii = xp.array(info_dict["radii"])
 
         # Equation 49 here: https://arxiv.org/pdf/1006.4702.pdf
         visible = wavelengths < visible_cutoff
         thermal = wavelengths >= visible_cutoff
-        n = info_dict["P_profile"]/k_B/info_dict["T_profile"]
+        n = xp.array(info_dict["P_profile"]/k_B/info_dict["T_profile"])
         intermediate_n = (n[0:-1] + n[1:])/2.0
         sigmas = absorption_coeffs / n[:, xp.newaxis]
         sigma_v = xp.median(xp.average(sigmas[:, visible], axis=1, weights=stellar_spectrum[visible]))

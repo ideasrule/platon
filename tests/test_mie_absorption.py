@@ -3,6 +3,7 @@ import numpy as np
 import scipy.integrate
 from nose.tools import nottest
 import matplotlib.pyplot as plt
+from platon import _cupy_numpy as xp
 
 from platon import _mie_multi_x
 from platon.transit_depth_calculator import TransitDepthCalculator
@@ -24,7 +25,7 @@ class TestMieAbsorption(unittest.TestCase):
                 # Optimization needed, or else code takes forever
                 Qext = 2
             else:
-                Qext = _mie_multi_x.get_Qext(ri, [x])[0]                    
+                Qext = _mie_multi_x.get_Qext(ri, [x])[0]
             return np.exp(-y**2) * np.sqrt(np.pi) * r_mean**2 * np.exp(2*np.sqrt(2)*sigma*y) * Qext
 
         result, error = scipy.integrate.quad(integrand, -5, 5, epsrel=1e-3, epsabs=0, limit=100)
@@ -39,14 +40,14 @@ class TestMieAbsorption(unittest.TestCase):
         to_include = np.array([1, 200, 1000, 3000, 4600])
         #to_include = np.array([4600])
         exact_cross_sections = [self.exact_cross_section(
-            r_mean, w, m, sigma) for w in calc.atm.lambda_grid[to_include]]
+            r_mean, w, m, sigma) for w in calc.atm.get_lambda_grid()[to_include]]
 
         # This technically gets us absorption cross sections, but for n_0=1 and
         # a single pressure in the list, this should equal cross section
         P_cond = calc.atm.P_grid <= 1e5
-        absorption = calc.atm._get_mie_scattering_absorption(
+        absorption = xp.cpu(calc.atm._get_mie_scattering_absorption(
             P_cond, calc.atm.T_grid == 800, m, r_mean,
-            frac_scale_height, n_0, sigma=sigma)
+            frac_scale_height, n_0, sigma=sigma))
 
         # absorption at max pressure for n_0=1 should equal cross section
         rough_cross_sections = absorption[:, -1, :].flatten()/n_0
@@ -55,8 +56,9 @@ class TestMieAbsorption(unittest.TestCase):
         self.assertTrue(np.max(frac_dev) < 0.01)
 
         for i in range(absorption.shape[1]):
-            P = calc.atm.P_grid[P_cond][i]
-            ref_P = np.max(calc.atm.P_grid[P_cond])
+            P_grid = xp.cpu(calc.atm.P_grid[P_cond])
+            P = P_grid[i]
+            ref_P = np.max(P_grid)
             ratio = (P/ref_P)**(1.0/frac_scale_height)
             self.assertTrue(np.allclose(rough_cross_sections * n_0 * ratio, absorption[:, i, :].flatten(), atol=0, rtol=1e-3))
             

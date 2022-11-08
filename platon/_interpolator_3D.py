@@ -23,6 +23,7 @@ def get_condition_array(target_data, interp_data, max_cutoff=xp.inf):
 def interp1d(target_xs, xs, data, assume_sorted=True):
     isscalar = xp.isscalar(target_xs)
     target_xs = xp.atleast_1d(target_xs)
+    assert(xs.shape[0] == data.shape[0])
     if not assume_sorted:
         sort = xp.argsort(xs)
         xs = xs[sort]

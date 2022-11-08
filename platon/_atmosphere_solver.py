@@ -1,6 +1,10 @@
-from pkg_resources import resource_filename
-from . import _cupy_numpy as xp
+import numpy as np
+import scipy.interpolate
+import matplotlib.pyplot as plt
 
+from pkg_resources import resource_filename
+from ._interpolator_3D import interp1d
+from . import _cupy_numpy as xp
 from . import _hydrostatic_solver
 from ._loader import load_dict_from_pickle, load_numpy
 from .abundance_getter import AbundanceGetter
@@ -235,7 +239,7 @@ class AtmosphereSolver:
             eff_cross_section = xp.interp(
                 self.lambda_grid,
                 self.low_res_lambdas,
-                scipy.interpolate.interp1d(self.all_radii, self.all_cross_secs[ri])(part_size))
+                interp1d(part_size, self.all_radii, self.all_cross_secs[ri].T))
         else:
             eff_cross_section = xp.zeros(self.N_lambda)
             z_scores = -xp.logspace(xp.log10(0.1), xp.log10(max_zscore), int(num_integral_points/2))
@@ -248,13 +252,12 @@ class AtmosphereSolver:
             dense_xs = 2*xp.pi*radii[xp.newaxis,:] / self.lambda_grid[:,xp.newaxis]
             dense_xs = dense_xs.flatten()
 
-            x_hist = xp.histogram(dense_xs, bins='auto')[1]
+            x_hist = np.histogram(xp.cpu(dense_xs), bins='auto')[1]
             Qext_hist = self._mie_cache.get_and_update(ri, x_hist) 
-
             spl = scipy.interpolate.splrep(x_hist, Qext_hist)
-            Qext_intpl = scipy.interpolate.splev(dense_xs, spl)
-            Qext_intpl = xp.reshape(Qext_intpl, (self.N_lambda, len(radii)))
-
+            Qext_intpl = scipy.interpolate.splev(xp.cpu(dense_xs), spl)
+            Qext_intpl = xp.array(xp.reshape(Qext_intpl, (self.N_lambda, len(radii))))
+            
             eff_cross_section = xp.trapz(probs*geometric_cross_section*Qext_intpl, z_scores)
 
         n = max_number_density * xp.power(self.P_grid[P_cond] / max(self.P_grid[P_cond]), 1.0/frac_scale_height)
@@ -310,6 +313,7 @@ class AtmosphereSolver:
    
 
     def _validate_params(self, T_profile, logZ, CO_ratio, cloudtop_pressure):
+        T_profile = xp.atleast_1d(T_profile)
         if T_profile.min() < self.min_temperature or\
            T_profile.max() > self.max_temperature:
             raise AtmosphereError("Invalid temperatures in T/P profile")
@@ -435,7 +439,7 @@ class AtmosphereSolver:
         cross_secs[cross_secs < min_cross_sec] = min_cross_sec
         
         if len(self.T_grid[T_cond]) == 1:
-            cross_secs_atm = xp.exp(scipy.interpolate.interpn((xp.log(self.P_grid[P_cond]),), xp.log(cross_secs[0]), xp.log(P_profile)))
+            cross_secs_atm = xp.exp(interp1d(xp.log(P_profile), xp.log(self.P_grid[P_cond]), xp.log(cross_secs[0])))
         else:            
             ln_cross = regular_grid_interp(
                 1.0/self.T_grid[T_cond][::-1],

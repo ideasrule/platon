@@ -357,7 +357,7 @@ class AtmosphereSolver:
             
         elif T_star >= self.stellar_spectra_temps.min() and T_star <= self.stellar_spectra_temps.max() and not blackbody:            
             unspotted_spectrum = interp1d(T_star, self.stellar_spectra_temps, self.stellar_spectra)
-            spot_spectrum = interp1d(T_star, self.stellar_spectra_temps, self.stellar_spectra)
+            spot_spectrum = interp1d(T_spot, self.stellar_spectra_temps, self.stellar_spectra)
             if len(spot_spectrum) != len(lambdas):
                 raise ValueError("Stellar spectra has a different length ({}) than opacities ({})!  If you are using high resolution opacities, pass stellar_blackbody=True to compute_depths".format(len(spot_spectrum), len(lambdas)))
         else:

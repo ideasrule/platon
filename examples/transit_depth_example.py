@@ -12,7 +12,7 @@ T = 1200              #Temperature of isothermal part of the atmosphere
 
 #create a TransitDepthCalculator object and compute wavelength dependent transit depths
 depth_calculator = TransitDepthCalculator(method="ktables") #put "xsec" for opacity sampling
-wavelengths, transit_depths, _ = depth_calculator.compute_depths(
+wavelengths, transit_depths = depth_calculator.compute_depths(
     Rs, Mp, Rp, T, CO_ratio=0.2, cloudtop_pressure=1e4)
 
 

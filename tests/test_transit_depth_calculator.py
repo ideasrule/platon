@@ -21,7 +21,7 @@ class TestTransitDepthCalculator(unittest.TestCase):
         Rs = 7e8
         T = 1200
         depth_calculator = TransitDepthCalculator()
-        wavelengths, transit_depths, _ = depth_calculator.compute_depths(
+        wavelengths, transit_depths = depth_calculator.compute_depths(
             Rs, Mp, Rp, T, logZ=logZ, CO_ratio=CO_ratio,
             custom_abundances=custom_abundances, cloudtop_pressure=1e4)
 
@@ -65,7 +65,7 @@ class TestTransitDepthCalculator(unittest.TestCase):
         T = 300
         depth_calculator = TransitDepthCalculator()
         with self.assertRaises(AtmosphereError):
-            wavelengths, transit_depths, _ = depth_calculator.compute_depths(
+            wavelengths, transit_depths = depth_calculator.compute_depths(
                 Rs, Mp, Rp, T, logZ=0.2, CO_ratio=1.1, T_star=6100)
 
     def test_bin_wavelengths(self):
@@ -78,12 +78,12 @@ class TestTransitDepthCalculator(unittest.TestCase):
         bins *= 1e-6
         depth_calculator.change_wavelength_bins(bins)
 
-        wavelengths, transit_depths, _ = depth_calculator.compute_depths(
+        wavelengths, transit_depths = depth_calculator.compute_depths(
             Rs, Mp, Rp, T, logZ=0.2, CO_ratio=1.1, T_star=6100)
         self.assertEqual(len(wavelengths), len(bins))
         self.assertEqual(len(transit_depths), len(bins))
 
-        wavelengths, transit_depths, _ = depth_calculator.compute_depths(
+        wavelengths, transit_depths = depth_calculator.compute_depths(
             Rs, Mp, Rp, T, logZ=0.2, CO_ratio=1.1, T_star=12000)
         self.assertEqual(len(wavelengths), len(bins))
         self.assertEqual(len(transit_depths), len(bins))
@@ -107,14 +107,16 @@ class TestTransitDepthCalculator(unittest.TestCase):
         H = k_B * T / (2 * AMU * g)
         gamma = 0.57721
         polarizability = 0.8059e-30
-        sigma = 128. * np.pi**5/3 * polarizability**2 / depth_calculator.atm.get_lambda_grid()**4
+        sigma = 128. * np.pi**5/3 * polarizability**2 / depth_calculator.atm.lambda_grid**4
         kappa = sigma / (2 * AMU)
 
         P_surface = 1e8
         R_surface = info_dict["radii"][-1]
         tau_surface = P_surface/g * np.sqrt(2*np.pi*R_surface/H) * kappa
         analytic_R = R_surface + H*(gamma + np.log(tau_surface) + scipy.special.expn(1, tau_surface))
+        
         analytic_depths = analytic_R**2 / Rs**2
+        
         ratios = analytic_depths / transit_depths
         relative_diffs = np.abs(ratios - 1)
         self.assertTrue(np.all(relative_diffs < 0.001))
@@ -123,13 +125,13 @@ class TestTransitDepthCalculator(unittest.TestCase):
         xsec_calc = TransitDepthCalculator(method="xsec")
         ktab_calc = TransitDepthCalculator(method="ktables")
                 
-        xsec_wavelengths, xsec_depths, _ = xsec_calc.compute_depths(R_sun, M_jup, R_jup, 1000)
+        xsec_wavelengths, xsec_depths = xsec_calc.compute_depths(R_sun, M_jup, R_jup, 1000)
 
         #Smooth from R=1000 to R=100 to match ktables
         N = 10
         smoothed_xsec_wavelengths = uniform_filter(xsec_wavelengths, N)[::N]
         smoothed_xsec_depths = uniform_filter(xsec_depths, N)[::N]
-        ktab_wavelengths, ktab_depths, _ = ktab_calc.compute_depths(R_sun, M_jup, R_jup, 1000)
+        ktab_wavelengths, ktab_depths = ktab_calc.compute_depths(R_sun, M_jup, R_jup, 1000)
         
         diffs = np.abs(ktab_depths - smoothed_xsec_depths[:-1])
         self.assertTrue(np.median(diffs) < 20e-6)
@@ -146,8 +148,8 @@ class TestTransitDepthCalculator(unittest.TestCase):
         ktab_calc = TransitDepthCalculator(method="ktables")
         ktab_calc.change_wavelength_bins(wavelength_bins)
                 
-        wavelengths, xsec_depths, _ = xsec_calc.compute_depths(R_sun, M_jup, R_jup, 300, logZ=1, CO_ratio=1.5)
-        wavelengths, ktab_depths, _ = ktab_calc.compute_depths(R_sun, M_jup, R_jup, 300, logZ=1, CO_ratio=1.5)
+        wavelengths, xsec_depths = xsec_calc.compute_depths(R_sun, M_jup, R_jup, 300, logZ=1, CO_ratio=1.5)
+        wavelengths, ktab_depths = ktab_calc.compute_depths(R_sun, M_jup, R_jup, 300, logZ=1, CO_ratio=1.5)
         
         diffs = np.abs(ktab_depths - xsec_depths)
 

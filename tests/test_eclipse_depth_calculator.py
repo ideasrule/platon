@@ -55,14 +55,14 @@ class TestEclipseDepthCalculator(unittest.TestCase):
             0.983, -1.77, -0.44, -0.56, 0.23)
         xsec_calc = EclipseDepthCalculator(method="xsec")
         ktab_calc = EclipseDepthCalculator(method="ktables")
-        xsec_wavelengths, xsec_depths, _ = xsec_calc.compute_depths(
+        xsec_wavelengths, xsec_depths = xsec_calc.compute_depths(
             profile, 0.75 * R_sun, 1.129 * M_jup, 1.115 * R_jup,
             5052)
         N = 10
         smoothed_xsec_wavelengths = uniform_filter(xsec_wavelengths, N)[::N]
         smoothed_xsec_depths = uniform_filter(xsec_depths, N)[::N]
         
-        ktab_wavelengths, ktab_depths, _ = ktab_calc.compute_depths(
+        ktab_wavelengths, ktab_depths = ktab_calc.compute_depths(
             profile, 0.75 * R_sun, 1.129 * M_jup, 1.115 * R_jup,
             5052)
         rel_diffs = np.abs(ktab_depths - smoothed_xsec_depths[:-1])/ ktab_depths
@@ -81,10 +81,10 @@ class TestEclipseDepthCalculator(unittest.TestCase):
         xsec_calc.change_wavelength_bins(wavelength_bins)
         ktab_calc = EclipseDepthCalculator(method="ktables")
         ktab_calc.change_wavelength_bins(wavelength_bins)
-        xsec_wavelengths, xsec_depths, _ = xsec_calc.compute_depths(
+        xsec_wavelengths, xsec_depths = xsec_calc.compute_depths(
             profile, 0.75 * R_sun, 1.129 * M_jup, 1.115 * R_jup,
             5052)
-        ktab_wavelengths, ktab_depths, _ = ktab_calc.compute_depths(
+        ktab_wavelengths, ktab_depths = ktab_calc.compute_depths(
             profile, 0.75 * R_sun, 1.129 * M_jup, 1.115 * R_jup,
             5052)
         rel_diffs = np.abs(ktab_depths - xsec_depths)/ ktab_depths

@@ -78,13 +78,13 @@ class TestEclipseRetrieval(unittest.TestCase):
         # Use Nested Sampling to do the fitting
         result = retriever.run_multinest(None, None, None,
                                          bins, depths, errors,
-                                         fit_info,
+                                         fit_info, plot_best=False,
                                          maxcall=200)
         result = retriever.run_multinest(
             np.array([[1.1e-6, 1.6e-6]]),
             np.array([R_guess**2/Rs**2]),
             np.array([50e-6]), bins, depths, errors,
-            fit_info, maxcall=200)
+            fit_info, plot_best=False, maxcall=200)
         
 if __name__ == '__main__':
     unittest.main()

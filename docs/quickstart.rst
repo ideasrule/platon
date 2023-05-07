@@ -68,7 +68,7 @@ To retrieve atmospheric parameters, look at retrieve_multinest.py, retrieve_emce
   fit_info.add_uniform_fit_param("error_multiple", 0.5, 5)
   
   # Run nested sampling
-  result = retriever.run_multinest(
+  result = retriever.run_dynesty(
 	 bins, depths, errors, #transit bins, depths, errors
          None, None, None, #eclipse bins, depths, errors
 	 fit_info, plot_best=True,
@@ -99,7 +99,7 @@ to plotting the posterior distribution and the best fit::
   result.plot_spectrum("my_best_fit") #leave off .png
 
 If you prefer using MCMC instead of Nested Sampling in your retrieval, you can
-use the run_emcee method instead of the run_multinest method. Do note that
+use the run_emcee method instead of the run_dynesty method. Do note that
 Nested Sampling is recommended, as it is not trivial to deal with multi-modal
 posteriors or to check for convergence with emcee::
 
@@ -107,4 +107,4 @@ posteriors or to check for convergence with emcee::
 
 For MCMC, the number of walkers and iterations/steps can also be specified. The
 `result` object returned by run_emcee is different from that returned
-by run_multinest, but still supports plot_corner and plot_spectrum.
+by run_dynesty, but still supports plot_corner and plot_spectrum.

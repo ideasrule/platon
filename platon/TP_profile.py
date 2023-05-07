@@ -12,6 +12,12 @@ class Profile:
                 xp.log10(min_P),
                 xp.log10(max_P),
                 num_profile_heights)
+
+    def get_temperatures(self):
+        return xp.cpu(self.temperatures)
+
+    def get_pressures(self):
+        return xp.cpu(self.pressures)
         
     def set_from_params_dict(self, profile_type, params_dict):
         if profile_type == "isothermal":

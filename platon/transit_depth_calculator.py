@@ -133,7 +133,7 @@ class TransitDepthCalculator:
                        T_star=None, T_spot=None, spot_cov_frac=None,
                        ri=None, frac_scale_height=1, number_density=0,
                        part_size=1e-6, part_size_std=0.5, P_quench=1e-99,
-                       full_output=False, min_abundance=1e-99, min_cross_sec=1e-99, stellar_blackbody=False):
+                       full_output=False, min_abundance=1e-99, min_cross_sec=1e-99, stellar_blackbody=False, zero_opacities=[]):
         '''
         Computes transit depths at a range of wavelengths, assuming an
         isothermal atmosphere.  To choose bins, call change_wavelength_bins().
@@ -224,6 +224,8 @@ class TransitDepthCalculator:
             Quench pressure in Pa.
         stellar_blackbody : bool, optional
             Whether to use a PHOENIX model for the stellar spectrum, or a blackbody
+        zero_opacities : list of strings                                                                                                                                                                   
+            List of molecules to zero opacities for
         full_output : bool, optional
             If True, returns info_dict as a third return value.
 
@@ -271,7 +273,7 @@ class TransitDepthCalculator:
             scattering_factor, scattering_slope, scattering_ref_wavelength,
             add_collisional_absorption, cloudtop_pressure, custom_abundances,
             T_star, T_spot, spot_cov_frac, ri, frac_scale_height,
-            number_density, part_size, part_size_std, P_quench)
+            number_density, part_size, part_size_std, P_quench, zero_opacities=zero_opacities)
 
         radii = atm_info["radii"]
         dr = atm_info["dr"]

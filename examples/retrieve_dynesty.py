@@ -89,7 +89,7 @@ fit_info.add_uniform_fit_param("log_cloudtop_P", -0.99, 5)
 fit_info.add_uniform_fit_param("error_multiple", 0.5, 5)
 
 #Use Nested Sampling to do the fitting
-result = retriever.run_multinest(bins, depths, errors,
+result = retriever.run_dynesty(bins, depths, errors,
                                  None, None, None,
                                  fit_info,
                                  sample="rwalk",

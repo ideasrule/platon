@@ -75,7 +75,7 @@ fit_info.add_uniform_fit_param("beta", 0, 2)
 fit_info.add_gaussian_fit_param("wfc3_offset_eclipse", 39e-6)
 
 #Use Nested Sampling to do the fitting
-result = retriever.run_multinest(None, None, None,
+result = retriever.run_dynesty(None, None, None,
                                  eclipse_bins, eclipse_depths, eclipse_errors,
                                  fit_info, nlive=200,
                                  sample="rwalk",

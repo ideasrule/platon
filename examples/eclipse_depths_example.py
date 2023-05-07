@@ -16,7 +16,7 @@ calc = EclipseDepthCalculator(method="xsec") #"ktables" for correlated k
 #calc.change_wavelength_bins(bins)
 
 wavelengths, depths, info_dict = calc.compute_depths(p, R_sun, M_jup, R_jup, 5700, full_output=True)
-plt.semilogy(p.temperatures, p.pressures)
+plt.semilogy(p.get_temperatures(), p.get_pressures())
 plt.xlabel("Temperature (K)")
 plt.ylabel("Pressure (Pa)")
 plt.figure()

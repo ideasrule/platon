@@ -18,10 +18,12 @@ def air_to_vac(wavelength):
 binned_wavelengths = np.load("../platon/data/k_wavelengths.npy") * u.meter
 
 output_spectra = {}
+temps = []
+spectra = []
 
 for temperature in np.arange(2000, 12000, 100):
-    filename = "bt-settl-agss2009/lte{0:03d}-4.5-0.0a+0.0.BT-Settl.7.dat.txt".format(int(temperature/100))
-    alt_filename = "bt-settl-agss2009/lte0{0}-4.5-0.0.BT-Settl.7.dat.txt".format(int(temperature/100))
+    filename = "bt-settl-agss/lte{0:03d}-4.5-0.0a+0.0.BT-Settl.7.dat.txt".format(int(temperature/100))
+    alt_filename = "bt-settl-agss/lte0{0}-4.5-0.0.BT-Settl.7.dat.txt".format(int(temperature/100))
     
     if os.path.isfile(filename):
         wavelengths, spectrum = np.loadtxt(filename, unpack=True)
@@ -44,18 +46,22 @@ for temperature in np.arange(2000, 12000, 100):
         end = wavelength * 10**(avg_log_interval/2.0)
 
         cond = np.logical_and(wavelengths >= start, wavelengths < end)
-        photon_energy = h*c/wavelength
-        photon_flux = np.mean(spectrum[cond])/photon_energy * (end - start)
+        flux = np.mean(spectrum[cond])
 
         if conversion_factor is None:
-            conversion_factor = photon_flux.si.value / photon_flux.value
+            conversion_factor = flux.si.value / flux.value
 
-        binned_spectrum.append(photon_flux.value)
+        binned_spectrum.append(flux.value)
     #print(len(binned_spectrum))
     binned_spectrum = np.array(binned_spectrum) * conversion_factor
-    output_spectra[temperature] = np.array(binned_spectrum)
+
+    spectra.append(binned_spectrum)
+    temps.append(temperature)
     print(temperature, np.min(binned_spectrum), np.max(binned_spectrum))
 
-pickle.dump(output_spectra, open("stellar_spectra.pkl", "wb"), protocol=pickle.HIGHEST_PROTOCOL)
+output_spectra['temperatures'] = np.array(temps)
+output_spectra['spectra'] = np.array(spectra)
+    
+pickle.dump(output_spectra, open("k_stellar_spectra.pkl", "wb"), protocol=pickle.HIGHEST_PROTOCOL)
 
     

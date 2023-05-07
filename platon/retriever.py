@@ -21,7 +21,7 @@ class Retriever:
         
     def run_emcee(self, wavelength_bins, depths, errors, fit_info, nwalkers=50,
                   nsteps=1000, include_condensation=True, rad_method="xsec",
-                  plot_best=False):
+                  zero_opacities=[], plot_best=False):
         '''Runs affine-invariant MCMC to retrieve atmospheric parameters.
 
         Parameters
@@ -45,6 +45,8 @@ class Retriever:
         include_condensation : bool, optional
             When determining atmospheric abundances, whether to include
             condensation.
+        zero_opacities : list of strings                                                                                                                                                                   
+            List of molecules to zero opacities for
         plot_best : bool, optional
             If True, plots the best fit model with the data
 
@@ -63,13 +65,13 @@ class Retriever:
         return self.combined_retriever.run_emcee(
             wavelength_bins, depths, errors, None, None, None,
             fit_info, nwalkers, nsteps, include_condensation, rad_method,
-            plot_best)
+            zero_opacities=zero_opacities, plot_best)
                                           
 
-    def run_multinest(self, wavelength_bins, depths, errors, fit_info,
+    def run_dynesty(self, wavelength_bins, depths, errors, fit_info,
                       include_condensation=True, rad_method="xsec",
                       plot_best=False,
-                      maxiter=None, maxcall=None, nlive=100,
+                      maxiter=None, maxcall=None, nlive=100, zero_opacities=[]
                       **dynesty_kwargs):
         '''Runs nested sampling to retrieve atmospheric parameters.
 
@@ -94,6 +96,8 @@ class Retriever:
             If True, plots the best fit model with the data
         nlive : int
             Number of live points to use for nested sampling
+        zero_opacities : list of strings                                                                                                                                                                   
+            List of molecules to zero opacities for
         **dynesty_kwargs : keyword arguments to pass to dynesty's NestedSampler
 
         Returns
@@ -106,10 +110,10 @@ class Retriever:
             weights, and result.logl contains the log likelihoods.  result.logz
             is the natural logarithm of the evidence.
         '''
-        return self.combined_retriever.run_multinest(
+        return self.combined_retriever.run_dynesty(
             wavelength_bins, depths, errors, None, None, None, fit_info,
             include_condensation, rad_method, plot_best, maxiter, maxcall,
-            nlive=nlive, **dynesty_kwargs)
+            nlive=nlive, zero_opacities=zero_opacities, **dynesty_kwargs)
             
 
     @staticmethod

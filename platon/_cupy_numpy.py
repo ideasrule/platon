@@ -1,6 +1,7 @@
 FORCE_CPU = True  # force to use CPU if this is True
 
 if FORCE_CPU:
+    print("forcing CPU")
     from numpy import *
     import scipy
     import scipy.special

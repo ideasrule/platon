@@ -87,5 +87,5 @@ with open("example_retrieval_result.pkl", "wb") as f:
 #Plot the spectrum and save it to best_fit.png
 result.plot_spectrum("best_fit")
 
-#Plot the 2D posteriors with "corner" package and save it to multinest_corner.png
-result.plot_corner("multinest_corner.png")
+#Plot the 2D posteriors with "corner" package and save it to dynesty_corner.png
+result.plot_corner("dynesty_corner.png")

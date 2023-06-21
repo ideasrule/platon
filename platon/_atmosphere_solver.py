@@ -31,7 +31,7 @@ class AtmosphereSolver:
             method)
 
         self.low_res_lambdas = load_numpy("data/low_res_lambdas.npy")
-
+        
         if method == "xsec":
             self.lambda_grid = load_numpy("data/wavelengths.npy")
             self.d_ln_lambda = xp.median(xp.diff(xp.log(self.lambda_grid)))
@@ -41,11 +41,8 @@ class AtmosphereSolver:
             self.d_ln_lambda = xp.median(xp.diff(xp.log(xp.unique(self.lambda_grid))))
             self.stellar_spectra_dict = load_dict_from_pickle("data/k_stellar_spectra.pkl")
 
-        #We stored these stellar spectra in a suboptimal way, but for backward compatibility...
-        self.stellar_spectra_temps = xp.array(list(self.stellar_spectra_dict.keys()))
-        argsort = xp.argsort(self.stellar_spectra_temps)
-        self.stellar_spectra_temps = self.stellar_spectra_temps[argsort]
-        self.stellar_spectra = xp.array(list(self.stellar_spectra_dict.values()))[argsort]
+        self.stellar_spectra_temps = xp.array(self.stellar_spectra_dict["temperatures"])
+        self.stellar_spectra = xp.array(self.stellar_spectra_dict["spectra"])
         
         self.collisional_absorption_data = load_dict_from_pickle(
             "data/collisional_absorption.pkl")
@@ -197,14 +194,14 @@ class AtmosphereSolver:
                   
         return absorption_coeff
 
-    def _get_gas_absorption(self, abundances, P_cond, T_cond):
+    def _get_gas_absorption(self, abundances, P_cond, T_cond, zero_opacities=[]):
         absorption_coeff = xp.zeros(
             (int(xp.sum(T_cond)), int(xp.sum(P_cond)), self.N_lambda))
 
         for species_name, species_abundance in abundances.items():
             assert(species_abundance.shape == (self.N_T, self.N_P))
             
-            if species_name in self.absorption_data:
+            if (species_name in self.absorption_data) and (species_name not in zero_opacities):
                 absorption_coeff += self.absorption_data[species_name][T_cond][:,P_cond] * species_abundance[T_cond][:,P_cond,xp.newaxis]
 
         return absorption_coeff
@@ -363,9 +360,9 @@ class AtmosphereSolver:
         else:
             d_lambda = self.d_ln_lambda * lambdas
             unspotted_spectrum = 2 * c * xp.pi / lambdas**4 / \
-                (xp.exp(h * c / lambdas / k_B / T_star) - 1) * d_lambda
+                (xp.exp(h * c / lambdas / k_B / T_star) - 1) * h * c / lambdas
             spot_spectrum = 2 * c * xp.pi / lambdas**4 / \
-                (xp.exp(h * c / lambdas / k_B / T_spot) - 1) * d_lambda
+                (xp.exp(h * c / lambdas / k_B / T_spot) - 1) * h * c / lambdas
 
         stellar_spectrum = spot_cov_frac * spot_spectrum + \
                            (1 - spot_cov_frac) * unspotted_spectrum
@@ -385,7 +382,7 @@ class AtmosphereSolver:
                        ri=None, frac_scale_height=1, number_density=0,
                        part_size=1e-6, part_size_std=0.5,
                        P_quench=1e-99,
-                       min_abundance=1e-99, min_cross_sec=1e-99):
+                       min_abundance=1e-99, min_cross_sec=1e-99, zero_opacities=[]):
         self._validate_params(T_profile, logZ, CO_ratio, cloudtop_pressure)
        
         abundances = self._get_abundances_array(
@@ -413,7 +410,7 @@ class AtmosphereSolver:
 
         absorption_coeff = xp.zeros((int(xp.sum(T_cond)), int(xp.sum(P_cond)), len(self.lambda_grid)))
         if add_gas_absorption:
-            absorption_coeff += self._get_gas_absorption(abundances, P_cond, T_cond)
+            absorption_coeff += self._get_gas_absorption(abundances, P_cond, T_cond, zero_opacities=zero_opacities)
         if add_H_minus_absorption:
             absorption_coeff += self._get_H_minus_absorption(abundances, P_cond, T_cond)
         if add_scattering:

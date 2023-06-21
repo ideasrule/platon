@@ -41,7 +41,7 @@ It is also possible to retrieve on combined transit and eclipse depths::
   fit_info.add_uniform_fit_param(...)
   fit_info.add_uniform_fit_param(...)
 
-  result = retriever.run_multinest(transit_bins, transit_depths, transit_errors,
+  result = retriever.run_dynesty(transit_bins, transit_depths, transit_errors,
                                    eclipse_bins, eclipse_depths, eclipse_errors,
 				   fit_info,
 				   rad_method="xsec") #"ktables" for corr-k

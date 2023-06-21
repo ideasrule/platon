@@ -89,7 +89,7 @@ fit_info.add_uniform_fit_param("log_cloudtop_P", -0.99, 5)
 fit_info.add_uniform_fit_param("error_multiple", 0.5, 5)
 
 #Use Nested Sampling to do the fitting
-result = retriever.run_multinest(bins, depths, errors,
+result = retriever.run_dynesty(bins, depths, errors,
                                  None, None, None,
                                  fit_info,
                                  sample="rwalk",
@@ -102,5 +102,5 @@ with open("example_retrieval_result.pkl", "wb") as f:
 #Plot the spectrum and save it to best_fit.png
 result.plot_spectrum("best_fit")
 
-#Plot the 2D posteriors with "corner" package and save it to multinest_corner.png
-result.plot_corner("multinest_corner.png")
+#Plot the 2D posteriors with "corner" package and save it to dynesty_corner.png
+result.plot_corner("dynesty_corner.png")

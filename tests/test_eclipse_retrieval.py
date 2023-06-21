@@ -76,11 +76,11 @@ class TestEclipseRetrieval(unittest.TestCase):
         fit_info.add_uniform_fit_param("T3", 1000, 3000)
 
         # Use Nested Sampling to do the fitting
-        result = retriever.run_multinest(None, None, None,
+        result = retriever.run_dynesty(None, None, None,
                                          bins, depths, errors,
                                          fit_info,
                                          maxcall=200)
-        result = retriever.run_multinest(
+        result = retriever.run_dynesty(
             np.array([[1.1e-6, 1.6e-6]]),
             np.array([R_guess**2/Rs**2]),
             np.array([50e-6]), bins, depths, errors,

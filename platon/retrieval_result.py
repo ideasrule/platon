@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import corner
 
-class RetrievalResult:    
+class RetrievalResult:
     def __init__(self, results, retrieval_type="dynesty",
                  transit_bins=None, transit_depths=None, transit_errors=None,
                  eclipse_bins=None, eclipse_depths=None, eclipse_errors=None,
@@ -11,7 +11,6 @@ class RetrievalResult:
                  best_fit_eclipse_depths=None, best_fit_eclipse_dict=None,
                  fit_info=None):
         
-        self.results = results
         self.retrieval_type = retrieval_type
         self.transit_bins = transit_bins
         self.transit_depths = transit_depths
@@ -43,7 +42,24 @@ class RetrievalResult:
         if "logz" in results:
             self.final_logz = results["logz"][-1]
                  
-            
+    def __getitem__(self, key):
+        return getattr(self, key)
+
+    def __setitem__(self, key, value):
+        setattr(self, key, value)
+
+    def __delitem__(self, key):
+        delattr(self, key)
+
+    def keys(self):
+        return list(self.__dict__.keys())
+
+    def values(self):
+        return list(self.__dict__.values())
+
+    def items(self):
+        return list(self.__dict__.items())
+
     def __repr__(self):
         return str(self.__dict__)
 

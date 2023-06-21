@@ -96,7 +96,7 @@ class CombinedRetriever:
 
     def _ln_like(self, params, transit_calc, eclipse_calc, fit_info, measured_transit_depths,
                  measured_transit_errors, measured_eclipse_depths,
-                 measured_eclipse_errors, wfc3_start=1e-6, wfc3_end=1.7e-6, ret_best_fit=False):
+                 measured_eclipse_errors, wfc3_start=1e-6, wfc3_end=1.7e-6, ret_best_fit=False, zero_opacities=[]):
 
         if not fit_info._within_limits(params):
             return -np.inf
@@ -147,7 +147,7 @@ class CombinedRetriever:
                     cloudtop_pressure=cloudtop_P, T_star=T_star,
                     T_spot=T_spot, spot_cov_frac=spot_cov_frac,
                     frac_scale_height=frac_scale_height, number_density=number_density,
-                    part_size=part_size, ri=ri, P_quench=P_quench, full_output=ret_best_fit)
+                    part_size=part_size, ri=ri, P_quench=P_quench, full_output=ret_best_fit, zero_opacities=zero_opacities)
                 calculated_transit_depths[np.logical_and(transit_wavelengths >= wfc3_start, transit_wavelengths <= wfc3_end)] += params_dict["wfc3_offset_transit"]
                 residuals = calculated_transit_depths - measured_transit_depths
                 scaled_errors = error_multiple * measured_transit_errors
@@ -166,14 +166,13 @@ class CombinedRetriever:
                     cloudtop_pressure=cloudtop_P,
                     T_spot=T_spot, spot_cov_frac=spot_cov_frac,
                     frac_scale_height=frac_scale_height, number_density=number_density,
-                    part_size = part_size, ri=ri, P_quench=P_quench, full_output=ret_best_fit)
+                    part_size = part_size, ri=ri, P_quench=P_quench, full_output=ret_best_fit, zero_opacities=zero_opacities)
                 calculated_eclipse_depths[np.logical_and(eclipse_wavelengths >= wfc3_start, eclipse_wavelengths <= wfc3_end)] += params_dict["wfc3_offset_eclipse"] 
                 residuals = calculated_eclipse_depths - measured_eclipse_depths
                 scaled_errors = error_multiple * measured_eclipse_errors
                 ln_likelihood += -0.5 * np.sum(residuals**2 / scaled_errors**2 + np.log(2 * np.pi * scaled_errors**2))                                
                 
         except AtmosphereError as e:
-            print(e)
             return -np.inf
         
         self.last_params = params
@@ -186,11 +185,11 @@ class CombinedRetriever:
 
     def _ln_prob(self, params, transit_calc, eclipse_calc, fit_info, measured_transit_depths,
                  measured_transit_errors, measured_eclipse_depths,
-                 measured_eclipse_errors):
+                 measured_eclipse_errors, zero_opacities=[]):
         
         ln_like = self._ln_like(params, transit_calc, eclipse_calc, fit_info, measured_transit_depths,
                                 measured_transit_errors, measured_eclipse_depths,
-                                measured_eclipse_errors)
+                                measured_eclipse_errors, zero_opacities=zero_opacities)
         return fit_info._ln_prior(params) + ln_like
 
     
@@ -200,7 +199,7 @@ class CombinedRetriever:
                   fit_info, nwalkers=50,
                   nsteps=1000, include_condensation=True,
                   rad_method="xsec",
-                  num_final_samples=100):
+                  num_final_samples=100, zero_opacities=[]):
         '''Runs affine-invariant MCMC to retrieve atmospheric parameters.
 
         Parameters
@@ -234,6 +233,8 @@ class CombinedRetriever:
             condensation.
         rad_method : string, optional
             "xsec" for opacity sampling, "ktables" for correlated k
+        zero_opacities : list of strings
+            List of molecules to zero opacities for
 
         Returns
         -------
@@ -257,7 +258,7 @@ class CombinedRetriever:
         sampler = emcee.EnsembleSampler(
             nwalkers, fit_info._get_num_fit_params(), self._ln_prob,
             args=(transit_calc, eclipse_calc, fit_info, transit_depths, transit_errors,
-                                 eclipse_depths, eclipse_errors))
+                                 eclipse_depths, eclipse_errors, zero_opacities))
 
         for i, result in enumerate(sampler.sample(
                 initial_positions, iterations=nsteps)):
@@ -295,6 +296,7 @@ class CombinedRetriever:
         np.random.shuffle(equal_samples)
         retrieval_result.random_transit_depths = []
         retrieval_result.random_eclipse_depths = []
+        retrieval_result.random_TP_profiles = []
         for params in equal_samples[0:num_final_samples]:
             ret = self._ln_like(
                 params, transit_calc, eclipse_calc, fit_info,
@@ -307,18 +309,19 @@ class CombinedRetriever:
                 retrieval_result.random_transit_depths.append(transit_info["unbinned_depths"])
             if eclipse_depths is not None:
                 retrieval_result.random_eclipse_depths.append(eclipse_info["unbinned_eclipse_depths"])
+                retrieval_result.random_TP_profiles.append(np.array([eclipse_info["P_profile"], eclipse_info["T_profile"]]))
 
         with open("retrieval_result.pkl", "wb") as f:
             pickle.dump(retrieval_result, f)
         
         return retrieval_result
 
-    def run_multinest(self, transit_bins, transit_depths, transit_errors,
+    def run_dynesty(self, transit_bins, transit_depths, transit_errors,
                       eclipse_bins, eclipse_depths, eclipse_errors,
                       fit_info,
                       include_condensation=True, rad_method="xsec",
                       maxiter=None, maxcall=None, nlive=100,
-                      num_final_samples=100,
+                      num_final_samples=100, zero_opacities=[],
                       **dynesty_kwargs):
         '''Runs nested sampling to retrieve atmospheric parameters.
 
@@ -351,6 +354,8 @@ class CombinedRetriever:
             "xsec" for opacity sampling, "ktables" for correlated k       
         nlive : int
             Number of live points to use for nested sampling
+        zero_opacities : list of strings                                                                                                                                                                   
+            List of molecules to zero opacities for
         **dynesty_kwargs : keyword arguments to pass to dynesty's NestedSampler
 
         Returns
@@ -377,7 +382,7 @@ class CombinedRetriever:
 
         def multinest_ln_like(cube):
             ln_like = self._ln_like(cube, transit_calc, eclipse_calc, fit_info, transit_depths, transit_errors,
-                                 eclipse_depths, eclipse_errors)
+                                    eclipse_depths, eclipse_errors, zero_opacities=zero_opacities)
             if np.random.randint(100) == 0:
                 print("\nEvaluated params: {}".format(self.pretty_print(fit_info)))
             return ln_like
@@ -418,6 +423,7 @@ class CombinedRetriever:
         
         retrieval_result.random_transit_depths = []
         retrieval_result.random_eclipse_depths = []
+        retrieval_result.random_TP_profiles = []
         for params in equal_samples[0:num_final_samples]:
             _, transit_info, _, eclipse_info = self._ln_like(
                 params, transit_calc, eclipse_calc, fit_info,
@@ -427,6 +433,7 @@ class CombinedRetriever:
                 retrieval_result.random_transit_depths.append(transit_info["unbinned_depths"])
             if eclipse_depths is not None:
                 retrieval_result.random_eclipse_depths.append(eclipse_info["unbinned_eclipse_depths"])
+                retrieval_result.random_TP_profiles.append(np.array([eclipse_info["P_profile"], eclipse_info["T_profile"]]))
                     
         with open("retrieval_result.pkl", "wb") as f:
             pickle.dump(retrieval_result, f)            

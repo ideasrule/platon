@@ -71,7 +71,7 @@ in that order.
   can achieve in a fit, but we recommend fitting them with Gaussian priors to
   take into account the measurement errors.
 
-* **Should I use run_multinest, or run_emcee?**
+* **Should I use run_dynesty, or run_emcee?**
   
   That depends on whether you like nested sampling or MCMC!  We recommend nested sampling because it handles multimodal distributions more robustly, and because it has a stopping criterion.  With emcee, checking for convergence is highly non-trivial.
    
@@ -81,7 +81,7 @@ in that order.
   will increase the number of samples your corner plot is generated from: ::
 
     # By default, npoints is 100
-    result = retriever.run_multinest(bins, depths, errors, fit_info, npoints=1000)
+    result = retriever.run_dynesty(bins, depths, errors, fit_info, npoints=1000)
     
   If you're using MCMC, increase nsteps from the default of 1000 to 10,000.
 
@@ -111,7 +111,7 @@ in that order.
   effect of setting their absorption cross section to 0.
   
   In some cases, nested sampling becomes extremely inefficient with the default
-  sampling method.  In those cases, pass sample="rwalk" to run_multinest, which
+  sampling method.  In those cases, pass sample="rwalk" to run_dynesty, which
   will cap the sampling efficiency at 1/25, 25 being the number of random walks to take.  According to the dynesty documentation, 25 should be sufficient
   at low dimensionality (<=10), but 50 might be necessary at
   moderate dimensionality (10-20).  To change the number of random walks to 50, pass walks=50.

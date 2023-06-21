@@ -73,13 +73,14 @@ class EclipseDepthCalculator:
         
         binned_wavelengths = []
         binned_depths = []
+        intermediate_stellar_photon_spectrum = intermediate_stellar_spectrum / (h * c / intermediate_lambdas)
         for (start, end) in self.atm.wavelength_bins:
             cond = xp.logical_and(
                 intermediate_lambdas >= start,
                 intermediate_lambdas < end)
             binned_wavelengths.append(xp.mean(intermediate_lambdas[cond]))
             binned_depth = xp.average(intermediate_depths[cond],
-                                      weights=intermediate_stellar_spectrum[cond])
+                                      weights=intermediate_stellar_photon_spectrum[cond])
             binned_depths.append(binned_depth)
             
         return intermediate_lambdas, intermediate_depths, xp.array(binned_wavelengths), xp.array(binned_depths)
@@ -100,7 +101,7 @@ class EclipseDepthCalculator:
                        ri = None, frac_scale_height=1,number_density=0,
                        part_size=1e-6, part_size_std=0.5, P_quench=1e-99,
                        stellar_blackbody=False,
-                       full_output=False):
+                       full_output=False, zero_opacities=[]):
         '''Most parameters are explained in :func:`~platon.transit_depth_calculator.TransitDepthCalculator.compute_depths`
 
         Parameters
@@ -117,7 +118,7 @@ class EclipseDepthCalculator:
             add_collisional_absorption, cloudtop_pressure, custom_abundances,
             T_star, T_spot, spot_cov_frac,
             ri, frac_scale_height, number_density, part_size, part_size_std,
-            P_quench)
+            P_quench, zero_opacities=zero_opacities)
 
         assert(atm_info["P_profile"].max() <= cloudtop_pressure)
         absorption_coeff = atm_info["absorption_coeff_atm"]
@@ -143,20 +144,17 @@ class EclipseDepthCalculator:
             fluxes_from_cloud = -xp.pi * planck_function[:, -1] * (max_taus**2 * -expn(1, max_taus) + max_taus * xp.exp(-max_taus) - xp.exp(-max_taus))
             fluxes += fluxes_from_cloud
 
-        stellar_photon_fluxes, _ = self.atm.get_stellar_spectrum(
+        stellar_fluxes, _ = self.atm.get_stellar_spectrum(
             lambda_grid, T_star, T_spot, spot_cov_frac, stellar_blackbody)
-        
-        d_lambda = self.atm.d_ln_lambda * lambda_grid
-        photon_fluxes = fluxes * d_lambda / (h * c / lambda_grid)
 
         photosphere_radii = self._get_photosphere_radii(taus, atm_info["radii"])
-        eclipse_depths = photon_fluxes / stellar_photon_fluxes * (photosphere_radii/star_radius)**2
+        eclipse_depths = fluxes / stellar_fluxes * (photosphere_radii/star_radius)**2
 
         #For correlated k, eclipse_depths has n_gauss points per wavelength, while unbinned_depths has 1 point per wavelength
-        unbinned_wavelengths, unbinned_depths, binned_wavelengths, binned_depths = self._get_binned_depths(eclipse_depths, stellar_photon_fluxes)
+        unbinned_wavelengths, unbinned_depths, binned_wavelengths, binned_depths = self._get_binned_depths(eclipse_depths, stellar_fluxes)
 
         if full_output:
-            atm_info["stellar_spectrum"] = stellar_photon_fluxes
+            atm_info["stellar_spectrum"] = stellar_fluxes
             atm_info["planet_spectrum"] = fluxes
             atm_info["unbinned_wavelengths"] = unbinned_wavelengths
             atm_info["unbinned_eclipse_depths"] = unbinned_depths

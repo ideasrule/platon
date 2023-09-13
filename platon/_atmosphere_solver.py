@@ -238,17 +238,18 @@ class AtmosphereSolver:
         return absorption_coeff
        
 
-    def _get_mie_scattering_absorption(self, P_cond, T_cond, ri, part_size,
+    def _get_mie_scattering_absorption(self, P_profile, ri, part_size,
                                        frac_scale_height, max_number_density,
                                        sigma = 0.5, max_zscore = 5, num_integral_points = 100):
         if isinstance(ri, str):
+            raise ValueError("Not implemented yet")
             eff_cross_section = np.interp(
                 self.lambda_grid,
                 self.low_res_lambdas,
                 scipy.interpolate.interp1d(self.all_radii, self.all_cross_secs[ri])(part_size))
         else:
             eff_cross_section = np.zeros(self.N_lambda)
-            z_scores = -np.logspace(np.log10(0.1), np.log10(max_zscore), num_integral_points/2)
+            z_scores = -np.logspace(np.log10(0.1), np.log10(max_zscore), num_integral_points//2)
             z_scores = np.append(z_scores[::-1], -z_scores)
 
             probs = np.exp(-z_scores**2/2) / np.sqrt(2 * np.pi)
@@ -267,8 +268,8 @@ class AtmosphereSolver:
 
             eff_cross_section = np.trapz(probs*geometric_cross_section*Qext_intpl, z_scores)
 
-        n = max_number_density * np.power(self.P_grid[P_cond] / max(self.P_grid[P_cond]), 1.0/frac_scale_height)
-        absorption_coeff = n[np.newaxis, :, np.newaxis] * eff_cross_section[np.newaxis, np.newaxis, :]
+        n = max_number_density * np.power(P_profile / max(self.P_grid), 1.0/frac_scale_height)
+        absorption_coeff = n[:, np.newaxis] * eff_cross_section[np.newaxis, :]
         
         return absorption_coeff
 
@@ -424,7 +425,12 @@ class AtmosphereSolver:
             absorption_coeff += self._get_H_minus_absorption(abundances, P_cond, T_cond)
         if add_scattering:
             if ri is not None:
-                raise ValueError("Not implemented")
+                if scattering_factor != 1 or scattering_slope != 4:
+                    raise ValueError("Cannot use both parametric and Mie scattering at the same time")
+                print(ri, part_size, frac_scale_height, number_density)
+                absorption_coeff += self._get_mie_scattering_absorption(
+                    P_profile, ri, part_size,
+                    frac_scale_height, number_density, sigma=part_size_std)
             else:
                 absorption_coeff += self._get_scattering_absorption(
                     atm_abundances, P_profile, T_profile,

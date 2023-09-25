@@ -1,5 +1,7 @@
 import os
 import sys
+import copy
+from astropy.io import ascii
 
 from pkg_resources import resource_filename
 from scipy.interpolate import RectBivariateSpline, UnivariateSpline, RegularGridInterpolator
@@ -9,6 +11,10 @@ from scipy import integrate
 import scipy.interpolate
 import scipy.ndimage
 from scipy.stats import lognorm
+import pandas as pd
+import astropy.units as u
+import astropy.constants as const
+from scipy import stats
 
 from . import _hydrostatic_solver
 from ._loader import load_dict_from_pickle, load_numpy
@@ -21,9 +27,10 @@ from ._get_data import get_data_if_needed
 from ._mie_cache import MieCache
 from .errors import AtmosphereError
 
+
 class AtmosphereSolver:
     def __init__(self, include_condensation=True, num_profile_heights=250,
-                 ref_pressure=1e5, method='xsec'):
+                 ref_pressure=1e5, method='xsec', path_to_own_stellar_spectrum = None):        
         self.arguments = locals()
         del self.arguments["self"]
 
@@ -40,18 +47,24 @@ class AtmosphereSolver:
             self.lambda_grid = load_numpy("data/wavelengths.npy")
             self.d_ln_lambda = np.median(np.diff(np.log(self.lambda_grid)))
             self.stellar_spectra = load_dict_from_pickle("data/stellar_spectra.pkl")
+            self.stellar_spectrum_mine = None
+            if path_to_own_stellar_spectrum is not None:
+                stellar_spectra_mine = pd.read_csv(path_to_own_stellar_spectrum,
+                                                    sep = '\t')
+                self.stellar_spectrum_mine = stellar_spectra_mine['stellar flux']
+                
+
         else:
             self.lambda_grid = load_numpy("data/k_wavelengths.npy")
             self.d_ln_lambda = np.median(np.diff(np.log(np.unique(self.lambda_grid))))
             self.stellar_spectra = load_dict_from_pickle("data/k_stellar_spectra.pkl")
-
+        
         self.collisional_absorption_data = load_dict_from_pickle(
             "data/collisional_absorption.pkl") 
         for key in self.collisional_absorption_data:
-            val = scipy.interpolate.interp1d(
+            self.collisional_absorption_data[key] = scipy.interpolate.interp1d(
                 self.low_res_lambdas,
                 self.collisional_absorption_data[key])(self.lambda_grid)
-            self.collisional_absorption_data[key] = np.copy(val, order="C")
             
         self.P_grid = load_numpy("data/pressures.npy")
         self.T_grid = load_numpy("data/temperatures.npy")
@@ -81,14 +94,12 @@ class AtmosphereSolver:
         in self.lambda_grid.  This makes the code much faster, as
         `compute_depths` will only compute depths at wavelengths that fall
         within a bin.
-
         Parameters
         ----------
         bins : array_like, shape (N,2)
             Wavelength bins, where bins[i][0] is the start wavelength and
             bins[i][1] is the end wavelength for bin i. If bins is None, resets
             the calculator to its unbinned state.
-
         Raises
         ------
         NotImplementedError
@@ -117,6 +128,7 @@ class AtmosphereSolver:
         
         self.wavelength_rebinned = True
         self.wavelength_bins = bins
+        # print(np.array_equal(bins_in, self.wavelength_bins))
 
         cond = np.any([
             np.logical_and(self.lambda_grid > start, self.lambda_grid < end) \
@@ -130,6 +142,9 @@ class AtmosphereSolver:
 
         for Teff in self.stellar_spectra:
             self.stellar_spectra[Teff] = self.stellar_spectra[Teff][cond]
+            
+        if self.stellar_spectrum_mine is not None:
+            self.stellar_spectrum_mine = self.stellar_spectrum_mine[cond]
             
         for key in self.collisional_absorption_data:
             self.collisional_absorption_data[key] = self.collisional_absorption_data[key][:, cond]
@@ -275,6 +290,8 @@ class AtmosphereSolver:
         # First, get atmospheric weight profile
         mu_profile = np.zeros(len(P_profile))
         atm_abundances = {}
+
+        # print(abundances)
         
         for species_name in abundances:
             interpolator = RectBivariateSpline(
@@ -282,6 +299,8 @@ class AtmosphereSolver:
                 np.log10(abundances[species_name]), kx=1, ky=1)
             abund = 10**interpolator.ev(T_profile, np.log10(P_profile))
             atm_abundances[species_name] = abund
+            # atm_abundances["COS"] = 1e-99
+            # atm_abundances['SO'] = 1e-99
             mu_profile += abund * self.mass_data[species_name]
 
         radii, dr = _hydrostatic_solver._solve(
@@ -293,8 +312,8 @@ class AtmosphereSolver:
             
         return radii, dr, atm_abundances, mu_profile
 
-    def _get_abundances_array(self, logZ, CO_ratio, custom_abundances):
-        if custom_abundances is None:
+    def _get_abundances_array(self, logZ, CO_ratio, custom_abundances, vmrs = None, gases = None):
+        if custom_abundances is None and logZ is not None and CO_ratio is not None:
             return self.abundance_getter.get(logZ, CO_ratio)
 
         if logZ is not None or CO_ratio is not None:
@@ -314,6 +333,22 @@ class AtmosphereSolver:
                     raise ValueError(
                         "custom_abundances has array of invalid size")
             return custom_abundances
+
+        if custom_abundances is None and vmrs is not None and gases is not None:
+            gases = np.array(gases)
+            getter = AbundanceGetter()
+
+            abundances = getter.get(0, 0.53)
+            
+            for key in abundances:
+                for i,arr in enumerate(abundances[key]):
+                    abundances[key][i] = ([0] * len(arr))
+                if key in gases:
+                    ind_of_gas = np.where(gases == key)[0]
+                    abundances[key] += vmrs[ind_of_gas]
+                else:
+                    abundances[key] += 1e-12
+            return abundances
 
         raise ValueError("Unrecognized format for custom_abundances")
    
@@ -345,37 +380,50 @@ class AtmosphereSolver:
                 raise ValueError(
                     "Cloudtop pressure is {} Pa, but must be between {} and {} Pa unless it is np.inf".format(
                         cloudtop_pressure, minimum, maximum))
+    def air_to_vac(self, wavelength):
+        """
+        Implements the air to vacuum wavelength conversion described in eqn 65 of
+        Griesen 2006. Taken from specutils.
+        """
+        wlum = wavelength.to(u.um).value
+        return (1 + 1e-6*(287.6155 + 1.62887/wlum**2 + 0.01360/wlum**4)) * wavelength
 
     def get_stellar_spectrum(self, lambdas, T_star, T_spot, spot_cov_frac, blackbody=False):
+        #assumes given stellar spectrum is in W/m^2/um and wavelength is in m
+        
         if spot_cov_frac is None:
             spot_cov_frac = 0
 
         if T_spot is None:
             T_spot = T_star
             
-        temperatures = list(self.stellar_spectra.keys()) #NOT sorted!
-        if T_star is None:
-            unspotted_spectrum = np.ones(len(lambdas))
-            spot_spectrum = np.ones(len(lambdas))
-        elif T_star >= np.min(temperatures) and T_star <= np.max(temperatures) and not blackbody:
-            interpolator = scipy.interpolate.interp1d(
-                temperatures, list(self.stellar_spectra.values()),
-                assume_sorted=False,
-                axis=0)
-            unspotted_spectrum = interpolator(T_star)
-            spot_spectrum = interpolator(T_spot)
-            if len(spot_spectrum) != len(lambdas):
-                raise ValueError("Stellar spectra has a different length ({}) than opacities ({})!  If you are using high resolution opacities, pass stellar_blackbody=True to compute_depths".format(len(spot_spectrum), len(lambdas)))
-        else:
-            d_lambda = self.d_ln_lambda * lambdas
-            unspotted_spectrum = 2 * c * np.pi / lambdas**4 / \
-                (np.exp(h * c / lambdas / k_B / T_star) - 1) * d_lambda
-            spot_spectrum = 2 * c * np.pi / lambdas**4 / \
-                (np.exp(h * c / lambdas / k_B / T_spot) - 1) * d_lambda
+        if self.stellar_spectrum_mine is not None:
+            stellar_spectrum = self.stellar_spectrum_mine
+            correction_factors = 1 + (stellar_spectrum * 0)
+        else: 
+            temperatures = list(self.stellar_spectra.keys()) #NOT sorted!
+            if T_star is None:
+                unspotted_spectrum = np.ones(len(lambdas))
+                spot_spectrum = np.ones(len(lambdas))
+            elif T_star >= np.min(temperatures) and T_star <= np.max(temperatures) and not blackbody:
+                interpolator = scipy.interpolate.interp1d(
+                    temperatures, list(self.stellar_spectra.values()),
+                    assume_sorted=False,
+                    axis=0)
+                unspotted_spectrum = interpolator(T_star)
+                spot_spectrum = interpolator(T_spot)
+                if len(spot_spectrum) != len(lambdas):
+                    raise ValueError("Stellar spectra has a different length ({}) than opacities ({})!  If you are using high resolution opacities, pass stellar_blackbody=True to compute_depths".format(len(spot_spectrum), len(lambdas)))
+            else:
+                d_lambda = self.d_ln_lambda * lambdas 
+                unspotted_spectrum = 2 * c * np.pi / lambdas**4 / \
+                    (np.exp(h * c / lambdas / k_B / T_star) - 1) * d_lambda
+                spot_spectrum = 2 * c * np.pi / lambdas**4 / \
+                    (np.exp(h * c / lambdas / k_B / T_spot) - 1) * d_lambda
+            stellar_spectrum = spot_cov_frac * spot_spectrum + \
+                            (1 - spot_cov_frac) * unspotted_spectrum
+            correction_factors = unspotted_spectrum/stellar_spectrum
 
-        stellar_spectrum = spot_cov_frac * spot_spectrum + \
-                           (1 - spot_cov_frac) * unspotted_spectrum
-        correction_factors = unspotted_spectrum/stellar_spectrum
         return stellar_spectrum, correction_factors
             
     def compute_params(self, star_radius, planet_mass, planet_radius,
@@ -391,12 +439,14 @@ class AtmosphereSolver:
                        ri=None, frac_scale_height=1, number_density=0,
                        part_size=1e-6, part_size_std=0.5,
                        P_quench=1e-99,
-                       min_abundance=1e-99, min_cross_sec=1e-99):
+                       min_abundance=1e-99, min_cross_sec=1e-99, surface_pressure = None,
+                       vmrs = None, gases = None):
+        if surface_pressure is not None: cloudtop_pressure = (surface_pressure)
         self._validate_params(T_profile, logZ, CO_ratio, cloudtop_pressure)
        
         abundances = self._get_abundances_array(
-            logZ, CO_ratio, custom_abundances)
-
+            logZ, CO_ratio, custom_abundances, vmrs = vmrs, gases = gases)
+        
         T_quench = np.interp(np.log(P_quench), np.log(P_profile), T_profile)
         for name in abundances:
             abundances[name][np.isnan(abundances[name])] = min_abundance

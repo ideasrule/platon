@@ -137,10 +137,12 @@ class SurfaceCalculator:
         if self.path_to_own_stellar_spectrum is None:
             atm = AtmosphereSolver(include_condensation=True, method="xsec")
             
-            stellar_photon_flux, _ = atm.get_stellar_spectrum(self.wavelengths, T_star = self.T_star.si.value, T_spot = None, spot_cov_frac = None, blackbody = self.stellar_blackbody) * u.photon / u.s / u.m**2
-            wavelengths = self.wavelengths * u.m
+            stellar_photon_flux, _ = atm.get_stellar_spectrum(atm.lambda_grid, T_star = self.T_star.si.value, T_spot = None, spot_cov_frac = None, blackbody = self.stellar_blackbody) * u.photon / u.s / u.m**2
+            wavelengths = atm.lambda_grid * u.m
             stellar_flux = ((stellar_photon_flux / (u.photon * np.gradient(wavelengths))) * ((const.c * const.h) / (wavelengths))).to(u.W/u.m**2/u.um)
             stellar_flux = stellar_flux.to(u.W/u.m**3).value
+            
+            stellar_flux = np.interp(self.wavelengths, wavelengths.si.value, stellar_flux)
             
         
         ########################### SELF-DEFINED STELLAR SPECTRA IN PHOTONS/S/M**2 ###########################

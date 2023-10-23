@@ -1,4 +1,4 @@
-FORCE_CPU = True  # force to use CPU if this is True
+FORCE_CPU = False  # force to use CPU if this is True
 
 if FORCE_CPU:
     print("forcing CPU")

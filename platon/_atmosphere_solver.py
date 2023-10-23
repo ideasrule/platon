@@ -42,8 +42,11 @@ class AtmosphereSolver:
             self.stellar_spectra_dict = load_dict_from_pickle("data/k_stellar_spectra.pkl")
 
         self.stellar_spectra_temps = xp.array(self.stellar_spectra_dict["temperatures"])
-        self.stellar_spectra = xp.array(self.stellar_spectra_dict["spectra"])
-        
+        self.stellar_spectra = list(self.stellar_spectra_dict["spectra"])
+        for i in range(len(self.stellar_spectra)):
+            self.stellar_spectra[i] = xp.interp(self.lambda_grid, self.low_res_lambdas, self.stellar_spectra[i])
+        self.stellar_spectra = xp.array(self.stellar_spectra)
+            
         self.collisional_absorption_data = load_dict_from_pickle(
             "data/collisional_absorption.pkl")
         
@@ -400,7 +403,7 @@ class AtmosphereSolver:
         radii, dr, atm_abundances, mu_profile = self._get_above_cloud_profiles(
             P_profile, T_profile, abundances, planet_mass, planet_radius,
             star_radius, above_clouds, T_star)
-
+            
         P_profile = P_profile[above_clouds]
         T_profile = T_profile[above_clouds]
 

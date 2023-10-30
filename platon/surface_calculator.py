@@ -25,7 +25,7 @@ class SurfaceCalculator:
         self.R_planet = R_planet * u.m# * R_jup #m
         self.A_bond_conversion = (3/2)
         
-        self.geoa = pd.read_csv('/Users/kimparagas/Desktop/research/main/jwst_project/new_GeoA.csv', sep = '\t')
+        self.geoa = pd.read_csv('../data_kim/new_GeoA.csv', sep = '\t')
         
         self.wavelengths = self.geoa['Wavelength'].to_numpy()
         
@@ -41,12 +41,11 @@ class SurfaceCalculator:
         self.surface_geoa = self.geoa[self.surface_type]
         self.surface_emi = 1 - self.surface_geoa
         
-        self.crust_emission_flux = ascii.read('/Users/kimparagas/Desktop/research/main/jwst_project/code/from_renyu/Crust_EmissionFlux.dat', delimiter = '\t')
+        self.crust_emission_flux = ascii.read('../data_kim/Crust_EmissionFlux.dat', delimiter = '\t')
         
         Teq = (1/4)**(1/4) * self.T_star * np.sqrt(self.R_star / self.a)
         Teq = Teq.si.value
-        f_poly_coeffs = pd.read_csv('/Users/kimparagas/Desktop/research/main/f_results/f_poly_coeffs.csv', sep = '\t', index_col = 0)
-        poly_models = []
+        f_poly_coeffs = pd.read_csv('../data_kim/f_poly_coeffs.csv', sep = '\t', index_col = 0)
         coeffs = f_poly_coeffs.loc[self.surface_type]
         for i, (c, name) in enumerate(zip(coeffs, coeffs.keys())):
             if np.isnan(c) == True:
@@ -73,8 +72,6 @@ class SurfaceCalculator:
         'Basaltic': 0.69, 'Granitoid': 0.56, 'Clay': 0.48, 'Ice-rich silicate': 0.66,
         'Fe-oxidized': 0.7}
         self.factor = np.array(self.factors[self.surface_type])
-        # self.factor = factor
-        print(self.factor)
         
         columns = ['Wavelength', 'Flux', 'Depth']
         self.surface_model = pd.DataFrame(columns = columns)

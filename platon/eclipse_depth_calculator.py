@@ -31,7 +31,6 @@ class EclipseDepthCalculator:
         '''
 
         self.atm = AtmosphereSolver(include_condensation=include_condensation, method=method, path_to_own_stellar_spectrum = path_to_own_stellar_spectrum)
-
         # scipy.special.expn is slow when called on millions of values, so
         # use interpolator to speed it up
         tau_cache = np.logspace(-6, 3, 1000)
@@ -42,9 +41,11 @@ class EclipseDepthCalculator:
             fill_value=(0.5, 0))
 
         
-    def change_wavelength_bins(self, bins):        
+    def change_wavelength_bins(self, bins, surface = None):        
         '''Same functionality as :func:`~platon.transit_depth_calculator.TransitDepthCalculator.change_wavelength_bins`'''
         self.atm.change_wavelength_bins(bins)
+        if surface is not None:
+            surface.change_spectra(self.atm.lambda_grid)
 
 
     def _get_binned_depths(self, depths, stellar_spectrum, atmosphere_depths = None, surface_depths = None, n_gauss=10):
@@ -93,6 +94,8 @@ class EclipseDepthCalculator:
             cond = np.logical_and(
                 intermediate_lambdas >= start,
                 intermediate_lambdas < end)
+            # print(intermediate_lambdas[cond])
+            # sys.exit()
             binned_wavelengths.append(np.mean(intermediate_lambdas[cond]))
             binned_depth = np.average(intermediate_depths[cond],
                                       weights=intermediate_stellar_spectrum[cond])
@@ -104,6 +107,8 @@ class EclipseDepthCalculator:
                                         weights=intermediate_stellar_spectrum[cond])
                 binned_atm_depths.append(binned_atm_depth)
                 binned_surface_depths.append(binned_surface_depth)
+        # print(binned_wavelengths)
+        # sys.exit()
         if atmosphere_depths is not None:    
             return intermediate_lambdas, intermediate_depths, np.array(binned_wavelengths), np.array(binned_depths), np.array(binned_atm_depths), np.array(binned_surface_depths)
         else: 
@@ -166,7 +171,7 @@ class EclipseDepthCalculator:
         if surface is not None:
             if surface_temperature is None:
                 surface_temperature = atm_info['T_profile'][-1]#surface.temperature_og
-            
+           
         intermediate_T = 0.5 * (atm_info["T_profile"][0:-1] + atm_info["T_profile"][1:])
             
         dr = atm_info["dr"]
@@ -183,6 +188,7 @@ class EclipseDepthCalculator:
         padded_taus[:, 1:] = taus
         integrand = planck_function * np.diff(scipy.special.expn(3, padded_taus), axis=1)
         fluxes = -2 * np.pi * np.sum(integrand, axis=1)
+        # fluxes = 0
         if not np.isinf(cloudtop_pressure) and surface is None:
             max_taus = np.max(taus, axis=1)
             fluxes_from_cloud = -np.pi * planck_function[:, -1] * (max_taus**2 * scipy.special.expi(-max_taus) + max_taus * np.exp(-max_taus) - np.exp(-max_taus))
@@ -190,7 +196,8 @@ class EclipseDepthCalculator:
 
         if surface is not None:
             surface.read_in_temp(surface_temperature)
-            surface.change_spectra(lambda_grid)
+            # print('max surface flux', surface.surface_model["Flux"].to_numpy().max())
+            # surface.change_spectra(lambda_grid)
             
             max_taus = np.max(taus, axis=1)
 
@@ -198,6 +205,7 @@ class EclipseDepthCalculator:
 
             fluxes += fluxes_from_cloud 
         
+        # print(T_star, stellar_blackbody)
         stellar_photon_fluxes, _ = self.atm.get_stellar_spectrum(
             lambda_grid, T_star, T_spot, spot_cov_frac, stellar_blackbody)
         

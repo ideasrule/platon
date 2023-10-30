@@ -20,12 +20,12 @@ class SurfaceCalculator:
     def __init__(self,T_star, R_star, a, R_planet, surface_type, stellar_blackbody = True, path_to_own_stellar_spectrum = None):
         self.stellar_blackbody = stellar_blackbody
         self.T_star = T_star * u.K
-        self.R_star = R_star * u.m # 
-        self.a = a * u.m # AU; 
-        self.R_planet = R_planet * u.m# 
+        self.R_star = R_star * u.m # * R_sun #ExoMAST
+        self.a = a * u.m # AU; ExoMAST
+        self.R_planet = R_planet * u.m# * R_jup #m
         self.A_bond_conversion = (3/2)
         
-        self.geoa = pd.read_csv('../data_kim/new_GeoA.csv', sep = '\t')
+        self.geoa = pd.read_csv('/Users/kimparagas/Desktop/research/main/jwst_project/new_GeoA.csv', sep = '\t')
         
         self.wavelengths = self.geoa['Wavelength'].to_numpy()
         
@@ -41,11 +41,11 @@ class SurfaceCalculator:
         self.surface_geoa = self.geoa[self.surface_type]
         self.surface_emi = 1 - self.surface_geoa
         
-        self.crust_emission_flux = ascii.read('../data_kim/Crust_EmissionFlux.dat', delimiter = '\t')
+        self.crust_emission_flux = ascii.read('/Users/kimparagas/Desktop/research/main/jwst_project/code/from_renyu/Crust_EmissionFlux.dat', delimiter = '\t')
         
         Teq = (1/4)**(1/4) * self.T_star * np.sqrt(self.R_star / self.a)
         Teq = Teq.si.value
-        f_poly_coeffs = pd.read_csv('../data_kim/f_poly_coeffs.csv', sep = '\t', index_col = 0)
+        f_poly_coeffs = pd.read_csv('/Users/kimparagas/Desktop/research/main/f_results/f_poly_coeffs.csv', sep = '\t', index_col = 0)
         poly_models = []
         coeffs = f_poly_coeffs.loc[self.surface_type]
         for i, (c, name) in enumerate(zip(coeffs, coeffs.keys())):
@@ -69,13 +69,41 @@ class SurfaceCalculator:
                 print(f'WARNING: Full redistribution equilibrium temperature {Teq:.2f} K is hotter than 1064 K.\nDayside may be (partially) molten in the corresponding 2D models.\nWill use factors corresponding to 1064 K (ensuring a non-molten dayside).')
                 Teq = 1064
                 factor = poly_model(Teq)
-        self.factor = np.array(factor)
+        self.factors = {'Metal-rich': 0.7, 'Ultramafic': 0.6, 'Feldspathic': 0.572,
+        'Basaltic': 0.69, 'Granitoid': 0.56, 'Clay': 0.48, 'Ice-rich silicate': 0.66,
+        'Fe-oxidized': 0.7}
+        self.factor = np.array(self.factors[self.surface_type])
+        # self.factor = factor
+        print(self.factor)
         
         columns = ['Wavelength', 'Flux', 'Depth']
         self.surface_model = pd.DataFrame(columns = columns)
         self.temperature = 0
         
         self.path_to_own_stellar_spectrum = path_to_own_stellar_spectrum
+        
+        atm = AtmosphereSolver(include_condensation=True, method="xsec")
+        self.lambda_grid = atm.lambda_grid
+        if self.path_to_own_stellar_spectrum is None:            
+            stellar_photon_flux, _ = atm.get_stellar_spectrum(atm.lambda_grid, T_star = self.T_star.si.value, T_spot = None, spot_cov_frac = None, blackbody = self.stellar_blackbody) * u.photon / u.s / u.m**2
+            wl = atm.lambda_grid * u.m
+            self.wl = wl.si.value
+            stellar_flux = ((stellar_photon_flux / (u.photon * np.gradient(wl))) * ((const.c * const.h) / (wl))).to(u.W/u.m**2/u.um)
+            self.stellar_flux = stellar_flux.to(u.W/u.m**3).value
+            
+        
+        ########################### NON BLACKBODY STELLAR SPECTRA ###########################
+        #################################################################################################
+        
+        if self.path_to_own_stellar_spectrum is not None:
+            spectrum = pd.read_csv(self.path_to_own_stellar_spectrum, sep = '\t') #assumed that the stellar flux is in photons per second per meter squared
+            wl = spectrum['wavelength'].to_numpy() * u.m
+            stellar_photon_flux = spectrum['stellar flux'].to_numpy() * u.photon / u.s / u.m**2
+            
+            stellar_flux = ((stellar_photon_flux / (u.photon * np.gradient(wl))) * ((const.c * const.h) / (wl))).to(u.W/u.m**2/u.um)
+            self.stellar_flux = stellar_flux.to(u.W/u.m**3).value
+            self.wl = wl.si.value
+            
         
     def calc_new_albedo_and_emi(self, plot = False): 
         interp_albedo = np.interp(self.wavelengths, self.geoa['Wavelength'], self.surface_geoa_og)
@@ -133,39 +161,17 @@ class SurfaceCalculator:
         
         return total_flux, depths    
     
-    def calc_surface_fluxes(self, skip_temp_calc = True):
-        if self.path_to_own_stellar_spectrum is None:
-            atm = AtmosphereSolver(include_condensation=True, method="xsec")
+    def calc_surface_fluxes(self, skip_temp_calc = True,
+                            plot_stellar_spectum = False, plot_surface_spectra = False, save_stellar_spectrum = False):
+        if skip_temp_calc == False:
+            self.mask = np.where(((self.wavelengths >= self.wl[0]) & (self.wavelengths <= self.wl[-1])))[0]
+            self.wavelengths = self.wavelengths[self.mask]
+            self.calc_new_albedo_and_emi()
             
-            stellar_photon_flux, _ = atm.get_stellar_spectrum(atm.lambda_grid, T_star = self.T_star.si.value, T_spot = None, spot_cov_frac = None, blackbody = self.stellar_blackbody) * u.photon / u.s / u.m**2
-            wavelengths = atm.lambda_grid * u.m
-            stellar_flux = ((stellar_photon_flux / (u.photon * np.gradient(wavelengths))) * ((const.c * const.h) / (wavelengths))).to(u.W/u.m**2/u.um)
-            stellar_flux = stellar_flux.to(u.W/u.m**3).value
-            
-            stellar_flux = np.interp(self.wavelengths, wavelengths.si.value, stellar_flux)
-            
-        
-        ########################### SELF-DEFINED STELLAR SPECTRA IN PHOTONS/S/M**2 ###########################
-        #################################################################################################
-        
-        if self.path_to_own_stellar_spectrum is not None:
-            spectrum = pd.read_csv(self.path_to_own_stellar_spectrum, sep = '\t') #assumed that the stellar flux is in photons per second per meter squared
-            wl = spectrum['wavelength'].to_numpy() * u.m
-            stellar_photon_flux = spectrum['stellar flux'].to_numpy() * u.photon / u.s / u.m**2
-            
-            stellar_flux = ((stellar_photon_flux / (u.photon * np.gradient(wl))) * ((const.c * const.h) / (wl))).to(u.W/u.m**2/u.um)
-            stellar_flux = stellar_flux.to(u.W/u.m**3).value
-            wl = wl.si.value
-            
-            if skip_temp_calc == False:
-                self.mask = np.where(((self.wavelengths >= wl[0]) & (self.wavelengths <= wl[-1])))[0]
-                self.wavelengths = self.wavelengths[self.mask]
-                self.calc_new_albedo_and_emi()
-            
-            stellar_flux = np.interp(self.wavelengths, wl, stellar_flux)
-
+        stellar_flux = np.interp(self.wavelengths, self.wl, self.stellar_flux)
+                
         def calc_temps(x, redist_factor):
-            Ag = np.mean(self.surface_geoa_og)
+            Ag = np.median(self.surface_geoa_og)
             As = (3/2) * Ag
             irrad = redist_factor * (np.trapz(y = (stellar_flux) * ((self.R_star / self.a)**2) * (1-As), x = x)) #do not need pi in this if the stellar spectrum is used vs the planck function 
             # temp = self.crust_emission_flux['Temperature [K]'][np.abs(self.crust_emission_flux[self.surfaces[i]].value - irrad).argmin()] #jwst_project
@@ -191,17 +197,29 @@ class SurfaceCalculator:
         
         self.surface_model['Wavelength'] = self.wavelengths
        
+
+        if plot_surface_spectra:
+            model_surface_spectra_table = ascii.read('/Users/kimparagas/desktop/jwst_project/code/current/products/model_fluxes_platon_stellar_bb.csv')
+            for i in np.arange(len(self.geoa_columns[1:])):
+                plt.plot(model_surface_spectra_table['Wavelength']*1e6, model_surface_spectra_table[self.surface_type], 'k')
+                plt.plot(self.model_fluxes['Wavelength'] * 1e6, total_fluxes[i], 'r--')
+                plt.xlabel(r'wavelength [$\mu$m]')
+                plt.ylabel('fluxes [si]')
+                plt.title(self.surface_type)
+                plt.show()
+                plt.close()
                 
     def read_in_temp(self, temp):
         self.temperature = temp
+        self.calc_surface_fluxes()
 
-    def calc_initial_spectra(self, skip_temp_calc = False):
-        self.calc_surface_fluxes(skip_temp_calc = skip_temp_calc, plot_stellar_spectum = False, plot_surface_spectra = False)
-        
     def change_spectra(self, wavelengths):
         self.wavelengths = wavelengths
         self.calc_new_albedo_and_emi()
         self.surface_model = pd.DataFrame(columns = ['Wavelength', 'Flux', 'Depth'])
         self.surface_model['Wavelength'] = self.wavelengths
         self.calc_surface_fluxes()
+        
+    def calc_initial_spectra(self, skip_temp_calc = False):
+        self.calc_surface_fluxes(skip_temp_calc = skip_temp_calc, plot_stellar_spectum = False, plot_surface_spectra = False)
         

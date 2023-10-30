@@ -342,7 +342,8 @@ class AtmosphereSolver:
             
             for key in abundances:
                 for i,arr in enumerate(abundances[key]):
-                    abundances[key][i] = ([0] * len(arr))
+                    abundances[key][i] = ([0] * len(arr))# + ([1e-12] * len(arr))
+                    # abundances[key][i] = [0] * len(arr)
                 if key in gases:
                     ind_of_gas = np.where(gases == key)[0]
                     abundances[key] += vmrs[ind_of_gas]
@@ -439,14 +440,14 @@ class AtmosphereSolver:
                        ri=None, frac_scale_height=1, number_density=0,
                        part_size=1e-6, part_size_std=0.5,
                        P_quench=1e-99,
-                       min_abundance=1e-99, min_cross_sec=1e-99, surface_pressure = None,
-                       vmrs = None, gases = None):
+                       min_abundance=1e-99, min_cross_sec=1e-99, surface_pressure = None, surface_temperature = None, vmrs = None, gases = None):
         if surface_pressure is not None: cloudtop_pressure = (surface_pressure)
         self._validate_params(T_profile, logZ, CO_ratio, cloudtop_pressure)
        
         abundances = self._get_abundances_array(
             logZ, CO_ratio, custom_abundances, vmrs = vmrs, gases = gases)
         
+        # abundances["OCS"] += 1e-4
         T_quench = np.interp(np.log(P_quench), np.log(P_profile), T_profile)
         for name in abundances:
             abundances[name][np.isnan(abundances[name])] = min_abundance

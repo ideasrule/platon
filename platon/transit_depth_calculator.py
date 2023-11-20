@@ -1,6 +1,7 @@
 from pkg_resources import resource_filename
 import matplotlib.pyplot as plt
 import scipy
+import numpy as np
 
 from . import _cupy_numpy as xp
 from . import _hydrostatic_solver
@@ -60,26 +61,29 @@ class TransitDepthCalculator:
 
     def _get_binned_corrected_depths(self, depths, T_star, T_spot,
                                      spot_cov_frac, blackbody=False, n_gauss=10):
-        unbinned_lambdas = self.atm.lambda_grid
+        depths = xp.cpu(depths)
+        unbinned_lambdas = xp.cpu(self.atm.lambda_grid)
         stellar_spectrum, correction_factors = self.atm.get_stellar_spectrum(
             unbinned_lambdas, T_star, T_spot, spot_cov_frac, blackbody)
+        stellar_spectrum = xp.cpu(stellar_spectrum)
+        correction_factors = xp.cpu(correction_factors)
         
         #Step 1: do a first binning if using k-coeffs; first binning is a
         #no-op otherwise
         if self.atm.method == "ktables":
             #Do a first binning based on ktables
-            points, weights = xp.array(scipy.special.roots_legendre(n_gauss))
+            points, weights = scipy.special.roots_legendre(n_gauss)
             percentiles = 100 * (points + 1) / 2
             weights /= 2
             assert(len(depths) % n_gauss == 0)
             num_binned = int(len(depths) / n_gauss)
-            intermediate_lambdas = xp.zeros(num_binned)
-            intermediate_depths = xp.zeros(num_binned)
+            intermediate_lambdas = np.zeros(num_binned)
+            intermediate_depths = np.zeros(num_binned)
 
             for chunk in range(num_binned):
                 start = chunk * n_gauss
                 end = (chunk + 1 ) * n_gauss
-                intermediate_depths[chunk] = xp.sum(depths[start : end] * weights)
+                intermediate_depths[chunk] = np.sum(depths[start : end] * weights)
 
             intermediate_lambdas = unbinned_lambdas[::n_gauss]
             intermediate_stellar_spectrum = stellar_spectrum[::n_gauss]
@@ -94,28 +98,29 @@ class TransitDepthCalculator:
             assert(False)                  
                 
         if self.atm.wavelength_bins is None:
-            return intermediate_lambdas,\
-                intermediate_depths * intermediate_correction_factors,\
-                intermediate_stellar_spectrum,\
-                intermediate_lambdas,\
-                intermediate_depths * intermediate_correction_factors,\
-                intermediate_stellar_spectrum, intermediate_correction_factors
+            return xp.array(intermediate_lambdas),\
+                xp.array(intermediate_depths * intermediate_correction_factors),\
+                xp.array(intermediate_stellar_spectrum),\
+                xp.array(intermediate_lambdas),\
+                xp.array(intermediate_depths * intermediate_correction_factors),\
+                xp.array(intermediate_stellar_spectrum),
+        xp.array(intermediate_correction_factors)
                         
         binned_wavelengths = []
         binned_depths = []
         binned_stellar_spectrum = []
         
-        for (start, end) in self.atm.wavelength_bins:
-            cond = xp.logical_and(
+        for (start, end) in xp.cpu(self.atm.wavelength_bins):
+            cond = np.logical_and(
                 intermediate_lambdas >= start,
                 intermediate_lambdas < end)
-            binned_wavelengths.append(xp.mean(intermediate_lambdas[cond]))
-            binned_depth = xp.average(intermediate_depths[cond] * intermediate_correction_factors[cond],
+            binned_wavelengths.append(np.mean(intermediate_lambdas[cond]))
+            binned_depth = np.average(intermediate_depths[cond] * intermediate_correction_factors[cond],
                                       weights=intermediate_stellar_spectrum[cond])
             binned_depths.append(binned_depth)
-            binned_stellar_spectrum.append(xp.median(intermediate_stellar_spectrum[cond]))
+            binned_stellar_spectrum.append(np.median(intermediate_stellar_spectrum[cond]))
 
-        return xp.array(binned_wavelengths), xp.array(binned_depths), xp.array(binned_stellar_spectrum), intermediate_lambdas, intermediate_depths, intermediate_stellar_spectrum, intermediate_correction_factors
+        return xp.array(binned_wavelengths), xp.array(binned_depths), xp.array(binned_stellar_spectrum), xp.array(intermediate_lambdas), xp.array(intermediate_depths), xp.array(intermediate_stellar_spectrum), xp.array(intermediate_correction_factors)
 
     def _validate_params(self, T, logZ, CO_ratio, cloudtop_pressure):
         T_profile = xp.ones(self.atm.num_profile_heights) * T

@@ -1,5 +1,6 @@
 import numpy as np
-from ._params import _UniformParam, _GaussianParam, _Param
+from ._params import _UniformParam, _GaussianParam, _Param, _CLRParam
+import sys
 
 
 class FitInfo:
@@ -9,6 +10,26 @@ class FitInfo:
 
         for key in guesses_dict:
             self.all_params[key] = _Param(guesses_dict[key])
+    
+    def add_CLR_fit_param(self, name, ng = None,
+                              low_guess=None, high_guess=None):
+        '''Fit for the parameter `name` using a uniform prior between `low_lim`
+        and `high_lim`.  If using emcee, the walkers' initial values for this
+        parameter are randomly selected to be between `low_guess` and
+        `high_guess`.  If not specified, `low_guess` is set to `low_lim`, and
+        similarly with `high_guess`.'''
+
+        if name in self.fit_param_names:
+            raise ValueError("Already fitting for {0}".format(name))
+        
+        if ng is None:
+            raise ValueError("Must define how many gases you are fitting for, not including the background gas.")
+
+        best_guess = self.all_params[name].best_guess
+
+        self.fit_param_names.append(name)
+        self.all_params[name] = _CLRParam(best_guess, ng,
+                                              low_guess, high_guess)
 
     def add_uniform_fit_param(self, name, low_lim, high_lim,
                               low_guess=None, high_guess=None):
@@ -98,6 +119,9 @@ class FitInfo:
 
     def _from_unit_interval(self, index, u):
         name = self.fit_param_names[index]
+        # print(f'name from _from_unit_interval: {name}')
+        # print(f'u from _from_unit_interval: {u}')
+        # print(f'output from u: {self.all_params[name].from_unit_interval(u)}')
         return self.all_params[name].from_unit_interval(u)
 
     def _ln_prior(self, array):

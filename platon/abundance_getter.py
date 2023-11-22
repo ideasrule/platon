@@ -7,7 +7,7 @@ import configparser
 from pkg_resources import resource_filename
 
 from ._loader import load_dict_from_pickle
-
+import sys
 
 class AbundanceGetter:
     def __init__(self, include_condensation=True):
@@ -20,6 +20,9 @@ class AbundanceGetter:
                                  int(properties["num_logZ"]))
         self.CO_ratios = eval(properties["CO_ratios"])
         self.included_species = eval(properties["included_species"])
+        # print(self.included_species)
+        # print(len(self.included_species)-1)
+        # sys.exit()
 
         if include_condensation:
             filename = "with_condensation.npy"
@@ -27,17 +30,31 @@ class AbundanceGetter:
             filename = "gas_only.npy"
 
         abundances_path = "data/abundances/{}".format(filename)
+        # print(abundances_path)
 
         self.log_abundances = np.log10(np.load(
             resource_filename(__name__, abundances_path)))
+        # print(self.log_abundances[0])
+        # print('NEXT[0][0]')
+        # print(self.log_abundances[0][0])
+        # print('NEXT[0][0][0]')
+        # print(self.log_abundances[0][0][0])
+        # print('NEXT[0][0][0][0]')
+        # print(self.log_abundances[0][0][0][0])
+        # for key in self.log_abundances:
+        #     print(key)
+        # print(self.log_abundances)
+        # new_array = np.full((41, 18, 1, 30, 13), fill_value=1e-99)
+        # appended = np.concatenate((self.log_abundances, new_array, new_array), axis=2)
 
         
+        # print(np.shape(appended))  
+        # self.log_abundances = appended      
     def get(self, logZ, CO_ratio=0.53):
         '''Get an abundance grid at the specified logZ and C/O ratio.  This
         abundance grid can be passed to TransitDepthCalculator, with or without
         modifications.  The end user should not need to call this except in
         rare cases.
-
         Returns
         -------
         abundances : dict of np.ndarray

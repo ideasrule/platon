@@ -103,8 +103,8 @@ class TransitDepthCalculator:
                 xp.array(intermediate_stellar_spectrum),\
                 xp.array(intermediate_lambdas),\
                 xp.array(intermediate_depths * intermediate_correction_factors),\
-                xp.array(intermediate_stellar_spectrum),
-        xp.array(intermediate_correction_factors)
+                xp.array(intermediate_stellar_spectrum),\
+                xp.array(intermediate_correction_factors)
                         
         binned_wavelengths = []
         binned_depths = []

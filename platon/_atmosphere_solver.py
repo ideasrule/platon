@@ -18,7 +18,7 @@ from .errors import AtmosphereError
 from ._interpolator_3D import regular_grid_interp, interp1d
 
 class AtmosphereSolver:
-    def __init__(self, include_condensation=True, num_profile_heights=250,
+    def __init__(self, include_condensation=True, num_profile_heights=100,
                  ref_pressure=1e5, method='xsec'):
         self.arguments = locals()
         del self.arguments["self"]
@@ -224,6 +224,7 @@ class AtmosphereSolver:
     def _get_collisional_absorption(self, abundances, P_cond, T_cond):
         absorption_coeff = xp.zeros(
             (int(xp.sum(T_cond)), int(xp.sum(P_cond)), self.N_lambda))
+        
         n = self.P_grid[xp.newaxis, P_cond] / (k_B * self.T_grid[T_cond, xp.newaxis])        
         for s1, s2 in self.collisional_absorption_data:
             if s1 in abundances and s2 in abundances:
@@ -277,7 +278,7 @@ class AtmosphereSolver:
         atm_abundances = {}
         
         for species_name in abundances:
-            abund = 10**regular_grid_interp(self.T_grid, xp.log10(self.P_grid), xp.log10(abundances[species_name]), T_profile, xp.log10(P_profile))
+            abund = 10.**regular_grid_interp(self.T_grid, xp.log10(self.P_grid), xp.log10(abundances[species_name]), T_profile, xp.log10(P_profile))
             atm_abundances[species_name] = abund
             mu_profile += abund * self.mass_data[species_name]
 
@@ -290,8 +291,8 @@ class AtmosphereSolver:
             
         return radii, dr, atm_abundances, mu_profile
 
-    def _get_abundances_array(self, logZ, CO_ratio, custom_abundances):
-        if custom_abundances is None:
+    def _get_abundances_array(self, logZ, CO_ratio, custom_abundances, gases, vmrs):
+        if custom_abundances is None and logZ is not None and CO_ratio is not None:
             return self.abundance_getter.get(logZ, CO_ratio)
 
         if logZ is not None or CO_ratio is not None:
@@ -311,6 +312,13 @@ class AtmosphereSolver:
                     raise ValueError(
                         "custom_abundances has array of invalid size")
             return custom_abundances
+
+        
+        if custom_abundances is None and vmrs is not None and gases is not None:
+            abundances = {}
+            for i, g in enumerate(gases):
+                abundances[g] = vmrs[i] * xp.ones((len(self.T_grid), len(self.P_grid)))
+            return abundances
 
         raise ValueError("Unrecognized format for custom_abundances")
    
@@ -375,6 +383,7 @@ class AtmosphereSolver:
     def compute_params(self, star_radius, planet_mass, planet_radius,
                        P_profile, T_profile,
                        logZ=0, CO_ratio=0.53,
+                       gases=None, vmrs=None,
                        add_gas_absorption=True,
                        add_H_minus_absorption=False,
                        add_scattering=True, scattering_factor=1,
@@ -389,13 +398,13 @@ class AtmosphereSolver:
         self._validate_params(T_profile, logZ, CO_ratio, cloudtop_pressure)
        
         abundances = self._get_abundances_array(
-            logZ, CO_ratio, custom_abundances)
+            logZ, CO_ratio, custom_abundances, gases, vmrs)
 
         T_quench = xp.interp(xp.log(P_quench), xp.log(P_profile), T_profile)
         for name in abundances:
             abundances[name][xp.isnan(abundances[name])] = min_abundance
             abundances[name][abundances[name] < min_abundance] = min_abundance
-            quench_abund = 10**regular_grid_interp(self.T_grid, xp.log10(self.P_grid), xp.log10(abundances[name]), T_quench, xp.log10(P_quench))
+            quench_abund = 10.**regular_grid_interp(self.T_grid, xp.log10(self.P_grid), xp.log10(abundances[name]), T_quench, xp.log10(P_quench))
             abundances[name][:, self.P_grid <= P_quench] = quench_abund
 
         above_clouds = P_profile < cloudtop_pressure
@@ -424,8 +433,8 @@ class AtmosphereSolver:
                 absorption_coeff += self._get_mie_scattering_absorption(
                     P_cond, T_cond, ri, part_size,
                     frac_scale_height, number_density, sigma=part_size_std)
-                absorption_coeff += self._get_scattering_absorption(abundances,
-                P_cond, T_cond)
+                absorption_coeff += self._get_scattering_absorption(
+                    abundances, P_cond, T_cond)
                 
             else:
                 absorption_coeff += self._get_scattering_absorption(abundances,

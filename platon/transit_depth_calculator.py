@@ -17,7 +17,7 @@ from ._atmosphere_solver import AtmosphereSolver
 
 
 class TransitDepthCalculator:
-    def __init__(self, include_condensation=True, num_profile_heights=250,
+    def __init__(self, include_condensation=True, num_profile_heights=100,
                  ref_pressure=1e5, method='xsec'):
         '''
         All physical parameters are in SI.
@@ -129,6 +129,7 @@ class TransitDepthCalculator:
     
     def compute_depths(self, star_radius, planet_mass, planet_radius,
                        temperature, logZ=0, CO_ratio=0.53,
+                       gases=None, vmrs=None,
                        add_gas_absorption=True, add_H_minus_absorption=False,
                        add_scattering=True, scattering_factor=1,
                        scattering_slope=4, scattering_ref_wavelength=1e-6,
@@ -273,7 +274,7 @@ class TransitDepthCalculator:
 
         atm_info = self.atm.compute_params(
             star_radius, planet_mass, planet_radius, P_profile, T_profile,
-            logZ, CO_ratio, add_gas_absorption, add_H_minus_absorption,
+            logZ, CO_ratio, gases, vmrs, add_gas_absorption, add_H_minus_absorption,
             add_scattering,
             scattering_factor, scattering_slope, scattering_ref_wavelength,
             add_collisional_absorption, cloudtop_pressure, custom_abundances,

@@ -94,6 +94,15 @@ class CombinedRetriever:
                     fit_info._get("CO_ratio"),
                     10**fit_info._get("log_cloudtop_P"))
 
+
+    def _convert_clr_to_vmr(self, clrs):
+        clr_bkg = -xp.sum(clrs)
+        clrs_with_bkg = xp.append(clrs, clr_bkg)
+        geometric_mean = 1 / xp.sum(xp.exp(clrs_with_bkg))
+        vmrs_with_bkg = np.exp(clrs_with_bkg + np.log(geometric_mean))
+        assert(xp.around(xp.sum(vmrs_with_bkg), decimals=5) == 1)
+        return vmrs_with_bkg
+    
     def _ln_like(self, params, transit_calc, eclipse_calc, fit_info, measured_transit_depths,
                  measured_transit_errors, measured_eclipse_depths,
                  measured_eclipse_errors, wfc3_start=1e-6, wfc3_end=1.7e-6, ret_best_fit=False, zero_opacities=[]):
@@ -121,6 +130,17 @@ class CombinedRetriever:
         part_size = 10.0**params_dict["log_part_size"]
         P_quench = 10 ** params_dict["log_P_quench"]        
 
+
+        if params_dict["use_clr"]:
+            gases = params_dict["gases"]
+            clrs = []
+            for gas in gases[:-1]:
+                clrs += [params_dict[f'clr_{gas}']]
+            vmrs = self._convert_clr_to_vmr(xp.array(clrs))
+        else:
+            vmrs = None
+            gases = None
+        
         if "n" in params_dict and params_dict["n"] is not None and "log_k" in params_dict:
             ri = params_dict["n"] - 1j * 10**params_dict["log_k"]
         else:
@@ -142,7 +162,7 @@ class CombinedRetriever:
                     raise ValueError("Must fit for T if using transit depths")
                 
                 transit_wavelengths, calculated_transit_depths, transit_info_dict = transit_calc.compute_depths(
-                    Rs, Mp, Rp, T, logZ, CO_ratio,
+                    Rs, Mp, Rp, T, logZ, CO_ratio, gases, vmrs,
                     scattering_factor=scatt_factor, scattering_slope=scatt_slope,
                     cloudtop_pressure=cloudtop_P, T_star=T_star,
                     T_spot=T_spot, spot_cov_frac=spot_cov_frac,
@@ -161,7 +181,7 @@ class CombinedRetriever:
                     raise AtmosphereError("Invalid T/P profile")
                 
                 eclipse_wavelengths, calculated_eclipse_depths, eclipse_info_dict = eclipse_calc.compute_depths(
-                    t_p_profile, Rs, Mp, Rp, T_star, logZ, CO_ratio,
+                    t_p_profile, Rs, Mp, Rp, T_star, logZ, CO_ratio, gases, vmrs,
                     scattering_factor=scatt_factor, scattering_slope=scatt_slope,
                     cloudtop_pressure=cloudtop_P,
                     T_spot=T_spot, spot_cov_frac=spot_cov_frac,
@@ -442,6 +462,7 @@ class CombinedRetriever:
 
     @staticmethod
     def get_default_fit_info(Rs, Mp, Rp, T=None, logZ=0, CO_ratio=0.53,
+                             use_vmr=False, gases=None, vmrs=None,
                              log_cloudtop_P=np.inf, log_scatt_factor=0,
                              scatt_slope=4, error_multiple=1, T_star=None,
                              T_spot=None, spot_cov_frac=None,

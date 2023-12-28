@@ -341,7 +341,7 @@ class CombinedRetriever:
                       eclipse_bins, eclipse_depths, eclipse_errors,
                       fit_info,
                       include_condensation=True, rad_method="xsec",
-                      maxiter=None, maxcall=None, nlive=100,
+                      maxiter=None, maxcall=None, nlive=250,
                       num_final_samples=100, zero_opacities=[],
                       **dynesty_kwargs):
         '''Runs nested sampling to retrieve atmospheric parameters.

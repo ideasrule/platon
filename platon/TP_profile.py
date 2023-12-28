@@ -5,13 +5,14 @@ expn=xp.scipy.special.expn
 from pkg_resources import resource_filename
 
 from .constants import h, c, k_B, AMU, G
+from .params import NUM_LAYERS, MIN_P, MAX_P
 
 class Profile:
-    def __init__(self, num_profile_heights=100, min_P=1e-4, max_P=1e8):
+    def __init__(self):
         self.pressures = xp.logspace(
-                xp.log10(min_P),
-                xp.log10(max_P),
-                num_profile_heights)
+                xp.log10(MIN_P),
+                xp.log10(MIN_P),
+                NUM_LAYERS)
 
     def get_temperatures(self):
         return xp.cpu(self.temperatures)

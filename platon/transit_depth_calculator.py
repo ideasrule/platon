@@ -14,11 +14,11 @@ from ._get_data import get_data
 from ._mie_cache import MieCache
 from .errors import AtmosphereError
 from ._atmosphere_solver import AtmosphereSolver
+from .params import NUM_LAYERS
 
 
 class TransitDepthCalculator:
-    def __init__(self, include_condensation=True, num_profile_heights=100,
-                 ref_pressure=1e5, method='xsec'):
+    def __init__(self, include_condensation=True, ref_pressure=1e5, method='xsec'):
         '''
         All physical parameters are in SI.
 
@@ -27,15 +27,12 @@ class TransitDepthCalculator:
         include_condensation : bool
             Whether to use equilibrium abundances that take condensation into
             account.
-        num_profile_heights : int
-            The number of zones the atmosphere is divided into
         ref_pressure : float
             The planetary radius is defined as the radius at this pressure
         method : string
             "xsec" for opacity sampling, "ktables" for correlated k
         '''
-        self.atm = AtmosphereSolver(include_condensation, num_profile_heights,
-                               ref_pressure, method)               
+        self.atm = AtmosphereSolver(include_condensation, ref_pressure, method)               
 
     def change_wavelength_bins(self, bins):
         """Specify wavelength bins, instead of using the full wavelength grid
@@ -123,7 +120,7 @@ class TransitDepthCalculator:
         return xp.array(binned_wavelengths), xp.array(binned_depths), xp.array(binned_stellar_spectrum), xp.array(intermediate_lambdas), xp.array(intermediate_depths), xp.array(intermediate_stellar_spectrum), xp.array(intermediate_correction_factors)
 
     def _validate_params(self, T, logZ, CO_ratio, cloudtop_pressure):
-        T_profile = xp.ones(self.atm.num_profile_heights) * T
+        T_profile = xp.ones(NUM_LAYERS) * T
         self.atm._validate_params(T, logZ, CO_ratio, cloudtop_pressure)
         
     
@@ -269,7 +266,7 @@ class TransitDepthCalculator:
             P_profile = xp.logspace(
                 xp.log10(self.atm.P_grid[0]),
                 xp.log10(self.atm.P_grid[-1]),
-                self.atm.num_profile_heights)
+                NUM_LAYERS)
             T_profile = xp.ones(len(P_profile)) * temperature
 
         atm_info = self.atm.compute_params(

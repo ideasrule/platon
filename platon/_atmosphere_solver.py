@@ -18,8 +18,7 @@ from .errors import AtmosphereError
 from ._interpolator_3D import regular_grid_interp, interp1d
 
 class AtmosphereSolver:
-    def __init__(self, include_condensation=True, num_profile_heights=100,
-                 ref_pressure=1e5, method='xsec'):
+    def __init__(self, include_condensation=True, ref_pressure=1e5, method='xsec'):
         self.arguments = locals()
         del self.arguments["self"]
 
@@ -68,7 +67,6 @@ class AtmosphereSolver:
         self.min_temperature = max(self.T_grid.min(), self.abundance_getter.min_temperature)
         self.max_temperature = xp.amax(self.T_grid)
 
-        self.num_profile_heights = num_profile_heights
         self.ref_pressure = ref_pressure
         self.method = method
         self._mie_cache = MieCache()

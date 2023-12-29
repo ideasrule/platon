@@ -51,6 +51,23 @@ class FitInfo:
         self.all_params[name] = _GaussianParam(
             mean, std, low_guess, high_guess)
 
+    def add_gases_clr(self, gases, low_lim=1e-12):
+        self.gases = gases
+        self.clr_low_lim = low_lim
+        ln_limit = np.log(np.min(low_lim))
+        n = len(gases)
+        clr_min =  (n-1)/n * (ln_limit + np.log(n-1))
+        clr_max = -(n-1)/n * ln_limit
+        for g in gases[:-1]:
+            self.all_params[f'clr_{g}'] = _Param(0)
+            self.add_uniform_fit_param(f'clr_{g}', clr_min, clr_max)
+
+    def add_gases_vmr(self, gases, low_lim, high_lim):
+        self.gases = gases
+        for g in gases[:-1]:
+            self.all_params[f'log_{g}'] = _Param(np.log10(low_lim))
+            self.add_uniform_fit_param(f'log_{g}', np.log10(low_lim), np.log10(high_lim))
+        
     def _interpret_param_array(self, array):
         if len(array) != len(self.fit_param_names):
             raise ValueException("Fit array invalid")

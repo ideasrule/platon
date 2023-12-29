@@ -1,7 +1,7 @@
-from platon.constants import METRES_TO_UM
 import matplotlib.pyplot as plt
 import numpy as np
 import corner
+from .constants import METRES_TO_UM
 
 class RetrievalResult:
     def __init__(self, results, retrieval_type="dynesty",
@@ -9,7 +9,7 @@ class RetrievalResult:
                  eclipse_bins=None, eclipse_depths=None, eclipse_errors=None,
                  best_fit_transit_depths=None, best_fit_transit_dict=None,
                  best_fit_eclipse_depths=None, best_fit_eclipse_dict=None,
-                 fit_info=None):
+                 fit_info=None, divisors=None, labels=None):
         
         self.retrieval_type = retrieval_type
         self.transit_bins = transit_bins
@@ -41,6 +41,9 @@ class RetrievalResult:
 
         if "logz" in results:
             self.final_logz = results["logz"][-1]
+
+        self.divisors = divisors
+        self.labels = labels
                  
     def __getitem__(self, key):
         return getattr(self, key)
@@ -62,18 +65,21 @@ class RetrievalResult:
 
     def __repr__(self):
         return str(self.__dict__)
-
-    def plot_corner(self, filename="multinest_corner.png"):
+    
+    def plot_corner(self, filename="multinest_corner.png"):       
         plt.clf()
         if self.retrieval_type == "dynesty":
-            fig = corner.corner(self.samples, weights=self.weights,
-                          range=[0.99] * self.samples.shape[1],
-                          labels=self.fit_info.fit_param_names)
+            fig = corner.corner(self.samples/self.divisors,
+                                weights=self.weights,
+                                range=[0.99] * self.samples.shape[1],
+                                labels=self.labels,
+                                smooth=0.8)
             fig.savefig(filename)
         elif self.retrieval_type == "emcee":
-            fig = corner.corner(self.flatchain,
+            fig = corner.corner(self.flatchain / self.divisors,
                                 range=[0.99] * self.flatchain.shape[1],
-                                labels=self.fit_info.fit_param_names)
+                                labels=self.labels,
+                                smooth=0.8)
             fig.savefig(filename)
         else:
             assert(False)
@@ -97,7 +103,7 @@ class RetrievalResult:
                          fmt='.', color='k', label="Observed")
             plt.scatter(METRES_TO_UM * self.transit_wavelengths,
                         self.best_fit_transit_depths,
-                        color='b', label="Calculated (binned)")                        
+                        color='b', label="Calculated (binned)")
                              
             plt.xlabel("Wavelength ($\mu m$)")
             plt.ylabel("Transit depth")

@@ -95,13 +95,12 @@ class CombinedRetriever:
                     fit_info._get("CO_ratio"),
                     10**fit_info._get("log_cloudtop_P"))
 
-
     def _convert_clr_to_vmr(self, clrs):
-        clr_bkg = -xp.sum(clrs)
-        clrs_with_bkg = xp.append(clrs, clr_bkg)
-        geometric_mean = 1 / xp.sum(xp.exp(clrs_with_bkg))
+        clr_bkg = -np.sum(clrs)
+        clrs_with_bkg = np.append(clrs, clr_bkg)
+        geometric_mean = 1 / np.sum(np.exp(clrs_with_bkg))
         vmrs_with_bkg = np.exp(clrs_with_bkg + np.log(geometric_mean))
-        assert(xp.around(xp.sum(vmrs_with_bkg), decimals=5) == 1)
+        assert(np.around(np.sum(vmrs_with_bkg), decimals=5) == 1)
         return vmrs_with_bkg
     
     def _ln_like(self, params, transit_calc, eclipse_calc, fit_info, measured_transit_depths,
@@ -128,16 +127,21 @@ class CombinedRetriever:
         spot_cov_frac = params_dict["spot_cov_frac"]
         frac_scale_height = params_dict["frac_scale_height"]
         number_density = 10.0**params_dict["log_number_density"]
-        part_size = 10.0**params_dict["log_part_size"]
-        P_quench = 10 ** params_dict["log_P_quench"]        
+        part_size = 10.**params_dict["log_part_size"]
+        P_quench = 10.** params_dict["log_P_quench"]
 
-        if params_dict["free_retrieval"]:
-            gases = params_dict["gases"]
-            vmrs = []
-            for gas in gases:
-                vmrs += [10.**params_dict[f'log_{gas}']]
-            vmrs = np.array(vmrs) / np.sum(vmrs)
+        if params_dict["fit_vmr"]:
             assert(logZ is None and CO_ratio is None)
+            gases = fit_info.gases
+            vmrs = [params_dict[f'log_{gas}'] for gas in gases[:-1]]
+            vmrs.append(1 - np.sum(vmrs))
+            if vmrs[-1] < 0: return -np.inf
+        elif params_dict["fit_clr"]:
+            assert(logZ is None and CO_ratio is None)
+            gases = fit_info.gases
+            clrs = [params_dict[f'clr_{gas}'] for gas in gases[:-1]]
+            vmrs = self._convert_clr_to_vmr(clrs)
+            if np.min(vmrs) < fit_info.clr_low_lim: return -np.inf
         else:
             vmrs = None
             gases = None
@@ -146,7 +150,6 @@ class CombinedRetriever:
             ri = params_dict["n"] - 1j * 10**params_dict["log_k"]
         else:
             ri = None
-
             
         if Rs <= 0 or Mp <= 0:
             return -np.inf
@@ -214,7 +217,7 @@ class CombinedRetriever:
         return fit_info._ln_prior(params) + ln_like
 
     
-    
+
     def run_emcee(self, transit_bins, transit_depths, transit_errors,
                   eclipse_bins, eclipse_depths, eclipse_errors,
                   fit_info, nwalkers=50,
@@ -289,11 +292,15 @@ class CombinedRetriever:
         best_params_arr = sampler.flatchain[np.argmax(
             sampler.flatlnprobability)]
         
-        write_param_estimates_file(
-            sampler.flatchain,
-            best_params_arr,
-            np.max(sampler.flatlnprobability),
+        divisors, new_labels = self._get_divisors_labels(
+            np.median(sampler.flatchain, axis=0),
             fit_info.fit_param_names)
+        
+        write_param_estimates_file(
+            sampler.flatchain / divisors,
+            best_params_arr / divisors,
+            np.max(sampler.flatlnprobability),
+            new_labels)
 
         best_fit_transit_depths, best_fit_transit_info, best_fit_eclipse_depths, best_fit_eclipse_info = self._ln_like(
             best_params_arr, transit_calc, eclipse_calc, fit_info,
@@ -310,15 +317,13 @@ class CombinedRetriever:
             eclipse_bins, eclipse_depths, eclipse_errors,
             best_fit_transit_depths, best_fit_transit_info,
             best_fit_eclipse_depths, best_fit_eclipse_info,
-            fit_info)
+            fit_info, divisors, new_labels)
         equal_samples = np.copy(sampler.flatchain)
-        print("equal_samples.shape: {}, num_final_samples: {}".format(equal_samples.shape, num_final_samples))
-        print(equal_samples)
         np.random.shuffle(equal_samples)
         retrieval_result.random_transit_depths = []
         retrieval_result.random_eclipse_depths = []
         retrieval_result.random_TP_profiles = []
-        for params in equal_samples[0:num_final_samples]:
+        for params in equal_samples[:num_final_samples]:
             ret = self._ln_like(
                 params, transit_calc, eclipse_calc, fit_info,
                 transit_depths, transit_errors,
@@ -332,11 +337,33 @@ class CombinedRetriever:
                 retrieval_result.random_eclipse_depths.append(eclipse_info["unbinned_eclipse_depths"])
                 retrieval_result.random_TP_profiles.append(np.array([eclipse_info["P_profile"], eclipse_info["T_profile"]]))
 
-        with open("retrieval_result.pkl", "wb") as f:
-            pickle.dump(retrieval_result, f)
-        
         return retrieval_result
 
+    def _get_divisors_labels(self, medians, labels):
+        divisors = np.ones(len(labels))
+        new_labels = np.copy(labels)
+        
+        for i, l in enumerate(labels):            
+            if l == "Rs":
+                divisors[i] = R_sun
+                new_labels[i] = "R_star/R_sun"
+            if l == "Rp":
+                if medians[i] > 0.5 * R_jup:
+                    divisors[i] = R_jup
+                    new_labels[i] = "R_p/R_j"
+                else:
+                    divisors[i] = R_earth
+                    new_labels[i] = "R_p/R_e"
+            if l == "Mp":
+                if medians[i] > 0.1 * M_jup:
+                    divisors[i] = M_jup
+                    new_labels[i] = "M_p/M_j"
+                else:
+                    divisors[i] = M_earth
+                    new_labels[i] = "M_p/M_e"
+                    
+        return divisors, new_labels
+    
     def run_dynesty(self, transit_bins, transit_depths, transit_errors,
                       eclipse_bins, eclipse_depths, eclipse_errors,
                       fit_info,
@@ -413,21 +440,24 @@ class CombinedRetriever:
                                 update_interval=float(num_dim), nlive=nlive, **dynesty_kwargs)
         sampler.run_nested(maxiter=maxiter, maxcall=maxcall)
         result = CustomDynestyResult(sampler.results)
-        
         result.logp = result.logl + np.array([fit_info._ln_prior(params) for params in result.samples])
         best_params_arr = result.samples[np.argmax(result.logp)]
 
         normalized_weights = np.exp(result.logwt - np.max(result.logwt))
         normalized_weights /= np.sum(normalized_weights)
         result.weights = normalized_weights                                
-
         equal_samples = dynesty.utils.resample_equal(result.samples, result.weights)
         np.random.shuffle(equal_samples)
-        write_param_estimates_file(
-            equal_samples,
-            best_params_arr,
-            np.max(result.logp),
+
+        divisors, new_labels = self._get_divisors_labels(
+            np.median(equal_samples, axis=0),
             fit_info.fit_param_names)
+        
+        write_param_estimates_file(
+            equal_samples / divisors,
+            best_params_arr / divisors,
+            np.max(result.logp),
+            new_labels)
         
         best_fit_transit_depths, best_fit_transit_info, best_fit_eclipse_depths, best_fit_eclipse_info = self._ln_like(
             best_params_arr, transit_calc, eclipse_calc, fit_info,
@@ -440,12 +470,12 @@ class CombinedRetriever:
             eclipse_bins, eclipse_depths, eclipse_errors,
             best_fit_transit_depths, best_fit_transit_info,
             best_fit_eclipse_depths, best_fit_eclipse_info,
-            fit_info)
-        
+            fit_info, divisors, new_labels)
+
         retrieval_result.random_transit_depths = []
         retrieval_result.random_eclipse_depths = []
         retrieval_result.random_TP_profiles = []
-        for params in equal_samples[0:num_final_samples]:
+        for params in equal_samples[:num_final_samples]:
             _, transit_info, _, eclipse_info = self._ln_like(
                 params, transit_calc, eclipse_calc, fit_info,
                 transit_depths, transit_errors,
@@ -456,9 +486,6 @@ class CombinedRetriever:
                 retrieval_result.random_eclipse_depths.append(eclipse_info["unbinned_eclipse_depths"])
                 retrieval_result.random_TP_profiles.append(np.array([eclipse_info["P_profile"], eclipse_info["T_profile"]]))
                     
-        with open("retrieval_result.pkl", "wb") as f:
-            pickle.dump(retrieval_result, f)            
-
         return retrieval_result
 
     @staticmethod
@@ -472,6 +499,7 @@ class CombinedRetriever:
                              n=None, log_k=-np.inf,
                              log_P_quench=-99,
                              wfc3_offset_transit=0, wfc3_offset_eclipse=0,
+                             fit_vmr=False, fit_clr=False,
                              profile_type = 'isothermal', **profile_kwargs):
         '''Get a :class:`.FitInfo` object filled with best guess values.  A few
         parameters are required, but others can be set to default values if you

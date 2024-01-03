@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import corner
 from .constants import METRES_TO_UM
+import matplotlib
 
 class RetrievalResult:
     def __init__(self, results, retrieval_type="dynesty",
@@ -73,19 +74,20 @@ class RetrievalResult:
                                 weights=self.weights,
                                 range=[0.99] * self.samples.shape[1],
                                 labels=self.labels,
-                                smooth=0.8)
+                                smooth=0.8, show_titles=True)
             fig.savefig(filename)
         elif self.retrieval_type == "emcee":
             fig = corner.corner(self.flatchain / self.divisors,
                                 range=[0.99] * self.flatchain.shape[1],
                                 labels=self.labels,
-                                smooth=0.8)
+                                smooth=0.8, show_titles=True)
             fig.savefig(filename)
         else:
             assert(False)
             
     def plot_spectrum(self, prefix="best_fit"):
         plt.clf()
+        N_trans = 0 #will update in the if
         if self.transit_bins is not None:    
             plt.figure(1, figsize=(16,6))
             lower_spectrum = np.percentile(self.random_transit_depths, 16, axis=0)
@@ -97,12 +99,19 @@ class RetrievalResult:
             plt.plot(METRES_TO_UM * self.best_fit_transit_dict["unbinned_wavelengths"],
                      self.best_fit_transit_dict["unbinned_depths"],
                      alpha=0.4, color='r', label="Calculated (unbinned)")
-            plt.errorbar(METRES_TO_UM * self.transit_wavelengths,
-                         self.transit_depths,
-                         yerr = self.transit_errors,
-                         fmt='.', color='k', label="Observed")
+            cmap = plt.cm.get_cmap("viridis")
+            N_trans = len(self.transit_wavelengths)
+            norm = matplotlib.colors.Normalize(vmin=np.min(self.loos[:N_trans]), vmax=np.max(self.loos[:N_trans]))
+            for i in range(N_trans):
+                plt.errorbar(METRES_TO_UM * self.transit_wavelengths[i],
+                             self.transit_depths[i],
+                             yerr = self.transit_errors[i],
+                             fmt='.', color=cmap(norm(self.loos[i])))
+            cbar = plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap),
+                                label="Leave-one-out log predictive density")
+            
             plt.scatter(METRES_TO_UM * self.transit_wavelengths,
-                        self.best_fit_transit_depths,
+                        self.best_fit_transit_depths,                        
                         color='b', label="Calculated (binned)")
                              
             plt.xlabel("Wavelength ($\mu m$)")
@@ -123,10 +132,18 @@ class RetrievalResult:
             plt.plot(METRES_TO_UM * self.best_fit_eclipse_dict["unbinned_wavelengths"],
                      self.best_fit_eclipse_dict["unbinned_eclipse_depths"],
                      alpha=0.4, color='r', label="Calculated (unbinned)")
-            plt.errorbar(METRES_TO_UM * self.eclipse_wavelengths,
-                         self.eclipse_depths,
-                         yerr=self.eclipse_errors,
-                         fmt='.', color='k', label="Observed")
+
+            cmap = plt.cm.get_cmap("viridis")
+            norm = matplotlib.colors.Normalize(vmin=np.min(self.loos[N_trans:]), vmax=np.max(self.loos[N_trans:]))
+            for i in range(len(self.eclipse_bins)):
+                plt.errorbar(METRES_TO_UM * self.eclipse_wavelengths[i],
+                             self.eclipse_depths[i],
+                             yerr=self.eclipse_errors[i],
+                             fmt='.', color=cmap(norm(self.loos[N_trans+i])))
+            
+            cbar = plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap),
+                                label="Leave-one-out log predictive density")
+            
             plt.scatter(METRES_TO_UM * self.eclipse_wavelengths,
                         self.best_fit_eclipse_depths,
                         color='r', label="Calculated (binned)")

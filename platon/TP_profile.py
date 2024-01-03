@@ -11,7 +11,7 @@ class Profile:
     def __init__(self):
         self.pressures = xp.logspace(
                 xp.log10(MIN_P),
-                xp.log10(MIN_P),
+                xp.log10(MAX_P),
                 NUM_LAYERS)
 
     def get_temperatures(self):

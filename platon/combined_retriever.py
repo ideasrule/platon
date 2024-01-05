@@ -137,7 +137,7 @@ class CombinedRetriever:
         if params_dict["fit_vmr"]:
             assert(logZ is None and CO_ratio is None)
             gases = fit_info.gases
-            vmrs = [params_dict[f'log_{gas}'] for gas in gases[:-1]]
+            vmrs = [10.**params_dict[f'log_{gas}'] for gas in gases[:-1]]
             vmrs.append(1 - np.sum(vmrs))
             if vmrs[-1] < 0: return -np.inf
         elif params_dict["fit_clr"]:

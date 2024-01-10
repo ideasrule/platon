@@ -2,6 +2,9 @@ from . import _cupy_numpy as xp
 expn=xp.scipy.special.expn
 import matplotlib.pyplot as plt
 import scipy.special
+from astropy.io import ascii
+import pandas as pd
+from pkg_resources import resource_filename
 
 from .constants import h, c, k_B, R_jup, M_jup, R_sun
 from ._atmosphere_solver import AtmosphereSolver
@@ -28,6 +31,30 @@ class EclipseDepthCalculator:
         self.tau_cache = xp.logspace(-6, 3, 1000)
         self.exp3_cache = expn(3, self.tau_cache)
 
+        #Load surface data
+        self.crust_emission_fluxes = ascii.read(
+            resource_filename(__name__, "data/Crust_EmissionFlux.dat"),
+            delimiter = '\t')
+        self.geo_albedos = pd.read_csv(
+            resource_filename(__name__, "data/new_GeoA.csv"),
+            sep = '\t')
+        self.surface_redist_factors = {'Metal-rich': 0.7, 'Ultramafic': 0.6, 'Feldspathic': 0.572, 'Basaltic': 0.69, 'Granitoid': 0.56, 'Clay': 0.48, 'Ice-rich silicate': 0.66, 'Fe-oxidized': 0.7}
+        
+    def calc_surface_flux(self, surface_type, stellar_flux, a_over_Rs, temperature=None):
+        Ag = xp.interp(self.atm.lambda_grid, xp.array(self.geo_albedos["Wavelength"]), xp.array(self.geo_albedos[surface_type]))
+        if temperature is None:
+            As = 3/2 * xp.median(Ag)
+            redist_factor = self.surface_redist_factors[surface_type]
+            irrad = redist_factor * xp.trapz((1-As) * stellar_flux / a_over_Rs**2, self.atm.lambda_grid)
+            temperature = xp.interp(irrad, xp.array(self.crust_emission_fluxes[surface_type].data), xp.array(self.crust_emission_fluxes['Temperature [K]']))
+        
+        emissivity = 1 - Ag
+        emitted_flux = emissivity * xp.pi * 2 * h * c**2 / self.atm.lambda_grid**5 / xp.expm1(h*c/(self.atm.lambda_grid * k_B * temperature))
+        reflected_flux = Ag * stellar_flux / a_over_Rs**2
+        flux = emitted_flux + reflected_flux
+        return flux
+    
+        
     def _exp3(self, x):
         shape = x.shape
         result = xp.interp(x.flatten(), self.tau_cache, self.exp3_cache,
@@ -102,7 +129,9 @@ class EclipseDepthCalculator:
                        ri = None, frac_scale_height=1,number_density=0,
                        part_size=1e-6, part_size_std=0.5, P_quench=1e-99,
                        stellar_blackbody=False,
-                       full_output=False, zero_opacities=[]):
+                       full_output=False, zero_opacities=[],
+                       surface_type=None, a_over_Rs=None, surface_temp=None, surface_pressure=xp.inf
+                       ):
         '''Most parameters are explained in :func:`~platon.transit_depth_calculator.TransitDepthCalculator.compute_depths`
 
         Parameters
@@ -112,16 +141,18 @@ class EclipseDepthCalculator:
         '''
         T_profile = t_p_profile.temperatures
         P_profile = t_p_profile.pressures
+        bot_pressure = min(cloudtop_pressure, surface_pressure)
+        
         atm_info = self.atm.compute_params(
             star_radius, planet_mass, planet_radius, P_profile, T_profile,
             logZ, CO_ratio, gases, vmrs, add_gas_absorption, add_H_minus_absorption, add_scattering,
             scattering_factor, scattering_slope, scattering_ref_wavelength,
-            add_collisional_absorption, cloudtop_pressure, custom_abundances,
+            add_collisional_absorption, bot_pressure, custom_abundances,
             T_star, T_spot, spot_cov_frac,
             ri, frac_scale_height, number_density, part_size, part_size_std,
             P_quench, zero_opacities=zero_opacities)
 
-        assert(atm_info["P_profile"].max() <= cloudtop_pressure)
+        assert(atm_info["P_profile"].max() <= bot_pressure)
         absorption_coeff = atm_info["absorption_coeff_atm"]
         intermediate_coeff = 0.5 * (absorption_coeff[0:-1] + absorption_coeff[1:])
         intermediate_T = 0.5 * (atm_info["T_profile"][0:-1] + atm_info["T_profile"][1:])
@@ -140,17 +171,24 @@ class EclipseDepthCalculator:
         integrand = planck_function * xp.diff(self._exp3(padded_taus), axis=1)
         fluxes = -2 * xp.pi * xp.sum(integrand, axis=1)
                 
-        if not xp.isinf(cloudtop_pressure):
+        if not xp.isinf(cloudtop_pressure) and cloudtop_pressure < surface_pressure:
             max_taus = taus.max(axis=1)
-            fluxes_from_cloud = -xp.pi * planck_function[:, -1] * (max_taus**2 * -expn(1, max_taus) + max_taus * xp.exp(-max_taus) - xp.exp(-max_taus))
+            fluxes_from_cloud = xp.pi * planck_function[:, -1] * (max_taus**2 * expn(1, max_taus) - max_taus * xp.exp(-max_taus) + xp.exp(-max_taus))
             fluxes += fluxes_from_cloud
 
         stellar_fluxes, _ = self.atm.get_stellar_spectrum(
             lambda_grid, T_star, T_spot, spot_cov_frac, stellar_blackbody)
-
+        if surface_pressure < cloudtop_pressure:
+            surface_flux = self.calc_surface_flux(surface_type, stellar_fluxes, a_over_Rs, surface_temp)
+            max_taus = taus.max(axis=1) #xp.max(taus, axis=1)
+            fluxes += surface_flux * (max_taus**2 * expn(1, max_taus) - max_taus * xp.exp(-max_taus) + xp.exp(-max_taus))
+            #plt.loglog(self.atm.lambda_grid, surface_flux)
+            #plt.figure()
+            #plt.loglog(self.atm.lambda_grid, max_taus)
+            #plt.show()
+        
         photosphere_radii = self._get_photosphere_radii(taus, atm_info["radii"])
         eclipse_depths = fluxes / stellar_fluxes * (photosphere_radii/star_radius)**2
-
         #For correlated k, eclipse_depths has n_gauss points per wavelength, while unbinned_depths has 1 point per wavelength
         unbinned_wavelengths, unbinned_depths, binned_wavelengths, binned_depths = self._get_binned_depths(eclipse_depths, stellar_fluxes)
 

@@ -144,7 +144,7 @@ class AtmosphereSolver:
         k_bf = xp.zeros(len(wavelengths))
         cond = wavelengths < lambda_0
         C = [152.519, 49.534, -118.858, 92.536, -34.194, 4.982]
-        f_lambda = xp.sum([C[i-1] * (1/wavelengths[cond] - 1/lambda_0)**((i-1)/2) for i in range(1,7)], axis=0)
+        f_lambda = xp.sum(xp.array([C[i-1] * (1/wavelengths[cond] - 1/lambda_0)**((i-1)/2) for i in range(1,7)]), axis=0)
         sigma = 1e-18 * wavelengths[cond]**3 * (1 / wavelengths[cond] - 1 / lambda_0)**1.5 * f_lambda
         k_bf[cond] = 0.75 * T**-2.5 * xp.exp(alpha/lambda_0 / T) * (1 - xp.exp(-alpha / wavelengths[cond] / T)) * sigma
 
@@ -173,17 +173,17 @@ class AtmosphereSolver:
             #print(A_mid.shape)
             A_red = xp.array([wavelengths[red]**i for i in (2, 0, -1, -2, -3, -4)]).T
             
-            k_ff[mid] += 1e-29 * (5040/T)**((n+1)/2) * A_mid.dot(ff_matrix_mid[n-1]) #xp.sum(ff_matrix_mid[n-1] * xp.array([wavelength**2, 1, wavelength**-1, wavelength**-2, wavelength**-3, wavelength**-4]))
+            k_ff[mid] += 1e-29 * (5040/T)**((n+1)/2) * A_mid.dot(ff_matrix_mid[n-1])
             k_ff[red] += 1e-29 * (5040/T)**((n+1)/2) * A_red.dot(ff_matrix_red[n-1])
 
         k = k_bf + k_ff
         
-        #1e-4 to convert from cm^4/dyne to m^4/N
-        return k * 1e-4    
+        #1e-3 to convert from cm^4/dyne to m^4/N
+        return k * 1e-3
     
     def _get_H_minus_absorption(self, abundances, P_cond, T_cond):
         absorption_coeff = xp.zeros(
-            (xp.sum(T_cond), xp.sum(P_cond), self.N_lambda))
+            (int(xp.sum(T_cond)), int(xp.sum(P_cond)), self.N_lambda))
         
         valid_Ts = self.T_grid[T_cond]
         trunc_el_abundances = abundances["el"][T_cond][:, P_cond]

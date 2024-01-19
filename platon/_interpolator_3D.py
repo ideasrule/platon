@@ -1,4 +1,5 @@
 from . import _cupy_numpy as xp
+from cupyx.scipy.interpolate import RegularGridInterpolator
 
 def get_condition_array(target_data, interp_data, max_cutoff=xp.inf):
     cond = xp.zeros(len(interp_data), dtype=bool)
@@ -9,7 +10,7 @@ def get_condition_array(target_data, interp_data, max_cutoff=xp.inf):
     for i in range(len(cond)):
         if start_index is None:
             if interp_data[i] > target_data.min():
-                start_index = i-1
+                start_index = max(0, i-1)
             if interp_data[i] == target_data.min():
                 start_index = i
         if end_index is None:
@@ -45,6 +46,10 @@ def interp1d(target_xs, xs, data, assume_sorted=True):
     return result
 
 def regular_grid_interp(ys, xs, data, target_ys, target_xs):
+    '''interpolator = RegularGridInterpolator((ys, xs), data, bounds_error=False)
+    interpolated_value = interpolator((target_ys, target_xs))
+    return interpolated_value'''
+
     isscalar = xp.isscalar(target_ys)
     target_ys = xp.atleast_1d(target_ys)
     target_xs = xp.atleast_1d(target_xs)

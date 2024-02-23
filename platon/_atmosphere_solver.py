@@ -255,16 +255,14 @@ class AtmosphereSolver:
             dense_xs = dense_xs.flatten()
 
             x_hist = np.histogram(xp.cpu(dense_xs), bins='auto')[1]
-            Qext_hist = self._mie_cache.get_and_update(ri, x_hist) 
-            spl = scipy.interpolate.splrep(x_hist, Qext_hist)
-            Qext_intpl = scipy.interpolate.splev(xp.cpu(dense_xs), spl)
-            Qext_intpl = xp.array(xp.reshape(Qext_intpl, (self.N_lambda, len(radii))))
-            
+            Qext_hist = self._mie_cache.get_and_update(ri, x_hist)
+            spl = scipy.interpolate.make_interp_spline(x_hist, Qext_hist)
+            spl = xp.interpolate.BSpline(xp.array(spl.t), xp.array(spl.c), spl.k)           
+            Qext_intpl = spl(dense_xs).reshape((self.N_lambda, len(radii)))
             eff_cross_section = xp.trapz(probs*geometric_cross_section*Qext_intpl, z_scores)
 
-        n = max_number_density * xp.power(self.P_grid[P_cond] / max(self.P_grid[P_cond]), 1.0/frac_scale_height)
+        n = max_number_density * xp.power(self.P_grid[P_cond] / max(self.P_grid[P_cond]), 1.0/frac_scale_height)        
         absorption_coeff = n[xp.newaxis, :, xp.newaxis] * eff_cross_section[xp.newaxis, xp.newaxis, :]
-        
         return absorption_coeff
 
     def _get_above_cloud_profiles(self, P_profile, T_profile, abundances,

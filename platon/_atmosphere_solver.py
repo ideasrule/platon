@@ -3,6 +3,7 @@ import scipy.interpolate
 import matplotlib.pyplot as plt
 
 from pkg_resources import resource_filename
+from ._hist import get_num_bins
 from ._interpolator_3D import interp1d
 from . import _cupy_numpy as xp
 from . import _hydrostatic_solver
@@ -252,13 +253,15 @@ class AtmosphereSolver:
             geometric_cross_section = xp.pi * radii**2
 
             dense_xs = 2*xp.pi*radii[xp.newaxis,:] / self.lambda_grid[:,xp.newaxis]
-            dense_xs = dense_xs.flatten()
+            log_dense_xs = xp.log(dense_xs.flatten())
 
-            x_hist = np.histogram(xp.cpu(dense_xs), bins='auto')[1]
-            Qext_hist = self._mie_cache.get_and_update(ri, x_hist)
-            spl = scipy.interpolate.make_interp_spline(x_hist, Qext_hist)
+            n_bins = get_num_bins(log_dense_xs)
+            log_x_hist = xp.cpu(xp.histogram(log_dense_xs, bins=n_bins)[1])
+            
+            Qext_hist = self._mie_cache.get_and_update(ri, np.exp(log_x_hist))
+            spl = scipy.interpolate.make_interp_spline(log_x_hist, Qext_hist)
             spl = xp.interpolate.BSpline(xp.array(spl.t), xp.array(spl.c), spl.k)           
-            Qext_intpl = spl(dense_xs).reshape((self.N_lambda, len(radii)))
+            Qext_intpl = spl(log_dense_xs).reshape((self.N_lambda, len(radii)))
             eff_cross_section = xp.trapz(probs*geometric_cross_section*Qext_intpl, z_scores)
 
         n = max_number_density * xp.power(self.P_grid[P_cond] / max(self.P_grid[P_cond]), 1.0/frac_scale_height)        

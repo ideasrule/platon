@@ -111,17 +111,18 @@ class Plotter():
         plt.fill_between(METRES_TO_UM * retrieval_result.best_fit_transit_dict["unbinned_wavelengths"],
                             lower_spectrum,
                             upper_spectrum,
-                            color="#f2c8c4")            
+                            color="#f2c8c4", zorder=2)            
         plt.plot(METRES_TO_UM * retrieval_result.best_fit_transit_dict["unbinned_wavelengths"],
-                    retrieval_result.best_fit_transit_dict["unbinned_depths"],
-                    alpha=0.4, color='r', label="Calculated (unbinned)")
+                    retrieval_result.best_fit_transit_dict["unbinned_depths"] * 
+                    retrieval_result.best_fit_transit_dict['unbinned_correction_factors'],
+                    color='r', label="Calculated (unbinned)", zorder=3)
         plt.errorbar(METRES_TO_UM * retrieval_result.transit_wavelengths,
                         retrieval_result.transit_depths,
                         yerr = retrieval_result.transit_errors,
-                        fmt='.', color='k', label="Observed")
+                        fmt='.', color='k', label="Observed", zorder=5)
         plt.scatter(METRES_TO_UM * retrieval_result.transit_wavelengths,
                     retrieval_result.best_fit_transit_depths,
-                    color='b', label="Calculated (binned)")                        
+                    color='b', label="Calculated (binned)", zorder=4)                        
                             
         plt.xlabel("Wavelength ($\mu m$)")
         plt.ylabel("Transit depth")

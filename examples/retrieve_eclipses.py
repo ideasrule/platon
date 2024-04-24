@@ -5,6 +5,7 @@ import pickle
 from platon.fit_info import FitInfo
 from platon.combined_retriever import CombinedRetriever
 from platon.constants import R_sun, R_jup, M_jup, AU
+from platon.plotter import Plotter
 
 #Retrieval on HD 189733b eclipse data
 
@@ -84,8 +85,15 @@ result = retriever.run_multinest(None, None, None,
 with open("example_retrieval_result.pkl", "wb") as f:
     pickle.dump(result, f)
 
+plot_utility = Plotter()
 #Plot the spectrum and save it to best_fit.png
-result.plot_spectrum("best_fit")
+plot_utility.plot_retrieval_eclipse_spectrum(result, prefix='best_fit')
 
 #Plot the 2D posteriors with "corner" package and save it to multinest_corner.png
-result.plot_corner("multinest_corner.png")
+plot_utility.plot_retrieval_corner(result, filename="multinest_corner.png")
+
+#Plot the contribution function
+plot_utility.plot_eclipse_contrib_func(result.best_fit_eclipse_dict, prefix='best_fit')
+
+#Plot the retrieved TP profiles
+plot_utility.plot_retrieval_TP_profiles(result, plot_samples=True, plot_1sigma_bounds=False, prefix='multinest')

@@ -165,7 +165,7 @@ class Plotter():
         plt.tight_layout()
         plt.legend()
         if prefix is not None:
-            plt.savefig(prefix + "eclipse.pdf")
+            plt.savefig(prefix + "_eclipse.pdf")
 
 
     def plot_optical_depth(self, depth_dict, prefix=None):

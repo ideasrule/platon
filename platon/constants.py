@@ -7,6 +7,7 @@ h = 6.62607004e-34
 c = 2.99792458e8
 
 METRES_TO_UM = 1e6
+BAR_TO_PASCALS = 1e5
 
 # GM_sun, Teff_sun, and radii are taken from IAU Resolution B3 on recommended
 # nominal constants (https://arxiv.org/pdf/1510.07674.pdf).  Masses are

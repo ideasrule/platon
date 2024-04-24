@@ -424,7 +424,7 @@ class CombinedRetriever:
                 transit_depths, transit_errors,
                 eclipse_depths, eclipse_errors, ret_best_fit=True)
             if transit_depths is not None:
-                retrieval_result.random_transit_depths.append(transit_info["unbinned_depths"])
+                retrieval_result.random_transit_depths.append(transit_info["unbinned_depths"] * transit_info["unbinned_correction_factors"])
             if eclipse_depths is not None:
                 retrieval_result.random_eclipse_depths.append(eclipse_info["unbinned_eclipse_depths"])
                     

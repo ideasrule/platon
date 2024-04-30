@@ -108,6 +108,7 @@ class RetrievalResult:
                              yerr = self.transit_errors[i],
                              fmt='.', color=cmap(norm(self.loos[i])))
             cbar = plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap),
+                                ax=plt.gca(),
                                 label="Leave-one-out log predictive density")
             
             plt.scatter(METRES_TO_UM * self.transit_wavelengths,
@@ -142,6 +143,7 @@ class RetrievalResult:
                              fmt='.', color=cmap(norm(self.loos[N_trans+i])))
             
             cbar = plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap),
+                                ax=plt.gca(),
                                 label="Leave-one-out log predictive density")
             
             plt.scatter(METRES_TO_UM * self.eclipse_wavelengths,

@@ -9,7 +9,7 @@ def get_condition_array(target_data, interp_data, max_cutoff=xp.inf):
     for i in range(len(cond)):
         if start_index is None:
             if interp_data[i] > target_data.min():
-                start_index = i-1
+                start_index = max(0, i-1)
             if interp_data[i] == target_data.min():
                 start_index = i
         if end_index is None:

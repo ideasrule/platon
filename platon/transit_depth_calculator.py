@@ -298,6 +298,7 @@ class TransitDepthCalculator:
             atm_info["unbinned_depths"] = xp.cpu(unbinned_depths)
             atm_info["unbinned_stellar_spectrum"] = xp.cpu(unbinned_stellar_spectrum)
             atm_info["unbinned_correction_factors"] = xp.cpu(unbinned_correction_factors)
+            atm_info["contrib"] = xp.cpu(absorption_fraction)
             
             for key in atm_info:
                 if type(atm_info[key]) == dict:

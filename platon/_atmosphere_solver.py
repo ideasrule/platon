@@ -50,8 +50,10 @@ class AtmosphereSolver:
             self.stellar_spectrum_mine = None
             if path_to_own_stellar_spectrum is not None:
                 stellar_spectra_mine = pd.read_csv(path_to_own_stellar_spectrum,
-                                                    sep = '\t')
+                                                    )
                 self.stellar_spectrum_mine = stellar_spectra_mine['stellar flux']
+                # self.stellar_spectrum_mine = np.interp(self.lambda_grid, stellar_spectra_mine['wavelength'],
+                #                                        self.stellar_spectrum_mine)
                 
 
         else:

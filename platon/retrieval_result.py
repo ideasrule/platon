@@ -84,6 +84,7 @@ class RetrievalResult:
 
     def plot_corner(self, filename="multinest_corner.png", file_name_vmr = None, truths = None):
         plt.clf()
+        # print(self.retrieval_type)
         if self.retrieval_type == "dynesty":
             new_samples = (self.samples) 
             new_labels = self.fit_info.fit_param_names
@@ -177,3 +178,30 @@ class RetrievalResult:
             plt.savefig(prefix + "_eclipse.png")
             plt.close()
 
+    def plot_residuals(self):
+        plt.figure(2, figsize=(16,6))
+        # lower_spectrum = np.percentile(self.random_eclipse_depths, 16, axis=0)
+        # upper_spectrum = np.percentile(self.random_eclipse_depths, 84, axis=0)
+        # plt.fill_between(METRES_TO_UM * self.best_fit_eclipse_dict["unbinned_wavelengths"],
+        #                     lower_spectrum * 1e6,
+        #                     upper_spectrum * 1e6,
+        #                     color="#f2c8c4")
+        # plt.plot(METRES_TO_UM * self.best_fit_eclipse_dict["unbinned_wavelengths"],
+        #             self.best_fit_eclipse_dict["unbinned_eclipse_depths"] * 1e6,
+        #             alpha=0.4, color='r', label="Calculated (unbinned)")
+        resid = self.eclipse_depths - self.best_fit_eclipse_depths
+        # plt.errorbar(METRES_TO_UM * self.eclipse_wavelengths,
+        #                 self.eclipse_depths * 1e6,
+        #                 yerr=self.eclipse_errors * 1e6,
+        #                 fmt='.', color='k', label="Observed")
+        plt.scatter(METRES_TO_UM * self.eclipse_wavelengths,
+                    resid * 1e6,
+                    color='r', label="Calculated (binned)")
+        plt.legend()
+        plt.xlabel("Wavelength ($\mu m$)")
+        plt.ylabel("Eclipse depth [ppm]")
+        # plt.xscale('log')
+        plt.tight_layout()
+        plt.legend()
+        plt.savefig("residuals.png")
+        plt.close()

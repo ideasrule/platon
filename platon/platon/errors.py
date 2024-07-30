@@ -1,2 +1,0 @@
-class AtmosphereError(Exception):
-    pass

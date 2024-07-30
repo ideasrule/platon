@@ -77,9 +77,9 @@ class _GaussianParam(_Param):
 class _CLRParam(_Param):
     def __init__(self, best_guess, ng, low_lim = None, high_lim = None):
         _Param.__init__(self, best_guess, low_lim, high_lim)
-        self.ppf = dl.load(open('/Users/kimparagas/desktop/jwst_project/clr_stuff/clr_prior_p3.pkl', 'rb')) #this file needs to be uploaded separately (too big for github)
+        self.ppf = dl.load(open('/Users/kimparagas/desktop/research/main/jwst_project/clr_stuff/clr_prior_p3.pkl', 'rb'))
         
-        clr_df = pd.read_csv(f'../data_kim/clr_priors/ng_{ng}_prior.csv',
+        clr_df = pd.read_csv(f'/Users/kimparagas/Desktop/research/main/jwst_project/clr_stuff/clr_priors/ng_{ng}_prior.csv',
              sep = '\t')
         
         self.lower_bin = clr_df['lower bin'].to_numpy()

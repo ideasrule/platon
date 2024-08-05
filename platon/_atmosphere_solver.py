@@ -31,15 +31,14 @@ class AtmosphereSolver:
             method)
 
         self.low_res_lambdas = load_numpy("data/low_res_lambdas.npy")
+        self.stellar_spectra_dict = load_dict_from_pickle("data/stellar_spectra.pkl")                    
         
         if method == "xsec":
             self.lambda_grid = load_numpy("data/wavelengths.npy")
             self.d_ln_lambda = xp.median(xp.diff(xp.log(self.lambda_grid)))
-            self.stellar_spectra_dict = load_dict_from_pickle("data/stellar_spectra.pkl")            
         else:
             self.lambda_grid = load_numpy("data/k_wavelengths.npy")
             self.d_ln_lambda = xp.median(xp.diff(xp.log(xp.unique(self.lambda_grid))))
-            self.stellar_spectra_dict = load_dict_from_pickle("data/k_stellar_spectra.pkl")
 
         self.stellar_spectra_temps = xp.array(self.stellar_spectra_dict["temperatures"])
         self.stellar_spectra = list(self.stellar_spectra_dict["spectra"])

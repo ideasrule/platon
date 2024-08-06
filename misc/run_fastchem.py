@@ -9,11 +9,11 @@ import os.path
 from save_output import saveChemistryOutput, saveMonitorOutput
 
 k_B = 1.38e-16
-T_grid = np.arange(100, 3100, 100)
+T_grid = np.arange(100, 4100, 100)
 P_grid = 10.0**np.arange(-9, 4)
 included_species = ["e-", "H", "H1-", "He", "C", "N", "O", "Na", "Fe", "Ca", "Ti", "K", "Ni", "H2", "N2", "O2", "H1O1",
                     "C1O1", "N1O1", "O1Si1", "O1Ti1", "O1V1", "C1H1N1_1", "C1H4", "C1O2", "H2O1", "H2S1", "H3N1", 
-                    "H3P1", "N1O2", "O2S1", "O3", "C2H2"]
+                    "H3P1", "N1O2", "O2S1", "O3", "C2H2", "Fe1H1"]
 
 def run_for_logZ_CO(params):   
     logZ, CO_ratio = params
@@ -65,7 +65,7 @@ def run_for_logZ_CO(params):
 
     input_data.temperature = T
     input_data.pressure = P
-    input_data.equilibrium_condensation = True
+    input_data.equilibrium_condensation = False #True
 
     fastchem_flag = fastchem.calcDensities(input_data, output_data)
     print("FastChem reports for {}, {}:".format(logZ, CO_ratio), pyfastchem.FASTCHEM_MSG[fastchem_flag])
@@ -89,7 +89,9 @@ reshaped_T = T.reshape((len(T_grid), len(P_grid)))
 reshaped_P = P.reshape((len(T_grid), len(P_grid)))
 
 all_logZ = np.linspace(-2, 3, 51)
-all_CO_ratios = np.array([0.001, 0.01, 0.05, 0.1, 0.2, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 1.0, 1.05, 1.1, 1.2, 1.4, 1.6, 1.8, 2.0])
+all_CO_ratios = np.array([0.001, 0.01, 0.05, 0.1, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.925, 0.95,
+                          0.975,
+                          1.0, 1.025, 1.05, 1.1, 1.2, 1.4, 1.6, 1.8, 2.0])
 abundances = np.zeros((len(all_logZ), len(all_CO_ratios), len(included_species), len(T_grid), len(P_grid)))
 
 logZ_CO_combos = list(itertools.product(all_logZ, all_CO_ratios))

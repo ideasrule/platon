@@ -118,7 +118,7 @@ class EclipseDepthCalculator:
         return result
               
     def compute_depths(self, t_p_profile, star_radius, planet_mass,
-                       planet_radius, T_star, logZ=0, CO_ratio=0.53,
+                       planet_radius, T_star, logZ=0, CO_ratio=0.53, CH4_mult=1,
                        gases=None, vmrs=None,
                        add_gas_absorption=True, add_H_minus_absorption=False,
                        add_scattering=True, scattering_factor=1,
@@ -145,7 +145,7 @@ class EclipseDepthCalculator:
         
         atm_info = self.atm.compute_params(
             star_radius, planet_mass, planet_radius, P_profile, T_profile,
-            logZ, CO_ratio, gases, vmrs, add_gas_absorption, add_H_minus_absorption, add_scattering,
+            logZ, CO_ratio, CH4_mult, gases, vmrs, add_gas_absorption, add_H_minus_absorption, add_scattering,
             scattering_factor, scattering_slope, scattering_ref_wavelength,
             add_collisional_absorption, bot_pressure, custom_abundances,
             T_star, T_spot, spot_cov_frac,

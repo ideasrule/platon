@@ -125,7 +125,7 @@ class TransitDepthCalculator:
         
     
     def compute_depths(self, star_radius, planet_mass, planet_radius,
-                       temperature, logZ=0, CO_ratio=0.53,
+                       temperature, logZ=0, CO_ratio=0.53, CH4_mult=0,
                        gases=None, vmrs=None,
                        add_gas_absorption=True, add_H_minus_absorption=False,
                        add_scattering=True, scattering_factor=1,
@@ -155,6 +155,8 @@ class TransitDepthCalculator:
             Base-10 logarithm of the metallicity, in solar units
         CO_ratio : float, optional
             C/O atomic ratio in the atmosphere.  The solar value is 0.53.
+        CH4_mult : float
+            Multiple applied to equilibrium CH4 abundance, for methane depletion
         add_gas_absorption: float, optional
             Whether gas absorption is accounted for
         add_H_minus_absorption: float, optional
@@ -271,7 +273,7 @@ class TransitDepthCalculator:
 
         atm_info = self.atm.compute_params(
             star_radius, planet_mass, planet_radius, P_profile, T_profile,
-            logZ, CO_ratio, gases, vmrs, add_gas_absorption, add_H_minus_absorption,
+            logZ, CO_ratio, CH4_mult, gases, vmrs, add_gas_absorption, add_H_minus_absorption,
             add_scattering,
             scattering_factor, scattering_slope, scattering_ref_wavelength,
             add_collisional_absorption, cloudtop_pressure, custom_abundances,

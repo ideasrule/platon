@@ -5,13 +5,14 @@ from .constants import METRES_TO_UM
 import matplotlib
 
 class RetrievalResult:
-    def __init__(self, results, retrieval_type="dynesty",
+    def __init__(self, results, retrieval_type, best_fit_params,
                  transit_bins=None, transit_depths=None, transit_errors=None,
                  eclipse_bins=None, eclipse_depths=None, eclipse_errors=None,
                  best_fit_transit_depths=None, best_fit_transit_dict=None,
                  best_fit_eclipse_depths=None, best_fit_eclipse_dict=None,
                  fit_info=None, divisors=None, labels=None):
-        
+
+        self.best_fit_params = best_fit_params
         self.retrieval_type = retrieval_type
         self.transit_bins = transit_bins
         self.transit_depths = transit_depths
@@ -21,6 +22,7 @@ class RetrievalResult:
             transit_bins = np.array(transit_bins)
             self.transit_wavelengths = (transit_bins[:,0] + transit_bins[:,1]) / 2
             self.transit_chi_sqr = np.sum((transit_depths - best_fit_transit_depths)**2 / transit_errors**2)
+            print("Transit chi sqr", self.transit_chi_sqr)
             
         
         self.eclipse_bins = eclipse_bins
@@ -82,6 +84,13 @@ class RetrievalResult:
                                 labels=self.labels,
                                 smooth=0.8, show_titles=True)
             fig.savefig(filename)
+        elif self.retrieval_type == "pymultinest":
+            fig = corner.corner(self.samples/self.divisors,
+                                range=[0.99] * self.samples.shape[1],
+                                labels=self.labels,
+                                smooth=0.8, show_titles=True,
+                                levels=1.0 - np.exp(-0.5 * np.array([1.0, 2.0, 3.0]) ** 2))
+            fig.savefig(filename)
         else:
             assert(False)
             
@@ -101,15 +110,17 @@ class RetrievalResult:
                      alpha=0.4, color='r', label="Calculated (unbinned)")
             cmap = plt.cm.get_cmap("viridis")
             N_trans = len(self.transit_wavelengths)
-            norm = matplotlib.colors.Normalize(vmin=np.min(self.loos[:N_trans]), vmax=np.max(self.loos[:N_trans]))
+            #norm = matplotlib.colors.Normalize(vmin=np.min(self.loos[:N_trans]), vmax=np.max(self.loos[:N_trans]))
             for i in range(N_trans):
                 plt.errorbar(METRES_TO_UM * self.transit_wavelengths[i],
                              self.transit_depths[i],
                              yerr = self.transit_errors[i],
-                             fmt='.', color=cmap(norm(self.loos[i])))
-            cbar = plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap),
-                                ax=plt.gca(),
-                                label="Leave-one-out log predictive density")
+                             fmt='.',
+                             #color=cmap(norm(self.loos[i]))
+                                        )
+            #cbar = plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap),
+            #                    ax=plt.gca(),
+            #                    label="Leave-one-out log predictive density")
             
             plt.scatter(METRES_TO_UM * self.transit_wavelengths,
                         self.best_fit_transit_depths,                        
@@ -135,16 +146,18 @@ class RetrievalResult:
                      alpha=0.4, color='r', label="Calculated (unbinned)")
 
             cmap = plt.cm.get_cmap("viridis")
-            norm = matplotlib.colors.Normalize(vmin=np.min(self.loos[N_trans:]), vmax=np.max(self.loos[N_trans:]))
+            #norm = matplotlib.colors.Normalize(vmin=np.min(self.loos[N_trans:]), vmax=np.max(self.loos[N_trans:]))
             for i in range(len(self.eclipse_bins)):
                 plt.errorbar(METRES_TO_UM * self.eclipse_wavelengths[i],
                              self.eclipse_depths[i],
                              yerr=self.eclipse_errors[i],
-                             fmt='.', color=cmap(norm(self.loos[N_trans+i])))
+                             fmt='.',
+                             #color=cmap(norm(self.loos[N_trans+i]))
+                             )
             
-            cbar = plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap),
-                                ax=plt.gca(),
-                                label="Leave-one-out log predictive density")
+            #cbar = plt.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap),
+            #                    ax=plt.gca(),
+            #                    label="Leave-one-out log predictive density")
             
             plt.scatter(METRES_TO_UM * self.eclipse_wavelengths,
                         self.best_fit_eclipse_depths,

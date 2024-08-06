@@ -289,9 +289,11 @@ class AtmosphereSolver:
             
         return radii, dr, atm_abundances, mu_profile
 
-    def _get_abundances_array(self, logZ, CO_ratio, custom_abundances, gases, vmrs):
+    def _get_abundances_array(self, logZ, CO_ratio, CH4_mult, custom_abundances, gases, vmrs):
         if custom_abundances is None and logZ is not None and CO_ratio is not None:
-            return self.abundance_getter.get(logZ, CO_ratio)
+            abunds = self.abundance_getter.get(logZ, CO_ratio)
+            abunds["CH4"] *= CH4_mult
+            return abunds
 
         if logZ is not None or CO_ratio is not None:
             raise ValueError(
@@ -380,7 +382,7 @@ class AtmosphereSolver:
 
     def compute_params(self, star_radius, planet_mass, planet_radius,
                        P_profile, T_profile,
-                       logZ=0, CO_ratio=0.53,
+                       logZ=0, CO_ratio=0.53, CH4_mult=1,
                        gases=None, vmrs=None,
                        add_gas_absorption=True,
                        add_H_minus_absorption=False,
@@ -396,7 +398,7 @@ class AtmosphereSolver:
         self._validate_params(T_profile, logZ, CO_ratio, cloudtop_pressure)
        
         abundances = self._get_abundances_array(
-            logZ, CO_ratio, custom_abundances, gases, vmrs)
+            logZ, CO_ratio, CH4_mult, custom_abundances, gases, vmrs)
 
         T_quench = xp.interp(xp.log(P_quench), xp.log(P_profile), T_profile)
         for name in abundances:

@@ -15,7 +15,7 @@ def air_to_vac(wavelength):
     wlum = wavelength.to(u.um).value
     return (1 + 1e-6*(287.6155 + 1.62887/wlum**2 + 0.01360/wlum**4)) * wavelength
 
-binned_wavelengths = np.load("../platon/data/k_wavelengths.npy") * u.meter
+binned_wavelengths = np.load("../platon/data/low_res_lambdas.npy") * u.meter
 
 output_spectra = {}
 temps = []
@@ -61,7 +61,8 @@ for temperature in np.arange(2000, 12000, 100):
 
 output_spectra['temperatures'] = np.array(temps)
 output_spectra['spectra'] = np.array(spectra)
-    
-pickle.dump(output_spectra, open("k_stellar_spectra.pkl", "wb"), protocol=pickle.HIGHEST_PROTOCOL)
+
+with open("stellar_spectra.pkl", "wb") as f:
+    pickle.dump(output_spectra, f)
 
     

@@ -70,7 +70,7 @@ class FitInfo:
         
     def _interpret_param_array(self, array):
         if len(array) != len(self.fit_param_names):
-            raise ValueException("Fit array invalid")
+            raise ValueError("Fit array invalid")
 
         result = dict()
         for i, key in enumerate(self.fit_param_names):
@@ -84,7 +84,7 @@ class FitInfo:
 
     def _within_limits(self, array):
         if len(array) != len(self.fit_param_names):
-            raise ValueException("Fit array invalid")
+            raise ValueError("Fit array invalid")
 
         for i, key in enumerate(self.fit_param_names):
             if not self.all_params[key].within_limits(array[i]):

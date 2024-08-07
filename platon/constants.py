@@ -35,3 +35,5 @@ R_sun = 6.957e8
 
 AU = 1.495978707e11
 '''Astronomical unit'''
+
+BAR_TO_PASCALS = 1e5

@@ -347,7 +347,7 @@ class CombinedRetriever:
             _, transit_info, _, eclipse_info = ret
                 
             if transit_depths is not None:
-                retrieval_result.random_transit_depths.append(transit_info["unbinned_depths"])
+                retrieval_result.random_transit_depths.append(transit_info["unbinned_depths"] * transit_info["unbinned_correction_factors"])
             if eclipse_depths is not None:
                 retrieval_result.random_eclipse_depths.append(eclipse_info["unbinned_eclipse_depths"])
                 retrieval_result.random_TP_profiles.append(np.array([eclipse_info["P_profile"], eclipse_info["T_profile"]]))
@@ -505,7 +505,7 @@ class CombinedRetriever:
                 transit_depths, transit_errors,
                 eclipse_depths, eclipse_errors, ret_best_fit=True)
             if transit_depths is not None:
-                retrieval_result.random_transit_depths.append(transit_info["unbinned_depths"])
+                retrieval_result.random_transit_depths.append(transit_info["unbinned_depths"] * transit_info["unbinned_correction_factors"])
             if eclipse_depths is not None:
                 retrieval_result.random_eclipse_depths.append(eclipse_info["unbinned_eclipse_depths"])
                 retrieval_result.random_TP_profiles.append(np.array([eclipse_info["P_profile"], eclipse_info["T_profile"]]))
@@ -563,19 +563,24 @@ class CombinedRetriever:
         result = pymultinest.solve(LogLikelihood=multinest_ln_like, Prior=transform_prior,
                                    n_dims=num_dim, outputfiles_basename=basename, verbose=True, resume=False, n_live_points=nlive)
         a = pymultinest.Analyzer(outputfiles_basename=basename, n_params=num_dim)
+        data = a.get_data()
+        result["samples"] = data[:,2:]
+        result["logp"] = np.log(data[:,0])
+        result["logl"] = -0.5 * data[:,1]
+        best_params_arr = result["samples"][np.argmax(result["logp"])]
+        
         equal_samples = a.get_equal_weighted_posterior()[:,:-1]
         np.random.shuffle(equal_samples)
-        best_params_arr = a.get_best_fit()["parameters"]
         
         divisors, new_labels = self._get_divisors_labels(
             np.median(equal_samples, axis=0),
             fit_info.fit_param_names)
         
-        '''write_param_estimates_file(
+        write_param_estimates_file(
             equal_samples / divisors,
             best_params_arr / divisors,
-            np.max(result.logp),
-            new_labels)'''
+            np.max(result["logp"]),
+            new_labels)
 
         best_fit_transit_depths, best_fit_transit_info, best_fit_eclipse_depths, best_fit_eclipse_info = self._ln_like(
             best_params_arr,
@@ -600,8 +605,8 @@ class CombinedRetriever:
                 params, transit_calc, eclipse_calc, fit_info,
                 transit_depths, transit_errors,
                 eclipse_depths, eclipse_errors, ret_best_fit=True)
-            if transit_depths is not None:
-                retrieval_result.random_transit_depths.append(transit_info["unbinned_depths"])
+            if transit_depths is not None:                                                
+                retrieval_result.random_transit_depths.append(transit_info["unbinned_depths"] * transit_info["unbinned_correction_factors"])
             if eclipse_depths is not None:
                 retrieval_result.random_eclipse_depths.append(eclipse_info["unbinned_eclipse_depths"])
                 retrieval_result.random_TP_profiles.append(np.array([eclipse_info["P_profile"], eclipse_info["T_profile"]]))

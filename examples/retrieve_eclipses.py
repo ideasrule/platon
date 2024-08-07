@@ -5,6 +5,7 @@ import pickle
 from platon.fit_info import FitInfo
 from platon.combined_retriever import CombinedRetriever
 from platon.constants import R_sun, R_jup, M_jup, AU
+from platon.plotter import Plotter
 
 #Retrieval on HD 189733b eclipse data
 
@@ -54,7 +55,8 @@ fit_info = retriever.get_default_fit_info(
     log_scatt_factor=0, scatt_slope=4, error_multiple=1, T_star=T_star,
     a = 0.03142 * AU,
     log_k_th = -2.52, log_gamma=-0.8, log_gamma2=-0.8, alpha=0.5, beta=1,
-    profile_type="radiative_solution" #"isothermal" for isothermal fitting
+    profile_type="radiative_solution", #"isothermal" for isothermal fitting
+    offset_start=0, offset_end=len(wfc3_bins)
     )
 
 #Add fitting parameters - this specifies which parameters you want to fit
@@ -72,7 +74,7 @@ fit_info.add_uniform_fit_param("alpha", 0, 0.5)
 fit_info.add_uniform_fit_param("beta", 0, 2)
 
 #Nuisance parameters
-fit_info.add_gaussian_fit_param("wfc3_offset_eclipse", 39e-6)
+fit_info.add_gaussian_fit_param("offset_eclipse", 39e-6)
 
 #Use Nested Sampling to do the fitting
 result = retriever.run_dynesty(None, None, None,
@@ -84,8 +86,16 @@ result = retriever.run_dynesty(None, None, None,
 with open("example_retrieval_result.pkl", "wb") as f:
     pickle.dump(result, f)
 
+plotter = Plotter()
 #Plot the spectrum and save it to best_fit.png
-result.plot_spectrum("best_fit")
+plotter.plot_retrieval_eclipse_spectrum(result, prefix='best_fit')
 
-#Plot the 2D posteriors with "corner" package and save it to dynesty_corner.png
-result.plot_corner("dynesty_corner.png")
+#Plot the 2D posteriors with "corner" package and save it to multinest_corner.png
+plotter.plot_retrieval_corner(result, filename="dynesty_corner.png")
+
+#Plot the contribution function
+plotter.plot_eclipse_contrib_func(result.best_fit_eclipse_dict, prefix='best_fit')
+
+#Plot the retrieved TP profiles
+plotter.plot_retrieval_TP_profiles(result, plot_samples=True, plot_1sigma_bounds=False, prefix='dynesty')
+

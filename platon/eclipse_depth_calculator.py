@@ -31,26 +31,11 @@ class EclipseDepthCalculator:
         self.tau_cache = xp.logspace(-6, 3, 1000)
         self.exp3_cache = expn(3, self.tau_cache)
 
-        #Load surface data
-        self.crust_emission_fluxes = ascii.read(
-            resource_filename(__name__, "data/Crust_EmissionFlux.dat"),
-            delimiter = '\t')
-        self.geo_albedos = pd.read_csv(
-            resource_filename(__name__, "data/new_GeoA.csv"),
-            sep = '\t')
-        self.surface_redist_factors = {'Metal-rich': 0.7, 'Ultramafic': 0.6, 'Feldspathic': 0.572, 'Basaltic': 0.69, 'Granitoid': 0.56, 'Clay': 0.48, 'Ice-rich silicate': 0.66, 'Fe-oxidized': 0.7}
         
-    def calc_surface_flux(self, surface_type, stellar_flux, a_over_Rs, temperature=None):
-        Ag = xp.interp(self.atm.lambda_grid, xp.array(self.geo_albedos["Wavelength"]), xp.array(self.geo_albedos[surface_type]))
-        if temperature is None:
-            As = 3/2 * xp.median(Ag)
-            redist_factor = self.surface_redist_factors[surface_type]
-            irrad = redist_factor * xp.trapz((1-As) * stellar_flux / a_over_Rs**2, self.atm.lambda_grid)
-            temperature = xp.interp(irrad, xp.array(self.crust_emission_fluxes[surface_type].data), xp.array(self.crust_emission_fluxes['Temperature [K]']))
-        
-        emissivity = 1 - Ag
+    def calc_surface_flux(self, surface_type, stellar_flux, a_over_Rs, temperature):
+        emissivity = 1 #Support for wavelength-dependent emissivities coming soon!
         emitted_flux = emissivity * xp.pi * 2 * h * c**2 / self.atm.lambda_grid**5 / xp.expm1(h*c/(self.atm.lambda_grid * k_B * temperature))
-        reflected_flux = Ag * stellar_flux / a_over_Rs**2
+        reflected_flux = 0 #Support for wavelength-dependent reflection coming soon!
         flux = emitted_flux + reflected_flux
         return flux
     

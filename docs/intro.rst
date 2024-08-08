@@ -24,5 +24,5 @@ sampling.  The speed of these retrievals is highly dependent on the wavelength
 range, data precision, prior ranges, opacity resolution, and number of live points (nested sampling)
 or iterations/walkers (MCMC).  A very rough guideline is that a retrieval with
 250 live points and R=20k for
-STIS + WFC3 + IRAC 3.6 um + IRAC 4.5 um data takes 1 hour 15 min.  There are a variety of ways to speed up the retrieval, as
+STIS + WFC3 + IRAC 3.6 um + IRAC 4.5 um data takes 19 minutes with multinest, or 75 minutes with dynesty.  There are a variety of ways to speed up the retrieval, as
 described on the Q&A page. 

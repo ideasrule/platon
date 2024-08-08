@@ -8,11 +8,10 @@ in that order.
 * **What physics does PLATON take into account?**
 
   We account for gas absorption, collisional absorption, an opaque
-  cloud deck, and scattering with user-specified slope and amplitude
-  (or Rayleigh, if not specified).  H- bound-free and free-free absorption
-  is not enabled by default, but can be turned on by passing add_H_minus_absorption=True to compute_depths.  34 chemical species are included
+  cloud deck, Rayleigh scattering, and haze scattering--either a user-specified slope and amplitude, or Mie scattering.  H- bound-free and free-free absorption
+  is not enabled by default, but can be turned on by passing add_H_minus_absorption=True to compute_depths.  35 chemical species are included
   in our calculations, namely the ones listed in data/species_info.
-  The abundances of these species were calculated using GGchem for a
+  The abundances of these species were calculated using FastChem for a
   grid of metallicity, C/O ratio, temperature, and pressure, assuming
   equilibrium chemistry with or without condensation.  Condensation can be
   toggled using include_condensation=True/False.  Metallicity ranges from 10^-2 to 10^3 times solar, C/O

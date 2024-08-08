@@ -5,18 +5,18 @@ if FORCE_CPU:
     from numpy import *
     import scipy
     import scipy.special
-    from scipy import interpolate
+    from scipy import interpolate, ndimage
 else:
     try:
         from cupy import *
         from cupyx import scipy
-        from cupyx.scipy import interpolate
+        from cupyx.scipy import interpolate, ndimage
     except:
         print("cupy not found. Disabling GPU acceleration")
         from numpy import *
         import scipy
         import scipy.special
-        from scipy import interpolate
+        from scipy import interpolate, ndimage
 
 def cpu(arr):
     try:

@@ -73,6 +73,9 @@ class AtmosphereSolver:
 
         self.all_cross_secs = load_dict_from_pickle("data/all_cross_secs.pkl")
         self.all_radii = load_numpy("data/mie_radii.npy")
+        diffs = np.diff(np.log(self.all_radii))
+        self.d_ln_radii = np.median(diffs)
+        assert(np.allclose(diffs, self.d_ln_radii))
 
     def get_lambda_grid(self):
         return xp.cpu(self.lambda_grid)
@@ -238,10 +241,15 @@ class AtmosphereSolver:
                                        frac_scale_height, max_number_density,
                                        sigma = 0.5, max_zscore = 5, num_integral_points = 100):
         if isinstance(ri, str):
+            kernel = sigma / self.d_ln_radii
+            cross_secs = xp.ndimage.gaussian_filter(self.all_cross_secs[ri], kernel)
+            if part_size < self.all_radii[3*int(kernel)] or part_size > self.all_radii[-3*int(kernel)]:
+                raise ValueError("part_size out of bounds: {} m".format(part_size))
+            
             eff_cross_section = xp.interp(
                 self.lambda_grid,
                 self.low_res_lambdas,
-                interp1d(part_size, self.all_radii, self.all_cross_secs[ri].T))
+                interp1d(part_size, self.all_radii, cross_secs.T))
         else:
             eff_cross_section = xp.zeros(self.N_lambda)
             z_scores = -xp.logspace(xp.log10(0.1), xp.log10(max_zscore), int(num_integral_points/2))

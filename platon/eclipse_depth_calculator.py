@@ -11,7 +11,7 @@ from ._atmosphere_solver import AtmosphereSolver
 from ._interpolator_3D import interp1d, regular_grid_interp
 
 class EclipseDepthCalculator:
-    def __init__(self, include_condensation=True, method="xsec"):
+    def __init__(self, include_condensation=True, method="xsec", include_opacities=["CH4", "CO2", "CO", "H2O", "H2S", "HCN", "K", "Na", "NH3", "SO2", "TiO", "VO"], downsample=1):
         '''
         All physical parameters are in SI.
 
@@ -27,12 +27,15 @@ class EclipseDepthCalculator:
         method : string
             "xsec" for opacity sampling, "ktables" for correlated k
         '''
-        self.atm = AtmosphereSolver(include_condensation=include_condensation, method=method)
+        self.atm = AtmosphereSolver(include_condensation, method=method, include_opacities=include_opacities, downsample=downsample)
         self.tau_cache = xp.logspace(-6, 3, 1000)
         self.exp3_cache = expn(3, self.tau_cache)
 
         
     def calc_surface_flux(self, surface_type, stellar_flux, a_over_Rs, temperature):
+        if surface_type is not None:
+            raise NotImplementedError("Non-blackbody surfaces coming soon!")
+        
         emissivity = 1 #Support for wavelength-dependent emissivities coming soon!
         emitted_flux = emissivity * xp.pi * 2 * h * c**2 / self.atm.lambda_grid**5 / xp.expm1(h*c/(self.atm.lambda_grid * k_B * temperature))
         reflected_flux = 0 #Support for wavelength-dependent reflection coming soon!
@@ -165,12 +168,8 @@ class EclipseDepthCalculator:
             lambda_grid, T_star, T_spot, spot_cov_frac, stellar_blackbody)
         if surface_pressure < cloudtop_pressure:
             surface_flux = self.calc_surface_flux(surface_type, stellar_fluxes, a_over_Rs, surface_temp)
-            max_taus = taus.max(axis=1) #xp.max(taus, axis=1)
+            max_taus = taus.max(axis=1)
             fluxes += surface_flux * (max_taus**2 * expn(1, max_taus) - max_taus * xp.exp(-max_taus) + xp.exp(-max_taus))
-            #plt.loglog(self.atm.lambda_grid, surface_flux)
-            #plt.figure()
-            #plt.loglog(self.atm.lambda_grid, max_taus)
-            #plt.show()
         
         photosphere_radii = self._get_photosphere_radii(taus, atm_info["radii"])
         eclipse_depths = fluxes / stellar_fluxes * (photosphere_radii/star_radius)**2

@@ -18,7 +18,7 @@ from .params import NUM_LAYERS
 
 
 class TransitDepthCalculator:
-    def __init__(self, include_condensation=True, ref_pressure=1e5, method='xsec'):
+    def __init__(self, include_condensation=True, ref_pressure=1e5, method='xsec', include_opacities=["CH4", "CO2", "CO", "H2O", "H2S", "HCN", "K", "Na", "NH3", "SO2", "TiO", "VO"], downsample=1):
         '''
         All physical parameters are in SI.
 
@@ -32,7 +32,7 @@ class TransitDepthCalculator:
         method : string
             "xsec" for opacity sampling, "ktables" for correlated k
         '''
-        self.atm = AtmosphereSolver(include_condensation, ref_pressure, method)               
+        self.atm = AtmosphereSolver(include_condensation, ref_pressure, method, include_opacities, downsample)
 
     def change_wavelength_bins(self, bins):
         """Specify wavelength bins, instead of using the full wavelength grid

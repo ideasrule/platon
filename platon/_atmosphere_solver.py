@@ -19,7 +19,7 @@ from .errors import AtmosphereError
 from ._interpolator_3D import regular_grid_interp, interp1d
 
 class AtmosphereSolver:
-    def __init__(self, include_condensation=True, ref_pressure=1e5, method='xsec'):
+    def __init__(self, include_condensation=True, ref_pressure=1e5, method='xsec', include_opacities=[], downsample=1):
         self.arguments = locals()
         del self.arguments["self"]
 
@@ -28,13 +28,13 @@ class AtmosphereSolver:
         self.absorption_data, self.mass_data, self.polarizability_data = read_species_data(
             resource_filename(__name__, "data/Absorption"),
             resource_filename(__name__, "data/species_info"),
-            method)
+            method, include_opacities, downsample)
 
         self.low_res_lambdas = load_numpy("data/low_res_lambdas.npy")
         self.stellar_spectra_dict = load_dict_from_pickle("data/stellar_spectra.pkl")                    
         
         if method == "xsec":
-            self.lambda_grid = load_numpy("data/wavelengths.npy")
+            self.lambda_grid = xp.copy(load_numpy("data/wavelengths.npy")[::downsample])
             self.d_ln_lambda = xp.median(xp.diff(xp.log(self.lambda_grid)))
         else:
             self.lambda_grid = load_numpy("data/k_wavelengths.npy")

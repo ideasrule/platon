@@ -24,11 +24,10 @@ their actual, wavelength-dependent refractive indices, assuming a standard
 deviation in the lognormal size distribution of 0.5::
 
   calculator.compute_depths(Rs, Mp, Rp, T,
-      ri = "TiO2", frac_scale_height = 0.5, number_density = 1e9,
+      ri = "TiO2_anatase", frac_scale_height = 0.5, number_density = 1e9,
       part_size = 1e-6, cloudtop_pressure=1e5)
 
-The supported species are MgSiO3_sol, SiO2_amorph, and TiO2, using the
-refractive index data of `Kitzmann et al 2017 <https://arxiv.org/abs/1710.04946>`_.
+The supported species are those with `data in LX-MIE <https://github.com/NewStrangeWorlds/LX-MIE/tree/master/compilation>`, with the exception of Fe2SiO4 and MgAl2O4 (which do not have refractive index data all the way to 0.2 um).  
 
 To retrieve Mie scattering parameters, make sure to set log_scatt_factor to 0,
 and log_number_density to a finite value.  n and log_k specify the real component and log10 of the imaginary component of the complex refractive index.  We recommend fixing at least n.  Example::

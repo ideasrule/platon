@@ -150,7 +150,6 @@ class CombinedRetriever:
         else:
             vmrs = None
             gases = None
-        
         if "n" in params_dict and params_dict["n"] is not None and "log_k" in params_dict:
             ri = params_dict["n"] - 1j * 10**params_dict["log_k"]
         else:
@@ -224,12 +223,18 @@ class CombinedRetriever:
                  measured_transit_errors, measured_eclipse_depths,
                  measured_eclipse_errors, zero_opacities=[]):
         
-        ln_like = self._ln_like(params, transit_calc, eclipse_calc, fit_info, measured_transit_depths,
+        lnlike_per_point = self._ln_like(params, transit_calc, eclipse_calc, fit_info, measured_transit_depths,
                                 measured_transit_errors, measured_eclipse_depths,
-                                measured_eclipse_errors, zero_opacities=zero_opacities)
+                                measured_eclipse_errors, zero_opacities=zero_opacities, lnlike_per_point=True)
+        
+        if not np.isscalar(lnlike_per_point):
+            ln_like = lnlike_per_point.sum()
+        else:
+            assert(lnlike_per_point == -np.inf)
+            ln_like = -np.inf
+
         return fit_info._ln_prior(params) + ln_like
 
-    
 
     def run_emcee(self, transit_bins, transit_depths, transit_errors,
                   eclipse_bins, eclipse_depths, eclipse_errors,
@@ -318,7 +323,7 @@ class CombinedRetriever:
         best_fit_transit_depths, best_fit_transit_info, best_fit_eclipse_depths, best_fit_eclipse_info = self._ln_like(
             best_params_arr, transit_calc, eclipse_calc, fit_info,
             transit_depths, transit_errors,
-            eclipse_depths, eclipse_errors, zero_opacities, ret_best_fit=True)
+            eclipse_depths, eclipse_errors, zero_opacities=zero_opacities, ret_best_fit=True)
         retrieval_result = RetrievalResult(
             {"best_fit_params": best_params_arr,
                 "acceptance_fraction": sampler.acceptance_fraction,
@@ -326,7 +331,7 @@ class CombinedRetriever:
              "flatchain": sampler.flatchain,
              "lnprobability": sampler.lnprobability,
              "flatlnprobability": sampler.flatlnprobability},             
-            "emcee",
+            "emcee", best_params_arr,
             transit_bins, transit_depths, transit_errors,
             eclipse_bins, eclipse_depths, eclipse_errors,
             best_fit_transit_depths, best_fit_transit_info,
@@ -352,7 +357,6 @@ class CombinedRetriever:
                 retrieval_result.random_eclipse_depths.append(eclipse_info["unbinned_eclipse_depths"])
                 retrieval_result.random_TP_profiles.append(np.array([eclipse_info["P_profile"], eclipse_info["T_profile"]]))
             retrieval_result.pointwise_lnlikes.append(self.params_to_lnlike[tuple(params)])
-            
         retrieval_result.loo_total, retrieval_result.loos, retrieval_result.loo_ks = psisloo(np.array(retrieval_result.pointwise_lnlikes))
         return retrieval_result
 

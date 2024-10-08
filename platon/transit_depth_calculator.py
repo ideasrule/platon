@@ -125,7 +125,7 @@ class TransitDepthCalculator:
         
     
     def compute_depths(self, star_radius, planet_mass, planet_radius,
-                       temperature, logZ=0, CO_ratio=0.53, CH4_mult=0,
+                       temperature, logZ=0, CO_ratio=0.53, CH4_mult=1,
                        gases=None, vmrs=None,
                        add_gas_absorption=True, add_H_minus_absorption=False,
                        add_scattering=True, scattering_factor=1,

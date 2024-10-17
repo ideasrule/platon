@@ -204,7 +204,7 @@ class CombinedRetriever:
                 ln_likelihood = np.append(ln_likelihood, -0.5 * (residuals**2 / scaled_errors**2 + np.log(2 * np.pi * scaled_errors**2)))
 
         except AtmosphereError as e:
-           return -np.inf
+            return -np.inf
         
         self.last_params = params
         self.last_lnprob = fit_info._ln_prior(params) + ln_likelihood.sum()
@@ -575,6 +575,7 @@ class CombinedRetriever:
         
         equal_samples = a.get_equal_weighted_posterior()[:,:-1]
         np.random.shuffle(equal_samples)
+        result["equal_samples"] = equal_samples[:,:-1]
         
         divisors, new_labels = self._get_divisors_labels(
             np.median(equal_samples, axis=0),

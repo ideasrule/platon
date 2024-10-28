@@ -35,6 +35,8 @@ class Profile:
                                         
         
     def set_from_arrays(self, P_profile, T_profile):
+        P_profile = xp.array(P_profile)
+        T_profile = xp.array(T_profile)
         self.temperatures = xp.interp(xp.log10(self.pressures), xp.log10(P_profile), T_profile)
 
     def set_isothermal(self, T_day):

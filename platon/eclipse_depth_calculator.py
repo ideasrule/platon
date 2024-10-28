@@ -11,7 +11,8 @@ from ._atmosphere_solver import AtmosphereSolver
 from ._interpolator_3D import interp1d, regular_grid_interp
 
 class EclipseDepthCalculator:
-    def __init__(self, include_condensation=True, method="xsec", include_opacities=["CH4", "CO2", "CO", "H2O", "H2S", "HCN", "K", "Na", "NH3", "SO2", "TiO", "VO"], downsample=1):
+    def __init__(self, include_condensation=True, method="xsec", include_opacities=["CH4", "CO2", "CO", "H2O", "H2S", "HCN", "K", "Na", "NH3", "SO2", "TiO", "VO"], downsample=1,
+                 surface_library="Paragas"):
         '''
         All physical parameters are in SI.
 
@@ -30,18 +31,35 @@ class EclipseDepthCalculator:
         self.atm = AtmosphereSolver(include_condensation, method=method, include_opacities=include_opacities, downsample=downsample)
         self.tau_cache = xp.logspace(-6, 3, 1000)
         self.exp3_cache = expn(3, self.tau_cache)
+        self.surface_library = surface_library
+        
+        if surface_library not in ["HES2012", "Paragas"]:
+            raise ValueError("The only surface libraries available are HES2012 and Paragas")
+        self.hemi_refls = pd.read_csv(resource_filename(__name__, f"data/{surface_library}/hemi_refls.csv"))
+        self.crust_emission_flux = ascii.read(resource_filename(__name__, f"data/{surface_library}/Crust_EmissionFlux.dat"), delimiter="\t")
+        if surface_library == "HES2012":
+            self.redist_factors = {'Metal-rich': 0.6052, 'Ultramafic': 0.5532, 'Feldspathic': 0.5414,
+                        'Basaltic': 0.6004, 'Granitoid': 0.5290, 'Clay': 0.5, 'Ice-rich silicate': 0.5,
+                        'Fe-oxidized': 0.5978}
+        else:
+            df = pd.read_csv(resource_filename(__name__, f"data/{surface_library}/f_relation_new_samples.csv"))
+            self.redist_factors = {col: df[col][0] for col in df.columns}
+        
+        
+    def calc_surface_flux(self, surface_type, stellar_fluxes, Rp_over_Rs, a_over_Rs, temperature=None):
+        if temperature is None:
+            irrad = self.redist_factors[surface_type] * xp.trapz(stellar_fluxes / a_over_Rs**2, self.atm.lambda_grid)
+            if irrad < self.crust_emission_flux[surface_type].data[0] or irrad > self.crust_emission_flux[surface_type].data[-1]:
+                raise ValueError("Cannot compute surface temperature because irradiation is out of range of the data files")
+            
+            temperature = xp.interp(irrad, xp.array(self.crust_emission_flux[surface_type].data), xp.array(self.crust_emission_flux["Temperature [K]"]))
 
-        
-    def calc_surface_flux(self, surface_type, stellar_flux, a_over_Rs, temperature):
-        if surface_type is not None:
-            raise NotImplementedError("Non-blackbody surfaces coming soon!")
-        
-        emissivity = 1 #Support for wavelength-dependent emissivities coming soon!
-        emitted_flux = emissivity * xp.pi * 2 * h * c**2 / self.atm.lambda_grid**5 / xp.expm1(h*c/(self.atm.lambda_grid * k_B * temperature))
-        reflected_flux = 0 #Support for wavelength-dependent reflection coming soon!
-        flux = emitted_flux + reflected_flux
-        return flux
-    
+        hemi_reflectance = xp.interp(self.atm.lambda_grid, xp.array(self.hemi_refls["Wavelength"]), xp.array(self.hemi_refls[surface_type]))
+        directional_emissivity = 1 - hemi_reflectance
+        emitted_fluxes = directional_emissivity * xp.pi * 2 * h * c**2 / self.atm.lambda_grid**5 / xp.expm1(h*c/(self.atm.lambda_grid * k_B * temperature))
+        reflected_fluxes = stellar_fluxes  / a_over_Rs**2 * hemi_reflectance
+        fluxes = emitted_fluxes + reflected_fluxes
+        return fluxes
         
     def _exp3(self, x):
         shape = x.shape
@@ -118,7 +136,7 @@ class EclipseDepthCalculator:
                        part_size=1e-6, part_size_std=0.5, P_quench=1e-99,
                        stellar_blackbody=False,
                        full_output=False, zero_opacities=[],
-                       surface_type=None, a_over_Rs=None, surface_temp=None, surface_pressure=xp.inf
+                       surface_type=None, semimajor_axis=None, surface_temp=None, surface_pressure=xp.inf
                        ):
         '''Most parameters are explained in :func:`~platon.transit_depth_calculator.TransitDepthCalculator.compute_depths`
 
@@ -167,7 +185,7 @@ class EclipseDepthCalculator:
         stellar_fluxes, _ = self.atm.get_stellar_spectrum(
             lambda_grid, T_star, T_spot, spot_cov_frac, stellar_blackbody)
         if surface_pressure < cloudtop_pressure:
-            surface_flux = self.calc_surface_flux(surface_type, stellar_fluxes, a_over_Rs, surface_temp)
+            surface_flux = self.calc_surface_flux(surface_type, stellar_fluxes, planet_radius / star_radius, semimajor_axis / star_radius, surface_temp)
             max_taus = taus.max(axis=1)
             fluxes += surface_flux * (max_taus**2 * expn(1, max_taus) - max_taus * xp.exp(-max_taus) + xp.exp(-max_taus))
         

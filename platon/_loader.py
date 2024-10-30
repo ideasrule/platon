@@ -1,10 +1,14 @@
 import pickle
-import numpy as np
+from . import _cupy_numpy as xp
 from pkg_resources import resource_filename
 
 def load_dict_from_pickle(filename):
     with open(resource_filename(__name__, filename), "rb") as f:
-        return pickle.load(f, encoding="latin1")
-        
+        dictionary = pickle.load(f, encoding="latin1")
+        for key in dictionary:
+            dictionary[key] = xp.array(dictionary[key])
+
+        return dictionary
+    
 def load_numpy(filename):
-    return np.load(resource_filename(__name__, filename))
+    return xp.load(resource_filename(__name__, filename))

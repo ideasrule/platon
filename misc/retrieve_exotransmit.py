@@ -52,7 +52,7 @@ fit_info.add_fit_param('error_multiple', 0.1, 10, 0, np.inf)
 errors = np.random.normal(scale=50e-6, size=len(mean_depths))
 mean_depths += errors
 
-result = retriever.run_multinest(wavelength_bins, mean_depths, errors, fit_info)
+result = retriever.run_dynesty(wavelength_bins, mean_depths, errors, fit_info)
 np.save("samples.npy", result.samples)
 np.save("weights.npy", result.weights)
 np.save("logl.npy", result.logl)

@@ -40,7 +40,7 @@ fit_info = retriever.get_default_fit_info(Rs, g, 0.99*Rp, 0.9*temperature, logZ=
 errors = np.random.normal(scale=50e-6, size=len(transit_depths))
 transit_depths += errors
 
-result = retriever.run_multinest(wavelength_bins, transit_depths, errors, fit_info)
+result = retriever.run_dynesty(wavelength_bins, transit_depths, errors, fit_info)
 np.save("samples.npy", result.samples)
 np.save("weights.npy", result.weights)
 np.save("logl.npy", result.logl)

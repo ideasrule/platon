@@ -25,10 +25,13 @@ Then, call the eclipse depth calculator::
 
   from platon.eclipse_depth_calculator import EclipseDepthCalculator
   calc = EclipseDepthCalculator(method="xsec") #"ktables" for correlated k
-  wavelengths, depths = calc.compute_depths(p, Rs, Mp, Rp, Tstar)
+  wavelengths, depths, _ = calc.compute_depths(p, Rs, Mp, Rp, Tstar)
   
 Most of the same parameters accepted by the transit depth calculator are also
-accepted by the eclipse depth calculator.
+accepted by the eclipse depth calculator.  Surface emission can be included by
+passing surface_temp.  Only blackbody emission is supported at the moment, but
+non-blackbody emissivities (from new, state of the art lab data!) will be
+included in the next release (Paragas et al. 2024, in prep).
 
 It is also possible to retrieve on combined transit and eclipse depths::
 
@@ -41,7 +44,7 @@ It is also possible to retrieve on combined transit and eclipse depths::
   fit_info.add_uniform_fit_param(...)
   fit_info.add_uniform_fit_param(...)
 
-  result = retriever.run_multinest(transit_bins, transit_depths, transit_errors,
+  result = retriever.run_dynesty(transit_bins, transit_depths, transit_errors,
                                    eclipse_bins, eclipse_depths, eclipse_errors,
 				   fit_info,
 				   rad_method="xsec") #"ktables" for corr-k
@@ -50,4 +53,3 @@ Here, T_limb is the temperature at the planetary limb (used for transit depths),
 while the T-P profile parameters are for the dayside (used for eclipse depths).
 
 To do an eclipse-only retrieval, set transit_bins, transit_depths, and transit_errors to None, and likewise to do a transit-only retrieval.
-

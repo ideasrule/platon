@@ -82,28 +82,25 @@ fit_info = retriever.get_default_fit_info(
 fit_info.add_gaussian_fit_param('Rs', 0.02*R_sun)
 fit_info.add_gaussian_fit_param('Mp', 0.04*M_jup)
 
-# Here, emcee is initialized with walkers where R is between 0.9*R_guess and
-# 1.1*R_guess.  However, the hard limit on R is from 0 to infinity.
-fit_info.add_uniform_fit_param('Rp', 0, np.inf, 0.9*R_guess, 1.1*R_guess)
-
-fit_info.add_uniform_fit_param('T', 300, 3000, 0.5*T_guess, 1.5*T_guess)
-fit_info.add_uniform_fit_param("log_scatt_factor", 0, 5, 0, 1)
+fit_info.add_uniform_fit_param('Rp', 0.9*R_guess, 1.1*R_guess)
+fit_info.add_uniform_fit_param('T', 0.5*T_guess, 1.5*T_guess)
+fit_info.add_uniform_fit_param("log_scatt_factor", 0, 1)
 fit_info.add_uniform_fit_param("logZ", -1, 3)
 fit_info.add_uniform_fit_param("log_cloudtop_P", -0.99, 5)
-fit_info.add_uniform_fit_param("error_multiple", 0, np.inf, 0.5, 5)
+fit_info.add_uniform_fit_param("error_multiple", 0.5, 5)
 
 #Use Nested Sampling to do the fitting
-result = retriever.run_emcee(bins, depths, errors,
-                             None, None, None,
-                             fit_info,
-                             rad_method="xsec" #"ktables" for corr-k
-)
-
+result = retriever.run_dynesty(bins, depths, errors,
+                                 None, None, None,
+                                 fit_info,
+                                 sample="rwalk",
+                                 rad_method="xsec") #"ktables" to use corr-k
 with open("example_retrieval_result.pkl", "wb") as f:
     pickle.dump(result, f)
 
-#Useful members: result.chain, result.lnprobability, result.flatchain, result.flatlnprobability
+#Useful members: result.samples, result.weights, result.logl, result.logp    
 
+#Plot the spectrum and save it to best_fit.png
 plotter = Plotter()
 plotter.plot_retrieval_transit_spectrum(result, prefix="best_fit")
-plotter.plot_retrieval_corner(result, filename="emcee_corner.png")
+plotter.plot_retrieval_corner(result, filename="dynesty_corner.png")

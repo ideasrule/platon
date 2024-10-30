@@ -11,9 +11,9 @@ Rp = 1.40 * R_jup      #Radius of planet
 T = 1200              #Temperature of isothermal part of the atmosphere
 
 #create a TransitDepthCalculator object and compute wavelength dependent transit depths
-depth_calculator = TransitDepthCalculator(method="ktables") #put "xsec" for opacity sampling
-wavelengths, transit_depths = depth_calculator.compute_depths(
-    Rs, Mp, Rp, T, CO_ratio=0.2, cloudtop_pressure=1e4)
+depth_calculator = TransitDepthCalculator()
+wavelengths, transit_depths, _ = depth_calculator.compute_depths(
+    Rs, Mp, Rp, T, logZ=0, CO_ratio=0.5, cloudtop_pressure=1e4)
 
 
 # Uncomment the code below to print
@@ -24,7 +24,7 @@ wavelengths, transit_depths = depth_calculator.compute_depths(
 
 # Uncomment the code below to plot
 
-#plt.semilogx(1e6*wavelengths, transit_depths)
-#plt.xlabel("Wavelength (um)")
-#plt.ylabel("Transit depth")
-#plt.show()
+plt.semilogx(1e6*wavelengths, transit_depths)
+plt.xlabel("Wavelength (um)")
+plt.ylabel("Transit depth")
+plt.show()

@@ -73,21 +73,21 @@ class TestRetriever(unittest.TestCase):
     def test_multinest(self):
         self.initialize(False)
         retriever = CombinedRetriever()
-        result = retriever.run_multinest(self.wavelength_bins, self.depths, self.errors, None, None, None, self.fit_info, maxcall=200, include_condensation=False, num_final_samples=20)
+        result = retriever.run_dynesty(self.wavelength_bins, self.depths, self.errors, None, None, None, self.fit_info, maxcall=200, include_condensation=False, num_final_samples=20)
         result.plot_spectrum("test_plot")
         
         self.assertTrue(isinstance(result, RetrievalResult))
         self.assertEqual(result.samples.shape[1], len(self.fit_info.fit_param_names))
 
         retriever = CombinedRetriever()
-        retriever.run_multinest(self.wavelength_bins, self.depths, self.errors,
+        retriever.run_dynesty(self.wavelength_bins, self.depths, self.errors,
                                 None, None, None, self.fit_info, maxiter=20,
                                 include_condensation=True, num_final_samples=20)
         self.assertTrue(isinstance(result, RetrievalResult))
         self.assertEqual(result.samples.shape[1], len(self.fit_info.fit_param_names))
 
         #Make sure retrieval with correlated k works
-        retriever.run_multinest(self.wavelength_bins, self.depths, self.errors,
+        retriever.run_dynesty(self.wavelength_bins, self.depths, self.errors,
                                 None, None, None, self.fit_info, maxiter=20,
                                 include_condensation=True,
                                 rad_method="ktables", num_final_samples=20)
@@ -105,7 +105,7 @@ class TestRetriever(unittest.TestCase):
             fit_info.all_params[name].best_guess = best_guess
             fit_info.all_params[name].high_lim = high_lim
             with self.assertRaises(expected_error):
-                retriever.run_multinest(self.wavelength_bins, self.depths,
+                retriever.run_dynesty(self.wavelength_bins, self.depths,
                                         self.errors, None, None, None,
                                         fit_info, maxiter=10, num_final_samples=10)
                 retriever.run_emcee(self.wavelength_bins, self.depths,

@@ -5,8 +5,7 @@
 [![arXiv](http://img.shields.io/badge/arXiv-2004.09513-orange.svg)](https://arxiv.org/abs/2004.09513) 
 [![arXiv](http://img.shields.io/badge/arXiv-1811.11761-orange.svg)](https://arxiv.org/abs/1811.11761)
 
-**April 18, 2020: PLATON v5.1 corresponds most closely to the version described
-in our second PLATON paper (https://arxiv.org/abs/2004.09513).**
+**Oct 30, 2024: PLATON v6.2 is out, with major updates!  This corresponds most closely to the version described in Zhang et al 2024.  Major changes include GPU support, free retrievals, surface emission, higher-resolution (R=20k) and more up-to-date opacities, leave-one-out cross-validation, pymultinest, and much better plotting tools.**
 
 **February 2, 2020: PLEASE re-clone your repository if you cloned it before this
 date!  On this date, all data files were deleted from the repository, including

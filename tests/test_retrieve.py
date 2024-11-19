@@ -11,6 +11,7 @@ from platon.fit_info import FitInfo
 from platon.constants import R_sun, R_jup, M_jup
 from platon.errors import AtmosphereError
 from platon.retrieval_result import RetrievalResult
+from platon.plotter import Plotter
 
 class TestRetriever(unittest.TestCase):
     def initialize(self, use_guesses=False):
@@ -64,17 +65,19 @@ class TestRetriever(unittest.TestCase):
         
         retriever = CombinedRetriever()
         result = retriever.run_emcee(self.wavelength_bins, self.depths, self.errors, None, None, None, self.fit_info, nsteps=nsteps, nwalkers=nwalkers, include_condensation=True, num_final_samples=20)
-        result.plot_spectrum("test")
+        plotter = Plotter()
+        plotter.plot_retrieval_transit_spectrum(result)
         self.assertTrue(isinstance(result, RetrievalResult))
         self.assertEqual(result.chain.shape, (nwalkers, nsteps, len(self.fit_info.fit_param_names)))
         self.assertEqual(result.lnprobability.shape, (nwalkers, nsteps))
                 
 
-    def test_multinest(self):
+    def test_dynesty(self):
         self.initialize(False)
         retriever = CombinedRetriever()
         result = retriever.run_dynesty(self.wavelength_bins, self.depths, self.errors, None, None, None, self.fit_info, maxcall=200, include_condensation=False, num_final_samples=20)
-        result.plot_spectrum("test_plot")
+        plotter = Plotter()
+        plotter.plot_retrieval_transit_spectrum(result)
         
         self.assertTrue(isinstance(result, RetrievalResult))
         self.assertEqual(result.samples.shape[1], len(self.fit_info.fit_param_names))
@@ -113,17 +116,17 @@ class TestRetriever(unittest.TestCase):
                                     fit_info, nsteps=10, num_final_samples=10)
 
         # All of these are invalid inputs
-        run_both("T", 199, 1000, 2999, AtmosphereError)
+        run_both("T", 199, 1000, 4001, AtmosphereError)
         run_both("T", 3000, 1000, 300, ValueError)
         
-        run_both("T", 201, 1000, 3001, AtmosphereError)        
+        run_both("T", 201, 1000, 4001, AtmosphereError)        
         run_both("T", 201, 1000, 999, ValueError)
 
-        run_both("logZ", -1.1, 0, 3)
-        run_both("logZ", -1, 2, 3.1)        
+        run_both("logZ", -2.1, 0, 3, ValueError)
+        run_both("logZ", -1, 2, 3.1, ValueError)
 
-        run_both("CO_ratio", 0.04, 0.53, 10)
-        run_both("CO_ratio", 0.1, 0.53, 10.1)
+        run_both("CO_ratio", 1e-4, 0.53, 1.8)
+        run_both("CO_ratio", 1e-2, 0.53, 2.2)
 
         run_both("log_cloudtop_P", -4.1, 0, 5)
         run_both("log_cloudtop_P", -4, 2, 5.1) 

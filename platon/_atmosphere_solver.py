@@ -37,6 +37,7 @@ class AtmosphereSolver:
             self.lambda_grid = xp.copy(load_numpy("data/wavelengths.npy")[::downsample])
             self.d_ln_lambda = xp.median(xp.diff(xp.log(self.lambda_grid)))
         else:
+            warnings.warn("Correlated-k is not recommended, and will probably be removed in a future version! Please use xsec")
             self.lambda_grid = load_numpy("data/k_wavelengths.npy")
             self.d_ln_lambda = xp.median(xp.diff(xp.log(xp.unique(self.lambda_grid))))
 

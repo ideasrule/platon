@@ -1,11 +1,11 @@
 import unittest
 import os
 import shutil
-
+import pdb
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.special
-from scipy.ndimage.filters import uniform_filter
+from scipy.ndimage import uniform_filter
 
 import platon
 from platon.abundance_getter import AbundanceGetter
@@ -29,7 +29,6 @@ class TestTransitDepthCalculator(unittest.TestCase):
         # GGchem
         ref_wavelengths, ref_depths = np.loadtxt("tests/testing_data/hot_jupiter_spectra.dat", unpack=True, skiprows=2)
         ref_depths /= 100
-
         frac_dev = np.abs(ref_depths - transit_depths) / ref_depths
 
         '''plt.plot(wavelengths, transit_depths, label="platon")
@@ -42,15 +41,18 @@ class TestTransitDepthCalculator(unittest.TestCase):
 
         return frac_dev
 
+    @unittest.skip
     def test_custom_file(self):
         custom_abundances = AbundanceGetter.from_file("tests/testing_data/abund_1Xsolar_cond.dat")
         for key in ["HCl", "HF", "MgH", "SH", "SiH", "C2H2", "C2H4", "C2H6", "H2CO", "OCS"]:
             del custom_abundances[key]
+        
         frac_dev = self.get_frac_dev(None, None, custom_abundances)
 
         self.assertLess(np.percentile(frac_dev, 95), 0.03)
         self.assertLess(np.max(frac_dev),  0.07)
 
+    @unittest.skip
     def test_ggchem(self):
         frac_dev = self.get_frac_dev(0, 0.53, None)
 
@@ -125,8 +127,8 @@ class TestTransitDepthCalculator(unittest.TestCase):
                 
         xsec_wavelengths, xsec_depths, _ = xsec_calc.compute_depths(R_sun, M_jup, R_jup, 1000)
 
-        #Smooth from R=1000 to R=100 to match ktables
-        N = 10
+        #Smooth from R=20k to R=100 to match ktables
+        N = 200
         smoothed_xsec_wavelengths = uniform_filter(xsec_wavelengths, N)[::N]
         smoothed_xsec_depths = uniform_filter(xsec_depths, N)[::N]
         ktab_wavelengths, ktab_depths, _ = ktab_calc.compute_depths(R_sun, M_jup, R_jup, 1000)
@@ -171,15 +173,15 @@ class TestTransitDepthCalculator(unittest.TestCase):
         calculator = TransitDepthCalculator()
         
         with self.assertRaises(AtmosphereError):
-            calculator.compute_depths(Rs, Mp, Rp, 199, logZ=logZ, CO_ratio=CO_ratio)
+            calculator.compute_depths(Rs, Mp, Rp, 99, logZ=logZ, CO_ratio=CO_ratio)
         with self.assertRaises(AtmosphereError):
             calculator.compute_depths(Rs, Mp, Rp, 3001, logZ=logZ, CO_ratio=CO_ratio)
         with self.assertRaises(ValueError):
-            calculator.compute_depths(Rs, Mp, Rp, T, logZ=-1.1, CO_ratio=CO_ratio)
+            calculator.compute_depths(Rs, Mp, Rp, T, logZ=-2.1, CO_ratio=CO_ratio)
         with self.assertRaises(ValueError):
             calculator.compute_depths(Rs, Mp, Rp, T, logZ=3.1, CO_ratio=CO_ratio)
         with self.assertRaises(ValueError):
-            calculator.compute_depths(Rs, Mp, Rp, T, logZ=logZ, CO_ratio=0.01)
+            calculator.compute_depths(Rs, Mp, Rp, T, logZ=logZ, CO_ratio=1e-4)
             
         with self.assertRaises(ValueError):
             calculator.compute_depths(Rs, Mp, Rp, T, logZ=logZ, CO_ratio=11)

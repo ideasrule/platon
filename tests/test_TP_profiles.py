@@ -7,13 +7,14 @@ import matplotlib.pyplot as plt
 from platon.TP_profile import Profile
 from platon.eclipse_depth_calculator import EclipseDepthCalculator
 from platon.constants import M_jup, R_jup, R_sun, AU
+from platon.params import NUM_LAYERS
 
 class TestTPProfile(unittest.TestCase):
     def test_isothermal(self):
-        profile = Profile(num_profile_heights=130)
+        profile = Profile()
         profile.set_isothermal(1300)
-        self.assertEqual(len(profile.pressures), 130)
-        self.assertEqual(len(profile.temperatures), 130)
+        self.assertEqual(len(profile.pressures), NUM_LAYERS)
+        self.assertEqual(len(profile.temperatures), NUM_LAYERS)
         self.assertTrue(np.all(profile.temperatures == 1300))
 
     def test_parametric(self):

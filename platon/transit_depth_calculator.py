@@ -61,7 +61,7 @@ class TransitDepthCalculator:
         depths = xp.cpu(depths)
         unbinned_lambdas = xp.cpu(self.atm.lambda_grid)
         stellar_spectrum, correction_factors = self.atm.get_stellar_spectrum(
-            unbinned_lambdas, T_star, T_spot, spot_cov_frac, blackbody)
+            self.atm.lambda_grid, T_star, T_spot, spot_cov_frac, blackbody)
         stellar_spectrum = xp.cpu(stellar_spectrum)
         correction_factors = xp.cpu(correction_factors)
         

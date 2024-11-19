@@ -49,7 +49,7 @@ class CombinedRetriever:
             elif abs(value) < 1e4: format_str = "{:.2f}"
             else: format_str = "{:.2e}"
 
-            if name == "offset_transit" or name == "offset_eclipse":
+            if name in ["offset_transit", "offset_eclipse", "offset_lrs"]:
                 unit = "ppm"
                 value *= 1e6
             
@@ -199,6 +199,7 @@ class CombinedRetriever:
                     frac_scale_height=frac_scale_height, number_density=number_density,
                     part_size = part_size, ri=ri, P_quench=P_quench, full_output=ret_best_fit, zero_opacities=zero_opacities)
                 calculated_eclipse_depths[params_dict["offset_start"] : params_dict["offset_end"]] += params_dict["offset_eclipse"]
+                calculated_eclipse_depths[eclipse_wavelengths >= 5e-6] += params_dict["offset_lrs"]
                 residuals = calculated_eclipse_depths - measured_eclipse_depths
                 scaled_errors = error_multiple * measured_eclipse_errors
                 ln_likelihood = np.append(ln_likelihood, -0.5 * (residuals**2 / scaled_errors**2 + np.log(2 * np.pi * scaled_errors**2)))
@@ -575,7 +576,7 @@ class CombinedRetriever:
         
         equal_samples = a.get_equal_weighted_posterior()[:,:-1]
         np.random.shuffle(equal_samples)
-        result["equal_samples"] = equal_samples[:,:-1]
+        result["equal_samples"] = equal_samples
         
         divisors, new_labels = self._get_divisors_labels(
             np.median(equal_samples, axis=0),
@@ -632,7 +633,7 @@ class CombinedRetriever:
                              log_number_density=-np.inf, log_part_size=-6,
                              n=None, log_k=-np.inf,
                              log_P_quench=-99,
-                             offset_transit=0, offset_eclipse=0, offset_start=0, offset_end=sys.maxsize,
+                             offset_transit=0, offset_eclipse=0, offset_start=0, offset_end=sys.maxsize, offset_lrs=0,
                              fit_vmr=False, fit_clr=False,
                              profile_type = 'isothermal', **profile_kwargs):
         '''Get a :class:`.FitInfo` object filled with best guess values.  A few

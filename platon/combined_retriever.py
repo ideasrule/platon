@@ -15,7 +15,8 @@ from .psis import psisloo
 from .transit_depth_calculator import TransitDepthCalculator
 from .eclipse_depth_calculator import EclipseDepthCalculator
 from .fit_info import FitInfo
-from .constants import METRES_TO_UM, M_jup, R_jup, R_sun
+
+from .constants import METRES_TO_UM, M_jup, R_jup, R_earth, M_earth, R_sun
 from ._params import _UniformParam
 from .errors import AtmosphereError
 from ._output_writer import write_param_estimates_file

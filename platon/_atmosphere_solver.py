@@ -235,8 +235,6 @@ class AtmosphereSolver:
                 self.collisional_absorption_data[(s1, s2)][cond] = min_absorption
                 n1 = (atm_abundances[s1] * n)
                 n2 = (atm_abundances[s2] * n)
-                #import pdb
-                #pdb.set_trace()
                 abs_data = 10.0 ** xp.interpolate.make_interp_spline(
                     self.T_grid,
                     xp.log10(self.collisional_absorption_data[(s1,s2)]), k=1, axis=0)(T_profile)
@@ -410,7 +408,6 @@ class AtmosphereSolver:
                 atm_abundances[species_name] = abund
 
         above_clouds = P_profile < cloudtop_pressure
-
         radii, dr, atm_abundances, mu_profile = self._get_above_cloud_profiles(
             P_profile, T_profile, atm_abundances, planet_mass, planet_radius,
             star_radius, above_clouds, T_star)

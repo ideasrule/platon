@@ -262,8 +262,8 @@ class TransitDepthCalculator:
                 raise ValueError(
                     "Cannot specify both temperature and custom T profile")
             
-            P_profile = custom_P_profile
-            T_profile = custom_T_profile
+            P_profile = xp.asarray(custom_P_profile)
+            T_profile = xp.asarray(custom_T_profile)
         else:
             P_profile = xp.logspace(
                 xp.log10(self.atm.P_grid[0]),

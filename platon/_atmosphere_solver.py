@@ -185,60 +185,67 @@ class AtmosphereSolver:
         #1e-3 to convert from cm^4/dyne to m^4/N
         return k * 1e-3
     
-    def _get_H_minus_absorption(self, abundances, P_cond, T_cond):
-        absorption_coeff = xp.zeros(
-            (int(xp.sum(T_cond)), int(xp.sum(P_cond)), self.N_lambda))
+    def _get_H_minus_absorption(self, atm_abundances, P_profile, T_profile):
+        absorption_coeff = xp.zeros((len(P_profile), self.N_lambda))
         
-        valid_Ts = self.T_grid[T_cond]
-        trunc_el_abundances = abundances["el"][T_cond][:, P_cond]
-        trunc_H_abundances = abundances["H"][T_cond][:, P_cond]
-        
-        for t in range(len(valid_Ts)):
-            k = self._get_k(valid_Ts[t], self.lambda_grid)          
-            absorption_coeff[t] = k * (trunc_el_abundances[t] * trunc_H_abundances[t] * self.P_grid[P_cond]**2)[:, xp.newaxis] / (k_B * valid_Ts[t])
-                  
+        trunc_el_abundances = atm_abundances["el"]
+        trunc_H_abundances = atm_abundances["H"]
+
+        for i in range(len(P_profile)):
+            k = self._get_k(T_profile[i], self.lambda_grid)
+            absorption_coeff[i] = k * (trunc_el_abundances[i] * trunc_H_abundances[i] * P_profile[i]**2) / (k_B * T_profile[i])
+
+        print(absorption_coeff.shape)
         return absorption_coeff
 
-    def _get_gas_absorption(self, abundances, P_cond, T_cond, zero_opacities=[]):
-        absorption_coeff = xp.zeros(
-            (int(xp.sum(T_cond)), int(xp.sum(P_cond)), self.N_lambda))
+    def _get_gas_absorption(self, atm_abundances, P_profile, T_profile, zero_opacities=[],
+                            min_absorption=1e-99):
+        absorption_coeff = 0.
 
-        for species_name, species_abundance in abundances.items():
-            assert(species_abundance.shape == (self.N_T, self.N_P))
-            
-            if (species_name in self.absorption_data) and (species_name not in zero_opacities):
-                absorption_coeff += self.absorption_data[species_name][T_cond][:,P_cond] * species_abundance[T_cond][:,P_cond,xp.newaxis]
-
+        for species_name, species_abundance in atm_abundances.items():
+            if species_name in self.absorption_data:
+                cond = self.absorption_data[species_name] < min_absorption
+                self.absorption_data[species_name][cond] = min_absorption
+                absorption_coeff += species_abundance[:, xp.newaxis] * 10.0 ** xp.interpolate.interpn(
+                    (self.T_grid, xp.log10(self.P_grid)),
+                    xp.log10(self.absorption_data[species_name]),
+                    xp.array([T_profile, xp.log10(P_profile)]).T)
+                        
         return absorption_coeff
 
-    def _get_scattering_absorption(self, abundances, P_cond, T_cond,
+    def _get_scattering_absorption(self, atm_abundances, P_profile, T_profile,
                                    multiple=1, slope=4, ref_wavelength=1e-6):
-        sum_polarizability_sqr = xp.zeros((int(xp.sum(T_cond)), int(xp.sum(P_cond))))
+        sum_polarizability_sqr = xp.zeros(len(P_profile)) 
 
-        for species_name in abundances:
+        for species_name in atm_abundances:
             if species_name in self.polarizability_data:
-                sum_polarizability_sqr += abundances[species_name][T_cond,:][:,P_cond] * self.polarizability_data[species_name]**2
+                sum_polarizability_sqr += atm_abundances[species_name] * self.polarizability_data[species_name]**2
 
-        n = self.P_grid[P_cond] / (k_B * self.T_grid[T_cond][:, xp.newaxis])
-        result = (multiple * (128.0 / 3 * xp.pi**5) * ref_wavelength**(slope - 4) * n * sum_polarizability_sqr)[:, :, xp.newaxis] / self.lambda_grid**slope
+        n = P_profile / (k_B * T_profile)
+        result = (multiple * (128.0 / 3 * xp.pi**5) * ref_wavelength**(slope - 4) * n * sum_polarizability_sqr)[:, xp.newaxis] / self.lambda_grid**slope
         return result
 
-    def _get_collisional_absorption(self, abundances, P_cond, T_cond):
-        absorption_coeff = xp.zeros(
-            (int(xp.sum(T_cond)), int(xp.sum(P_cond)), self.N_lambda))
-        
-        n = self.P_grid[xp.newaxis, P_cond] / (k_B * self.T_grid[T_cond, xp.newaxis])        
+    def _get_collisional_absorption(self, atm_abundances, P_profile, T_profile, min_absorption=1e-99):
+        absorption_coeff = xp.zeros((len(P_profile), self.N_lambda))
+        n = P_profile / (k_B * T_profile)
+
         for s1, s2 in self.collisional_absorption_data:
-            if s1 in abundances and s2 in abundances:
-                n1 = (abundances[s1][T_cond, :][:, P_cond] * n)
-                n2 = (abundances[s2][T_cond, :][:, P_cond] * n)
-                abs_data = self.collisional_absorption_data[(s1, s2)].reshape(
-                    (self.N_T, 1, -1))[T_cond]
-                absorption_coeff += abs_data * (n1 * n2)[:, :, xp.newaxis]
+            if s1 in atm_abundances and s2 in atm_abundances:
+                cond = self.collisional_absorption_data[(s1, s2)] < min_absorption
+                self.collisional_absorption_data[(s1, s2)][cond] = min_absorption
+                n1 = (atm_abundances[s1] * n)
+                n2 = (atm_abundances[s2] * n)
+                #import pdb
+                #pdb.set_trace()
+                abs_data = 10.0 ** xp.interpolate.make_interp_spline(
+                    self.T_grid,
+                    xp.log10(self.collisional_absorption_data[(s1,s2)]), k=1, axis=0)(T_profile)
+                
+                absorption_coeff += abs_data * (n1 * n2)[:, xp.newaxis]
 
         return absorption_coeff
 
-    def _get_mie_scattering_absorption(self, P_cond, T_cond, ri, part_size,
+    def _get_mie_scattering_absorption(self, P_profile, ri, part_size,
                                        frac_scale_height, max_number_density,
                                        sigma = 0.5, max_zscore = 5, num_integral_points = 100):
         if isinstance(ri, str):
@@ -272,22 +279,19 @@ class AtmosphereSolver:
             Qext_intpl = spl(log_dense_xs).reshape((self.N_lambda, len(radii)))
             eff_cross_section = xp.trapz(probs*geometric_cross_section*Qext_intpl, z_scores)
 
-        n = max_number_density * xp.power(self.P_grid[P_cond] / max(self.P_grid[P_cond]), 1.0/frac_scale_height)        
-        absorption_coeff = n[xp.newaxis, :, xp.newaxis] * eff_cross_section[xp.newaxis, xp.newaxis, :]
+        n = max_number_density * xp.power(P_profile / max(self.P_grid), 1.0/frac_scale_height)
+        absorption_coeff = n[:,xp.newaxis] * eff_cross_section
         return absorption_coeff
 
-    def _get_above_cloud_profiles(self, P_profile, T_profile, abundances,
+    def _get_above_cloud_profiles(self, P_profile, T_profile, atm_abundances,
                                   planet_mass, planet_radius, star_radius,
                                   above_cloud_cond, T_star=None):        
         assert(len(P_profile) == len(T_profile))
         # First, get atmospheric weight profile
         mu_profile = xp.zeros(len(P_profile))
-        atm_abundances = {}
         
-        for species_name in abundances:
-            abund = 10.**regular_grid_interp(self.T_grid, xp.log10(self.P_grid), xp.log10(abundances[species_name]), T_profile, xp.log10(P_profile))
-            atm_abundances[species_name] = abund
-            mu_profile += abund * self.mass_data[species_name]
+        for species_name in atm_abundances:
+            mu_profile += atm_abundances[species_name] * self.mass_data[species_name]
 
         radii, dr = _hydrostatic_solver._solve(
             P_profile, T_profile, self.ref_pressure, mu_profile, planet_mass,
@@ -298,8 +302,8 @@ class AtmosphereSolver:
             
         return radii, dr, atm_abundances, mu_profile
 
-    def _get_abundances_array(self, logZ, CO_ratio, CH4_mult, custom_abundances, gases, vmrs):
-        if custom_abundances is None and logZ is not None and CO_ratio is not None:
+    def _get_abundances_array(self, logZ, CO_ratio, CH4_mult, gases, vmrs):
+        if logZ is not None and CO_ratio is not None:
             abunds = self.abundance_getter.get(logZ, CO_ratio)
             abunds["CH4"] *= CH4_mult
             return abunds
@@ -307,23 +311,8 @@ class AtmosphereSolver:
         if logZ is not None or CO_ratio is not None:
             raise ValueError(
                 "Must set logZ=None and CO_ratio=None to use custom_abundances")
-
-        if isinstance(custom_abundances, str):
-            # Interpret as filename
-            return AbundanceGetter.from_file(custom_abundances)
-
-        if isinstance(custom_abundances, dict):
-            for key, value in custom_abundances.items():
-                if not isinstance(value, xp.ndarray):
-                    raise ValueError(
-                        "custom_abundances must map species names to arrays")
-                if value.shape != (self.N_T, self.N_P):
-                    raise ValueError(
-                        "custom_abundances has array of invalid size")
-            return custom_abundances
-
         
-        if custom_abundances is None and vmrs is not None and gases is not None:
+        if vmrs is not None and gases is not None:
             abundances = {}
             for i, g in enumerate(gases):
                 abundances[g] = vmrs[i] * xp.ones((len(self.T_grid), len(self.P_grid)))
@@ -394,7 +383,7 @@ class AtmosphereSolver:
                        logZ=0, CO_ratio=0.53, CH4_mult=1,
                        gases=None, vmrs=None,
                        add_gas_absorption=True,
-                       add_H_minus_absorption=False,
+                       add_H_minus_absorption=True,
                        add_scattering=True, scattering_factor=1,
                        scattering_slope=4, scattering_ref_wavelength=1e-6,
                        add_collisional_absorption=True,
@@ -405,73 +394,71 @@ class AtmosphereSolver:
                        P_quench=1e-99,
                        min_abundance=1e-99, min_cross_sec=1e-99, zero_opacities=[]):
         self._validate_params(T_profile, logZ, CO_ratio, cloudtop_pressure)
-       
-        abundances = self._get_abundances_array(
-            logZ, CO_ratio, CH4_mult, custom_abundances, gases, vmrs)
 
-        T_quench = xp.interp(xp.log(P_quench), xp.log(P_profile), T_profile)
-        for name in abundances:
-            abundances[name][xp.isnan(abundances[name])] = min_abundance
-            abundances[name][abundances[name] < min_abundance] = min_abundance
-            quench_abund = 10.**regular_grid_interp(self.T_grid, xp.log10(self.P_grid), xp.log10(abundances[name]), T_quench, xp.log10(P_quench))
-            abundances[name][:, self.P_grid <= P_quench] = quench_abund
+        import time
+        start = time.time()
+        if custom_abundances is not None:
+            atm_abundances = custom_abundances
+            for key in atm_abundances:
+                atm_abundances[key] = xp.asarray(atm_abundances[key]) #CPU -> GPU, if necessary
+        else:
+            abundances = self._get_abundances_array(
+                logZ, CO_ratio, CH4_mult, gases, vmrs)
+            atm_abundances = {}
+            for species_name in abundances:
+                abund = 10.**regular_grid_interp(self.T_grid, xp.log10(self.P_grid), xp.log10(abundances[species_name]), T_profile, xp.log10(P_profile))
+                quench_abund = 10.**interp1d(xp.log10(P_quench), xp.log10(P_profile), xp.log10(abund))
+                abund[P_profile <= P_quench] = quench_abund
+                atm_abundances[species_name] = abund
 
+        print("1", time.time() - start)
         above_clouds = P_profile < cloudtop_pressure
 
         radii, dr, atm_abundances, mu_profile = self._get_above_cloud_profiles(
-            P_profile, T_profile, abundances, planet_mass, planet_radius,
+            P_profile, T_profile, atm_abundances, planet_mass, planet_radius,
             star_radius, above_clouds, T_star)
-            
+        print("2", time.time() - start)
         P_profile = P_profile[above_clouds]
         T_profile = T_profile[above_clouds]
-
-        T_cond = _interpolator_3D.get_condition_array(T_profile, self.T_grid)
-        P_cond = _interpolator_3D.get_condition_array(
-            P_profile, self.P_grid, cloudtop_pressure)
-
-        absorption_coeff = xp.zeros((int(xp.sum(T_cond)), int(xp.sum(P_cond)), len(self.lambda_grid)))
+        absorption_coeff = xp.zeros((len(P_profile), len(self.lambda_grid)))
+        
         if add_gas_absorption:
-            absorption_coeff += self._get_gas_absorption(abundances, P_cond, T_cond, zero_opacities=zero_opacities)
+            absorption_coeff += self._get_gas_absorption(atm_abundances, P_profile, T_profile, zero_opacities=zero_opacities)
+            print("3", time.time() - start)
         if add_H_minus_absorption:
-            absorption_coeff += self._get_H_minus_absorption(abundances, P_cond, T_cond)
+            #raise ValueError("Not implemented")
+            absorption_coeff += self._get_H_minus_absorption(atm_abundances, P_profile, T_profile)
         if add_scattering:
             if ri is not None:
+                #raise ValueError("Not implemented")
+                
                 if scattering_factor != 1 or scattering_slope != 4:
                     raise ValueError("Cannot use both parametric and Mie scattering at the same time")
-                
+
                 absorption_coeff += self._get_mie_scattering_absorption(
-                    P_cond, T_cond, ri, part_size,
+                    P_profile, ri, part_size,
                     frac_scale_height, number_density, sigma=part_size_std)
                 absorption_coeff += self._get_scattering_absorption(
-                    abundances, P_cond, T_cond)
+                    atm_abundances, P_profile, T_profile)
                 
             else:
-                absorption_coeff += self._get_scattering_absorption(abundances,
-                P_cond, T_cond, scattering_factor, scattering_slope,
-                scattering_ref_wavelength)
+                absorption_coeff += self._get_scattering_absorption(
+                    atm_abundances, P_profile, T_profile,
+                    scattering_factor, scattering_slope,
+                    scattering_ref_wavelength)
+            print("4", time.time() - start)
 
         if add_collisional_absorption:
             absorption_coeff += self._get_collisional_absorption(
-                abundances, P_cond, T_cond)
-
+                atm_abundances, P_profile, T_profile)
+        print("5", time.time() - start)
         # Cross sections vary less than absorption coefficients by pressure
         # and temperature, so interpolation should be done with cross sections
-        cross_secs = absorption_coeff / (self.P_grid[P_cond][xp.newaxis, :, xp.newaxis] / k_B / self.T_grid[T_cond][:, xp.newaxis, xp.newaxis])
-        cross_secs[cross_secs < min_cross_sec] = min_cross_sec
-        
-        if len(self.T_grid[T_cond]) == 1:
-            cross_secs_atm = xp.exp(interp1d(xp.log(P_profile), xp.log(self.P_grid[P_cond]), xp.log(cross_secs[0])))
-        else:            
-            ln_cross = regular_grid_interp(
-                1.0/self.T_grid[T_cond][::-1],
-                xp.log(self.P_grid[P_cond]),
-                xp.log(cross_secs[::-1]),
-                1.0 / T_profile,
-                xp.log(P_profile))
-         
-            cross_secs_atm = xp.exp(ln_cross)
+        cross_secs_atm = absorption_coeff / (P_profile / k_B / T_profile)[:, np.newaxis]        
+        absorption_coeff_atm = cross_secs_atm * (P_profile / k_B / T_profile)[:, np.newaxis]
 
-        absorption_coeff_atm = cross_secs_atm * (P_profile / k_B / T_profile)[:, xp.newaxis]
+        print("6", time.time() - start)
+        
         output_dict = {"absorption_coeff_atm": absorption_coeff_atm,
                        "radii": radii,
                        "dr": dr,

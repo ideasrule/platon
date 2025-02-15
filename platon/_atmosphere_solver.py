@@ -395,8 +395,6 @@ class AtmosphereSolver:
                        min_abundance=1e-99, min_cross_sec=1e-99, zero_opacities=[]):
         self._validate_params(T_profile, logZ, CO_ratio, cloudtop_pressure)
 
-        import time
-        start = time.time()
         if custom_abundances is not None:
             atm_abundances = custom_abundances
             for key in atm_abundances:
@@ -411,27 +409,22 @@ class AtmosphereSolver:
                 abund[P_profile <= P_quench] = quench_abund
                 atm_abundances[species_name] = abund
 
-        print("1", time.time() - start)
         above_clouds = P_profile < cloudtop_pressure
 
         radii, dr, atm_abundances, mu_profile = self._get_above_cloud_profiles(
             P_profile, T_profile, atm_abundances, planet_mass, planet_radius,
             star_radius, above_clouds, T_star)
-        print("2", time.time() - start)
         P_profile = P_profile[above_clouds]
         T_profile = T_profile[above_clouds]
         absorption_coeff = xp.zeros((len(P_profile), len(self.lambda_grid)))
         
         if add_gas_absorption:
             absorption_coeff += self._get_gas_absorption(atm_abundances, P_profile, T_profile, zero_opacities=zero_opacities)
-            print("3", time.time() - start)
+
         if add_H_minus_absorption:
-            #raise ValueError("Not implemented")
             absorption_coeff += self._get_H_minus_absorption(atm_abundances, P_profile, T_profile)
         if add_scattering:
             if ri is not None:
-                #raise ValueError("Not implemented")
-                
                 if scattering_factor != 1 or scattering_slope != 4:
                     raise ValueError("Cannot use both parametric and Mie scattering at the same time")
 
@@ -446,19 +439,16 @@ class AtmosphereSolver:
                     atm_abundances, P_profile, T_profile,
                     scattering_factor, scattering_slope,
                     scattering_ref_wavelength)
-            print("4", time.time() - start)
 
         if add_collisional_absorption:
             absorption_coeff += self._get_collisional_absorption(
                 atm_abundances, P_profile, T_profile)
-        print("5", time.time() - start)
+
         # Cross sections vary less than absorption coefficients by pressure
         # and temperature, so interpolation should be done with cross sections
         cross_secs_atm = absorption_coeff / (P_profile / k_B / T_profile)[:, np.newaxis]        
         absorption_coeff_atm = cross_secs_atm * (P_profile / k_B / T_profile)[:, np.newaxis]
 
-        print("6", time.time() - start)
-        
         output_dict = {"absorption_coeff_atm": absorption_coeff_atm,
                        "radii": radii,
                        "dr": dr,

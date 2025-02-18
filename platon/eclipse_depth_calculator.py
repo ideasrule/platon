@@ -118,9 +118,11 @@ class EclipseDepthCalculator:
             
         return intermediate_lambdas, intermediate_depths, xp.array(binned_wavelengths), xp.array(binned_depths)
 
-    def _get_photosphere_radii(self, taus, radii):
+    def _get_photosphere_radii(self, taus, radii, planet_radius):
         intermediate_radii = 0.5 * (radii[0:-1] + radii[1:])
+        max_taus = xp.max(taus, axis=1)
         result = radii[xp.argmin(xp.absolute(xp.log(taus)), axis=1)]
+        result[max_taus < 1] = planet_radius
         return result
               
     def compute_depths(self, t_p_profile, star_radius, planet_mass,
@@ -189,7 +191,7 @@ class EclipseDepthCalculator:
             max_taus = taus.max(axis=1)
             fluxes += surface_flux * (max_taus**2 * expn(1, max_taus) - max_taus * xp.exp(-max_taus) + xp.exp(-max_taus))
         
-        photosphere_radii = self._get_photosphere_radii(taus, atm_info["radii"])
+        photosphere_radii = self._get_photosphere_radii(taus, atm_info["radii"], planet_radius)
         eclipse_depths = fluxes / stellar_fluxes * (photosphere_radii/star_radius)**2
         #For correlated k, eclipse_depths has n_gauss points per wavelength, while unbinned_depths has 1 point per wavelength
         unbinned_wavelengths, unbinned_depths, binned_wavelengths, binned_depths = self._get_binned_depths(eclipse_depths, stellar_fluxes)

@@ -123,7 +123,7 @@ class EclipseDepthCalculator:
 
     def _get_photosphere_radii(self, taus, radii, planet_radius):
         intermediate_radii = 0.5 * (radii[0:-1] + radii[1:])
-        max_taus = xp.max(taus, axis=1)
+        max_taus = taus.max(axis=1)
         result = radii[xp.argmin(xp.absolute(xp.log(taus)), axis=1)]
         result[max_taus < 1] = planet_radius
         return result

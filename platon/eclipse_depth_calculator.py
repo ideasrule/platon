@@ -46,9 +46,12 @@ class EclipseDepthCalculator:
             self.redist_factors = {col: df[col][0] for col in df.columns}
         
         
-    def calc_surface_flux(self, surface_type, stellar_fluxes, Rp_over_Rs, a_over_Rs, temperature=None):
+    def calc_surface_flux(self, surface_type, stellar_fluxes, stellar_fluxes_orig, Rp_over_Rs, a_over_Rs, temperature=None):
         if temperature is None:
-            irrad = self.redist_factors[surface_type] * xp.trapz(stellar_fluxes / a_over_Rs**2, self.atm.lambda_grid)
+            interp_rh = xp.interp(self.atm.orig_lambda_grid, xp.asarray(self.hemi_refls["Wavelength"]), xp.asarray(self.hemi_refls[surface_type]))
+            irrad = self.redist_factors[surface_type] * xp.trapz(
+                (1 - interp_rh) * stellar_fluxes_orig / a_over_Rs**2,
+                                     self.atm.orig_lambda_grid)
             if irrad < self.crust_emission_flux[surface_type].data[0] or irrad > self.crust_emission_flux[surface_type].data[-1]:
                 raise ValueError("Cannot compute surface temperature because irradiation is out of range of the data files")
             
@@ -186,8 +189,11 @@ class EclipseDepthCalculator:
 
         stellar_fluxes, _ = self.atm.get_stellar_spectrum(
             lambda_grid, T_star, T_spot, spot_cov_frac, stellar_blackbody)
+        
         if surface_pressure < cloudtop_pressure:
-            surface_flux = self.calc_surface_flux(surface_type, stellar_fluxes, planet_radius / star_radius, semimajor_axis / star_radius, surface_temp)
+            stellar_fluxes_orig, _ = self.atm.get_stellar_spectrum(
+                self.atm.orig_lambda_grid, T_star, T_spot, spot_cov_frac, stellar_blackbody)
+            surface_flux = self.calc_surface_flux(surface_type, stellar_fluxes, stellar_fluxes_orig, planet_radius / star_radius, semimajor_axis / star_radius, surface_temp)
             max_taus = taus.max(axis=1)
             fluxes += surface_flux * (max_taus**2 * expn(1, max_taus) - max_taus * xp.exp(-max_taus) + xp.exp(-max_taus))
         

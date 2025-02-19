@@ -41,6 +41,7 @@ class AtmosphereSolver:
             self.lambda_grid = load_numpy("data/k_wavelengths.npy")
             self.d_ln_lambda = xp.median(xp.diff(xp.log(xp.unique(self.lambda_grid))))
 
+        self.orig_lambda_grid = xp.copy(self.lambda_grid) #In case we truncate with change_wavelength_bins
         self.stellar_spectra_temps = xp.array(self.stellar_spectra_dict["temperatures"])
         self.stellar_spectra = list(self.stellar_spectra_dict["spectra"])
         for i in range(len(self.stellar_spectra)):

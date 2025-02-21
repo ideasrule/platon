@@ -44,19 +44,19 @@ class EclipseDepthCalculator:
         else:
             df = pd.read_csv(resource_filename(__name__, f"data/{surface_library}/f_relation_new_samples.csv"))
             self.redist_factors = {col: df[col][0] for col in df.columns}
-        
-        
-    def calc_surface_flux(self, surface_type, stellar_fluxes, stellar_fluxes_orig, Rp_over_Rs, a_over_Rs, temperature=None):
-        if temperature is None:
-            interp_rh = xp.interp(self.atm.orig_lambda_grid, xp.asarray(self.hemi_refls["Wavelength"]), xp.asarray(self.hemi_refls[surface_type]))
-            irrad = self.redist_factors[surface_type] * xp.trapz(
-                (1 - interp_rh) * stellar_fluxes_orig / a_over_Rs**2,
-                                     self.atm.orig_lambda_grid)
-            if irrad < self.crust_emission_flux[surface_type].data[0] or irrad > self.crust_emission_flux[surface_type].data[-1]:
-                raise ValueError("Cannot compute surface temperature because irradiation is out of range of the data files")
-            
-            temperature = xp.interp(irrad, xp.array(self.crust_emission_flux[surface_type].data), xp.array(self.crust_emission_flux["Temperature [K]"]))
 
+    def calc_surface_temp(self, surface_type, stellar_fluxes_orig, a_over_Rs):
+        interp_rh = xp.interp(self.atm.orig_lambda_grid, xp.asarray(self.hemi_refls["Wavelength"]), xp.asarray(self.hemi_refls[surface_type]))
+        irrad = self.redist_factors[surface_type] * xp.trapz(
+            (1 - interp_rh) * stellar_fluxes_orig / a_over_Rs**2,
+            self.atm.orig_lambda_grid)
+        if irrad < self.crust_emission_flux[surface_type].data[0] or irrad > self.crust_emission_flux[surface_type].data[-1]:
+            raise ValueError("Cannot compute surface temperature because irradiation is out of range of the data files")
+            
+        temperature = xp.interp(irrad, xp.array(self.crust_emission_flux[surface_type].data), xp.array(self.crust_emission_flux["Temperature [K]"]))
+        return temperature
+        
+    def calc_surface_flux(self, surface_type, stellar_fluxes, a_over_Rs, temperature):
         hemi_reflectance = xp.interp(self.atm.lambda_grid, xp.array(self.hemi_refls["Wavelength"]), xp.array(self.hemi_refls[surface_type]))
         directional_emissivity = 1 - hemi_reflectance
         emitted_fluxes = directional_emissivity * xp.pi * 2 * h * c**2 / self.atm.lambda_grid**5 / xp.expm1(h*c/(self.atm.lambda_grid * k_B * temperature))
@@ -193,7 +193,9 @@ class EclipseDepthCalculator:
         if surface_pressure < cloudtop_pressure:
             stellar_fluxes_orig, _ = self.atm.get_stellar_spectrum(
                 self.atm.orig_lambda_grid, T_star, T_spot, spot_cov_frac, stellar_blackbody)
-            surface_flux = self.calc_surface_flux(surface_type, stellar_fluxes, stellar_fluxes_orig, planet_radius / star_radius, semimajor_axis / star_radius, surface_temp)
+            if surface_temp is None:
+                surface_temp = self.calc_surface_temp(surface_type, stellar_fluxes_orig, semimajor_axis / star_radius)
+            surface_flux = self.calc_surface_flux(surface_type, stellar_fluxes, semimajor_axis / star_radius, surface_temp)
             max_taus = taus.max(axis=1)
             fluxes += surface_flux * (max_taus**2 * expn(1, max_taus) - max_taus * xp.exp(-max_taus) + xp.exp(-max_taus))
         
@@ -203,6 +205,7 @@ class EclipseDepthCalculator:
         unbinned_wavelengths, unbinned_depths, binned_wavelengths, binned_depths = self._get_binned_depths(eclipse_depths, stellar_fluxes)
 
         if full_output:
+            atm_info["surface_temp"] = surface_temp
             atm_info["stellar_spectrum"] = stellar_fluxes
             atm_info["planet_spectrum"] = fluxes
             atm_info["unbinned_wavelengths"] = unbinned_wavelengths

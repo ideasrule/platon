@@ -14,9 +14,7 @@ Optionally, one can estimate the surface temperature of a chosen surface_type fr
 Then, call compute_depths with all the ordinary eclipse calculator arguments, but also the surface arguments::
 
   wavelengths, depths, info_dict = calc.compute_depths(...,
-    surface_pressure = Psurf, surface_type=surface_type, semimajor_axis=semi_major_axis, surface_temp = surface_temp
-
-)
+    surface_pressure = Psurf, surface_type=surface_type, semimajor_axis=semi_major_axis, surface_temp = surface_temp)
 
 surface_temp can be None, in which case the temperature will be automatically calculated from energy balance.
 The available surface types are the columns in data/HES2012/hemi_refls.csv or data/Paragas/hemi_refls.csv. The "Paragas" library surface types include a range of textures.

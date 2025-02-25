@@ -18,12 +18,13 @@ PLATON supports both dynesty and pymultinest for nested sampling.  dynesty is in
   
   conda install -c conda-forge mpi4py pymultinest
 
-After installing PLATON, you can run unit tests to make sure everything works::
+After installing PLATON, run one of the examples so that the data files are automatically downloaded::
+  cd examples/
+  python transit_depth_example.py
+  
+You can also run unit tests to make sure everything works::
   
   nosetests -v 
-
-The unit tests should also give you a good idea of how fast the code will be.
-On a decent Ubuntu machine with OpenBLAS, it takes 3 minutes.
 
 The default data files (in platon/data) have a wavelength resolution of R=20k.
 If you want higher resolution, you can download higher-resolution opacities from the `DACE opacity database <https://dace.unige.ch/opacityDatabase>`_ and interpolate to PLATON's temperature and pressure grid.

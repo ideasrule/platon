@@ -1,4 +1,4 @@
-# PLanetary Atmospheric Transmission for Observer Noobs
+# PLanetary Atmospheric Tool for Observer Noobs
 <img src="logo.png" height="315">
 
  [![codecov](https://codecov.io/gh/ideasrule/platon/branch/devel/graph/badge.svg)](https://codecov.io/gh/ideasrule/platon)

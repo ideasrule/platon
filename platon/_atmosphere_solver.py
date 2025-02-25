@@ -274,7 +274,7 @@ class AtmosphereSolver:
             Qext_intpl = spl(log_dense_xs).reshape((self.N_lambda, len(radii)))
             eff_cross_section = xp.trapz(probs*geometric_cross_section*Qext_intpl, z_scores)
 
-        n = max_number_density * xp.power(self.P_grid[P_cond] / max(self.P_grid), 1.0/frac_scale_height)        
+        n = max_number_density * xp.power(self.P_grid[P_cond] / max(self.P_grid[P_cond]), 1.0/frac_scale_height)        
         absorption_coeff = n[xp.newaxis, :, xp.newaxis] * eff_cross_section[xp.newaxis, xp.newaxis, :]
         return absorption_coeff
 

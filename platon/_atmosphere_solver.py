@@ -1,6 +1,7 @@
 import numpy as np
 import scipy.interpolate
 import matplotlib.pyplot as plt
+import warnings
 
 from pkg_resources import resource_filename
 from ._hist import get_num_bins

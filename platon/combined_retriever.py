@@ -1,5 +1,5 @@
 import os
-
+import pdb
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.interpolate
@@ -13,9 +13,9 @@ import sys
 
 from .psis import psisloo
 from .transit_depth_calculator import TransitDepthCalculator
-from .eclipse_depth_calculator import EclipseDepthCalculator
+from .flux_calculator import FluxCalculator
 from .fit_info import FitInfo
-from .constants import METRES_TO_UM, M_jup, R_jup, R_sun
+from .constants import METRES_TO_UM, M_jup, R_jup, R_sun, pc
 from ._params import _UniformParam
 from .errors import AtmosphereError
 from ._output_writer import write_param_estimates_file
@@ -117,6 +117,7 @@ class CombinedRetriever:
         params_dict = fit_info._interpret_param_array(params)
         
         Rp = params_dict["Rp"]
+        dist = params_dict["dist"]
         T = params_dict["T"]
         logZ = params_dict["logZ"]
         CO_ratio = params_dict["CO_ratio"]
@@ -124,7 +125,6 @@ class CombinedRetriever:
         scatt_slope = params_dict["scatt_slope"]
         cloudtop_P = 10.0**params_dict["log_cloudtop_P"]
         error_multiple = params_dict["error_multiple"]
-        Rs = params_dict["Rs"]
         Mp = params_dict["Mp"]
         T_star = params_dict["T_star"]
         T_spot = params_dict["T_spot"]
@@ -134,6 +134,11 @@ class CombinedRetriever:
         part_size = 10.**params_dict["log_part_size"]
         P_quench = 10.** params_dict["log_P_quench"]
         CH4_mult = 10.**params_dict["log_CH4_mult"]
+
+        
+        if Mp <= 0 or dist <= 0:
+            return -np.inf
+        
 
         if params_dict["fit_vmr"]:
             assert(logZ is None and CO_ratio is None)
@@ -152,12 +157,11 @@ class CombinedRetriever:
             gases = None
         if "n" in params_dict and params_dict["n"] is not None and "log_k" in params_dict:
             ri = params_dict["n"] - 1j * 10**params_dict["log_k"]
+        elif "ri" in params_dict:
+            ri = params_dict["ri"]
         else:
             ri = None
             
-        if Rs <= 0 or Mp <= 0:
-            return -np.inf
-
         ln_likelihood = np.array([])
         calculated_transit_depths = None
         transit_info_dict = None
@@ -189,9 +193,10 @@ class CombinedRetriever:
 
                 if np.any(np.isnan(t_p_profile.temperatures)):
                     raise AtmosphereError("Invalid T/P profile")
-                
-                eclipse_wavelengths, calculated_eclipse_depths, eclipse_info_dict = eclipse_calc.compute_depths(
-                    t_p_profile, Rs, Mp, Rp, T_star, logZ, CO_ratio, CH4_mult, gases, vmrs,
+
+                eclipse_wavelengths, calculated_eclipse_depths, eclipse_info_dict = eclipse_calc.compute_fluxes(
+                    Rp / dist,
+                    t_p_profile, Mp, Rp, logZ, CO_ratio, CH4_mult, gases, vmrs,
                     custom_abundances=None,
                     scattering_factor=scatt_factor, scattering_slope=scatt_slope,
                     cloudtop_pressure=cloudtop_P,
@@ -199,10 +204,13 @@ class CombinedRetriever:
                     frac_scale_height=frac_scale_height, number_density=number_density,
                     part_size = part_size, ri=ri, P_quench=P_quench, full_output=ret_best_fit, zero_opacities=zero_opacities)
                 calculated_eclipse_depths[params_dict["offset_start"] : params_dict["offset_end"]] += params_dict["offset_eclipse"]
-                calculated_eclipse_depths[eclipse_wavelengths >= 5e-6] += params_dict["offset_lrs"]
                 residuals = calculated_eclipse_depths - measured_eclipse_depths
                 scaled_errors = error_multiple * measured_eclipse_errors
                 ln_likelihood = np.append(ln_likelihood, -0.5 * (residuals**2 / scaled_errors**2 + np.log(2 * np.pi * scaled_errors**2)))
+                #plt.plot(eclipse_wavelengths, calculated_eclipse_depths)
+                #plt.plot(eclipse_wavelengths, measured_eclipse_depths)
+                #pdb.set_trace()
+                #plt.show()
 
         except AtmosphereError as e:
             return -np.inf
@@ -327,7 +335,7 @@ class CombinedRetriever:
             eclipse_depths, eclipse_errors, zero_opacities=zero_opacities, ret_best_fit=True)
         retrieval_result = RetrievalResult(
             {"best_fit_params": best_params_arr,
-                "acceptance_fraction": sampler.acceptance_fraction,
+             "acceptance_fraction": sampler.acceptance_fraction,
              "chain": sampler.chain,
              "flatchain": sampler.flatchain,
              "lnprobability": sampler.lnprobability,
@@ -385,6 +393,51 @@ class CombinedRetriever:
                     new_labels[i] = "M_p/M_e"
                     
         return divisors, new_labels
+
+    def run_minimizer(self, transit_bins, transit_depths, transit_errors,
+                      eclipse_bins, eclipse_depths, eclipse_errors,
+                      fit_info,
+                      include_condensation=True, rad_method="xsec", zero_opacities=[]):
+        self.params_to_lnlike = {}
+        eclipse_calc = None
+        eclipse_calc = FluxCalculator(
+            include_condensation=include_condensation, method=rad_method)
+        eclipse_calc.change_wavelength_bins(eclipse_bins)
+        
+        def neg_ln_like(cube):
+            lnlike_per_point = self._ln_like(cube, None, eclipse_calc, fit_info, None, None, eclipse_depths, eclipse_errors, zero_opacities=zero_opacities, lnlike_per_point=True)
+            if not np.isscalar(lnlike_per_point):
+                ln_like = lnlike_per_point.sum()
+            else:
+                assert(lnlike_per_point == -np.inf)
+                ln_like = -np.inf
+            
+            if np.random.randint(100) == 0:
+                print("\nEvaluated params: {}".format(self.pretty_print(fit_info)))
+            return -ln_like
+
+        bounds = []
+        for p in fit_info.fit_param_names:
+            bounds.append([fit_info.all_params[p].low_lim, fit_info.all_params[p].high_lim])            
+            
+        result = scipy.optimize.differential_evolution(neg_ln_like, bounds)
+        with open("minimized_result.pkl", "wb") as f:
+            pickle.dump(result, f)
+        
+        best_fit_transit_depths, best_fit_transit_info, best_fit_eclipse_depths, best_fit_eclipse_info = self._ln_like(
+            result.x, None, eclipse_calc, fit_info,
+            None, None,
+            eclipse_depths, eclipse_errors, zero_opacities=zero_opacities, ret_best_fit=True)
+        
+        eclipse_waves = (eclipse_bins[:,0] + eclipse_bins[:,1]) / 2
+        plt.errorbar(1e6 * eclipse_waves, eclipse_depths, yerr=eclipse_errors, fmt='.')
+        plt.plot(1e6 * eclipse_waves, best_fit_eclipse_depths)
+        plt.savefig("best_fit_minimizer.png")
+        plt.show()
+
+        
+        print(result)
+
     
     def run_dynesty(self, transit_bins, transit_depths, transit_errors,
                       eclipse_bins, eclipse_depths, eclipse_errors,
@@ -441,7 +494,7 @@ class CombinedRetriever:
             transit_calc.change_wavelength_bins(transit_bins)
             self._validate_params(fit_info, transit_calc)
         if eclipse_bins is not None:
-            eclipse_calc = EclipseDepthCalculator(
+            eclipse_calc = FluxCalculator(
                 include_condensation=include_condensation, method=rad_method)
             eclipse_calc.change_wavelength_bins(eclipse_bins)
 
@@ -512,7 +565,7 @@ class CombinedRetriever:
             if transit_depths is not None:
                 retrieval_result.random_transit_depths.append(transit_info["unbinned_depths"] * transit_info["unbinned_correction_factors"])
             if eclipse_depths is not None:
-                retrieval_result.random_eclipse_depths.append(eclipse_info["unbinned_eclipse_depths"])
+                retrieval_result.random_eclipse_depths.append(eclipse_info["unbinned_fluxes"])
                 retrieval_result.random_TP_profiles.append(np.array([eclipse_info["P_profile"], eclipse_info["T_profile"]]))
             retrieval_result.pointwise_lnlikes.append(self.params_to_lnlike[tuple(params)])
 
@@ -540,7 +593,7 @@ class CombinedRetriever:
             transit_calc.change_wavelength_bins(transit_bins)
             self._validate_params(fit_info, transit_calc)
         if eclipse_bins is not None:
-            eclipse_calc = EclipseDepthCalculator(
+            eclipse_calc = FluxCalculator(
                 include_condensation=include_condensation, method=rad_method)
             eclipse_calc.change_wavelength_bins(eclipse_bins)
 
@@ -614,7 +667,7 @@ class CombinedRetriever:
             if transit_depths is not None:                                                
                 retrieval_result.random_transit_depths.append(transit_info["unbinned_depths"] * transit_info["unbinned_correction_factors"])
             if eclipse_depths is not None:
-                retrieval_result.random_eclipse_depths.append(eclipse_info["unbinned_eclipse_depths"])
+                retrieval_result.random_eclipse_depths.append(eclipse_info["unbinned_fluxes"])
                 retrieval_result.random_TP_profiles.append(np.array([eclipse_info["P_profile"], eclipse_info["T_profile"]]))
             retrieval_result.pointwise_lnlikes.append(self.params_to_lnlike[tuple(params)])
 
@@ -624,8 +677,8 @@ class CombinedRetriever:
         
 
     @staticmethod
-    def get_default_fit_info(Rs, Mp, Rp, T=None, logZ=0, CO_ratio=0.53, log_CH4_mult=0,
-                             free_retrieval=False,
+    def get_default_fit_info(Mp, Rp, T=None, logZ=0, CO_ratio=0.53, log_CH4_mult=0,
+                             dist=720*pc,
                              log_cloudtop_P=np.inf, log_scatt_factor=0,
                              scatt_slope=4, error_multiple=1, T_star=None,
                              T_spot=None, spot_cov_frac=None,

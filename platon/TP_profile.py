@@ -19,7 +19,7 @@ class Profile:
 
     def get_pressures(self):
         return xp.cpu(self.pressures)
-        
+
     def set_from_params_dict(self, profile_type, params_dict):
         if profile_type == "isothermal":
             self.set_isothermal(params_dict["T"])
@@ -30,8 +30,28 @@ class Profile:
                 10**params_dict["log_P3"], params_dict["T3"])
         elif profile_type == "radiative_solution":
             self.set_from_radiative_solution(**params_dict)
+        elif profile_type == "rates":
+            self.set_from_rates(**params_dict)
         else:
             assert(False)
+
+    def set_from_rates(self, Tmin, rn4, rn3, rn2, rn1, r0, r1, **ignored_kwargs):
+        P_bar = self.pressures * 1e-5
+        P_knots = xp.array([1e-4, 1e-3, 1e-2, 1e-1, 1, 10])
+        r_knots = xp.array([rn4, rn3, rn2, rn1, r0, r1])
+        rates = xp.interp(xp.log10(P_bar), xp.log10(P_knots), r_knots, left=0, right=0)
+        
+        temperatures = []
+        for i in range(len(P_bar)):
+            if i == 0:
+                temperatures.append(xp.array(Tmin))
+            else:
+                temperatures.append(temperatures[-1] + rates[i] * (xp.log10(P_bar[i] / P_bar[i-1])))
+
+        self.temperatures = xp.array(temperatures)
+        #plt.semilogy(self.temperatures.get(), self.pressures.get())
+        #plt.gca().invert_yaxis()
+        #plt.show()
                                         
         
     def set_from_arrays(self, P_profile, T_profile):
@@ -94,15 +114,15 @@ class Profile:
         T = T4 ** 0.25
         self.temperatures = xp.append(T[0], T)
 
-    def set_from_radiative_solution(self, T_star, Rs, a, Mp, Rp, beta, log_k_th, log_gamma, log_gamma2=None, alpha=0, T_int=100, **ignored_kwargs):
+    def set_from_radiative_solution(self, T_irr, Mp, Rp, beta, log_k_th, log_gamma, log_gamma2=None, alpha=0, T_int=100, **ignored_kwargs):
         '''From Line et al. 2013: http://adsabs.harvard.edu/abs/2013ApJ...775..137L, Equation 13 - 16'''
 
+        g = G * Mp / Rp**2
         k_th = 10.0**log_k_th
         gamma = 10.0**log_gamma
         gamma2 = 10.0**log_gamma2
         
-        g = G * Mp / Rp**2
-        T_eq = beta * xp.sqrt(Rs/(2*a)) * T_star
+        T_eq = beta * T_irr / xp.sqrt(2) 
         taus = k_th * self.pressures / g
 
         def incoming_stream_contribution(gamma):

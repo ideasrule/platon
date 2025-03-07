@@ -1,6 +1,7 @@
 import numpy as np
 import scipy.interpolate
 import matplotlib.pyplot as plt
+import pdb
 
 from pkg_resources import resource_filename
 from ._hist import get_num_bins
@@ -118,8 +119,8 @@ class AtmosphereSolver:
                                                self.lambda_grid < end))
             if num_points == 0:
                 raise ValueError("Wavelength bin too narrow: {}-{} meters".format(start, end))
-            if num_points <= 5:
-                print("WARNING: only {} points in {}-{} m bin. Results will be inaccurate".format(num_points, start, end))
+            #if num_points <= 5:
+            #    print("WARNING: only {} points in {}-{} m bin. Results will be inaccurate".format(num_points, start, end))
         
         self.wavelength_rebinned = True
         self.wavelength_bins = bins
@@ -277,8 +278,8 @@ class AtmosphereSolver:
         return absorption_coeff
 
     def _get_above_cloud_profiles(self, P_profile, T_profile, abundances,
-                                  planet_mass, planet_radius, star_radius,
-                                  above_cloud_cond, T_star=None):        
+                                  planet_mass, planet_radius,
+                                  above_cloud_cond):        
         assert(len(P_profile) == len(T_profile))
         # First, get atmospheric weight profile
         mu_profile = xp.zeros(len(P_profile))
@@ -291,7 +292,7 @@ class AtmosphereSolver:
 
         radii, dr = _hydrostatic_solver._solve(
             P_profile, T_profile, self.ref_pressure, mu_profile, planet_mass,
-            planet_radius, star_radius, above_cloud_cond, T_star)
+            planet_radius, above_cloud_cond)
         
         for key in atm_abundances:
             atm_abundances[key] = atm_abundances[key][above_cloud_cond]
@@ -361,35 +362,7 @@ class AtmosphereSolver:
                     "Cloudtop pressure is {} Pa, but must be between {} and {} Pa unless it is xp.inf".format(
                         cloudtop_pressure, minimum, maximum))
 
-    def get_stellar_spectrum(self, lambdas, T_star, T_spot, spot_cov_frac, blackbody=False):
-        if spot_cov_frac is None:
-            spot_cov_frac = 0
-
-        if T_spot is None:
-            T_spot = T_star
-            
-        if T_star is None:
-            unspotted_spectrum = xp.ones(len(lambdas))
-            spot_spectrum = xp.ones(len(lambdas))
-            
-        elif T_star >= self.stellar_spectra_temps.min() and T_star <= self.stellar_spectra_temps.max() and not blackbody:            
-            unspotted_spectrum = interp1d(T_star, self.stellar_spectra_temps, self.stellar_spectra)
-            spot_spectrum = interp1d(T_spot, self.stellar_spectra_temps, self.stellar_spectra)
-            if len(spot_spectrum) != len(lambdas):
-                raise ValueError("Stellar spectra has a different length ({}) than opacities ({})!  If you are using high resolution opacities, pass stellar_blackbody=True to compute_depths".format(len(spot_spectrum), len(lambdas)))
-        else:
-            d_lambda = self.d_ln_lambda * lambdas
-            unspotted_spectrum = 2 * c * xp.pi / lambdas**4 / \
-                (xp.exp(h * c / lambdas / k_B / T_star) - 1) * h * c / lambdas
-            spot_spectrum = 2 * c * xp.pi / lambdas**4 / \
-                (xp.exp(h * c / lambdas / k_B / T_spot) - 1) * h * c / lambdas
-
-        stellar_spectrum = spot_cov_frac * spot_spectrum + \
-                           (1 - spot_cov_frac) * unspotted_spectrum
-        correction_factors = unspotted_spectrum/stellar_spectrum
-        return stellar_spectrum, correction_factors
-
-    def compute_params(self, star_radius, planet_mass, planet_radius,
+    def compute_params(self, planet_mass, planet_radius,
                        P_profile, T_profile,
                        logZ=0, CO_ratio=0.53, CH4_mult=1,
                        gases=None, vmrs=None,
@@ -399,7 +372,6 @@ class AtmosphereSolver:
                        scattering_slope=4, scattering_ref_wavelength=1e-6,
                        add_collisional_absorption=True,
                        cloudtop_pressure=xp.inf, custom_abundances=None,
-                       T_star=None, T_spot=None, spot_cov_frac=None,
                        ri=None, frac_scale_height=1, number_density=0,
                        part_size=1e-6, part_size_std=0.5,
                        P_quench=1e-99,
@@ -420,7 +392,7 @@ class AtmosphereSolver:
 
         radii, dr, atm_abundances, mu_profile = self._get_above_cloud_profiles(
             P_profile, T_profile, abundances, planet_mass, planet_radius,
-            star_radius, above_clouds, T_star)
+            above_clouds)
             
         P_profile = P_profile[above_clouds]
         T_profile = T_profile[above_clouds]
@@ -458,7 +430,7 @@ class AtmosphereSolver:
         # and temperature, so interpolation should be done with cross sections
         cross_secs = absorption_coeff / (self.P_grid[P_cond][xp.newaxis, :, xp.newaxis] / k_B / self.T_grid[T_cond][:, xp.newaxis, xp.newaxis])
         cross_secs[cross_secs < min_cross_sec] = min_cross_sec
-        
+
         if len(self.T_grid[T_cond]) == 1:
             cross_secs_atm = xp.exp(interp1d(xp.log(P_profile), xp.log(self.P_grid[P_cond]), xp.log(cross_secs[0])))
         else:            
@@ -471,6 +443,8 @@ class AtmosphereSolver:
          
             cross_secs_atm = xp.exp(ln_cross)
 
+        #pdb.set_trace()
+            
         absorption_coeff_atm = cross_secs_atm * (P_profile / k_B / T_profile)[:, xp.newaxis]
         output_dict = {"absorption_coeff_atm": absorption_coeff_atm,
                        "radii": radii,

@@ -154,7 +154,7 @@ class Plotter():
                             upper_spectrum,
                             color="#f2c8c4")
         plt.plot(METRES_TO_UM * retrieval_result.best_fit_eclipse_dict["unbinned_wavelengths"],
-                    retrieval_result.best_fit_eclipse_dict["unbinned_eclipse_depths"],
+                    retrieval_result.best_fit_eclipse_dict["unbinned_fluxes"],
                     alpha=0.4, color='r', label="Calculated (unbinned)")
         plt.errorbar(METRES_TO_UM * retrieval_result.eclipse_wavelengths,
                         retrieval_result.eclipse_depths,

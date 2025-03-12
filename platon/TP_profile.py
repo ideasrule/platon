@@ -35,10 +35,10 @@ class Profile:
         else:
             assert(False)
 
-    def set_from_rates(self, Tmin, rn4, rn3, rn2, rn1, r0, r1, **ignored_kwargs):
+    def set_from_rates(self, Tmin, rn8, rn7, rn6, rn5, rn4, rn3, rn2, rn1, r0, **ignored_kwargs):
         P_bar = self.pressures * 1e-5
-        P_knots = xp.array([1e-4, 1e-3, 1e-2, 1e-1, 1, 10])
-        r_knots = xp.array([rn4, rn3, rn2, rn1, r0, r1])
+        P_knots = xp.array([1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1])
+        r_knots = xp.array([rn8, rn7, rn6, rn5, rn4, rn3, rn2, rn1, r0])
         rates = xp.interp(xp.log10(P_bar), xp.log10(P_knots), r_knots, left=0, right=0)
         
         temperatures = []

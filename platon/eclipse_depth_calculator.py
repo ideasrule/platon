@@ -188,11 +188,11 @@ class EclipseDepthCalculator:
             fluxes += fluxes_from_cloud
 
         stellar_fluxes, _ = self.atm.get_stellar_spectrum(
-            lambda_grid, T_star, T_spot, spot_cov_frac, stellar_blackbody)
+            T_star, T_spot, spot_cov_frac, stellar_blackbody)
         
         if surface_pressure < cloudtop_pressure:
             stellar_fluxes_orig, _ = self.atm.get_stellar_spectrum(
-                self.atm.orig_lambda_grid, T_star, T_spot, spot_cov_frac, stellar_blackbody)
+                T_star, T_spot, spot_cov_frac, stellar_blackbody, use_full_lambdas=True)
             if surface_temp is None:
                 surface_temp = self.calc_surface_temp(surface_type, stellar_fluxes_orig, semimajor_axis / star_radius)
             surface_flux = self.calc_surface_flux(surface_type, stellar_fluxes, semimajor_axis / star_radius, surface_temp)

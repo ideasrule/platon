@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 from platon.eclipse_depth_calculator import EclipseDepthCalculator
 from platon.TP_profile import Profile
 from platon.abundance_getter import AbundanceGetter
-from platon.surface_calculator import SurfaceCalculator
 from platon.constants import R_sun, AU, R_earth, M_earth
 
 

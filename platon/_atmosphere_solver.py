@@ -48,6 +48,7 @@ class AtmosphereSolver:
         for i in range(len(self.stellar_spectra)):
             self.stellar_spectra[i] = xp.interp(self.lambda_grid, self.low_res_lambdas, self.stellar_spectra[i])
         self.stellar_spectra = xp.array(self.stellar_spectra)
+        self.orig_stellar_spectra = xp.array(self.stellar_spectra)
             
         self.collisional_absorption_data = load_dict_from_pickle(
             "data/collisional_absorption.pkl")
@@ -363,7 +364,14 @@ class AtmosphereSolver:
                     "Cloudtop pressure is {} Pa, but must be between {} and {} Pa unless it is xp.inf".format(
                         cloudtop_pressure, minimum, maximum))
 
-    def get_stellar_spectrum(self, lambdas, T_star, T_spot, spot_cov_frac, blackbody=False):
+    def get_stellar_spectrum(self, T_star, T_spot, spot_cov_frac, blackbody=False, use_full_lambdas=False):
+        if use_full_lambdas:
+            lambdas = self.orig_lambda_grid
+            stellar_spectra = self.orig_stellar_spectra
+        else:
+            lambdas = self.lambda_grid
+            stellar_spectra = self.stellar_spectra
+            
         if spot_cov_frac is None:
             spot_cov_frac = 0
 
@@ -375,8 +383,8 @@ class AtmosphereSolver:
             spot_spectrum = xp.ones(len(lambdas))
             
         elif T_star >= self.stellar_spectra_temps.min() and T_star <= self.stellar_spectra_temps.max() and not blackbody:            
-            unspotted_spectrum = interp1d(T_star, self.stellar_spectra_temps, self.stellar_spectra)
-            spot_spectrum = interp1d(T_spot, self.stellar_spectra_temps, self.stellar_spectra)
+            unspotted_spectrum = interp1d(T_star, self.stellar_spectra_temps, stellar_spectra)
+            spot_spectrum = interp1d(T_spot, self.stellar_spectra_temps, stellar_spectra)
             if len(spot_spectrum) != len(lambdas):
                 raise ValueError("Stellar spectra has a different length ({}) than opacities ({})!  If you are using high resolution opacities, pass stellar_blackbody=True to compute_depths".format(len(spot_spectrum), len(lambdas)))
         else:

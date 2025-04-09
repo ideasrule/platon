@@ -5,6 +5,7 @@ import pickle
 from platon.fit_info import FitInfo
 from platon.combined_retriever import CombinedRetriever
 from platon.constants import R_sun, R_jup, M_jup
+from platon.plotter import Plotter
 
 def hd209458b_stis():
     #http://iopscience.iop.org/article/10.1086/510111/pdf
@@ -99,8 +100,9 @@ with open("example_retrieval_result.pkl", "wb") as f:
 
 #Useful members: result.samples, result.weights, result.logl, result.logp    
 
-#Plot the spectrum and save it to best_fit.png
-result.plot_spectrum("best_fit")
 
-#Plot the 2D posteriors with "corner" package and save it to multinest_corner.png
-result.plot_corner("multinest_corner.png")
+#Plot the spectrum and save it to best_fit.png
+plotter = Plotter()
+plotter.plot_retrieval_transit_spectrum(result, prefix="best_fit")
+plotter.plot_retrieval_corner(result, filename="dynesty_corner.png")
+

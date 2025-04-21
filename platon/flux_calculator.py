@@ -1,5 +1,7 @@
 from . import _cupy_numpy as xp
 import numpy as np
+import pickle
+import pdb
 expn=xp.scipy.special.expn
 import matplotlib.pyplot as plt
 import scipy.special
@@ -14,7 +16,7 @@ from ._atmosphere_solver import AtmosphereSolver
 from ._interpolator_3D import interp1d, regular_grid_interp
 
 class FluxCalculator:
-    def __init__(self, include_condensation=True, method="xsec", include_opacities=["C2", "C3", "12C12C13C", "12C13C12C", "CN", "CO", "CP", "CS", "HCN", "NS", "OCS", "C2H2", "C2H4", "H2O", "toluene", "CH", "HeHp", "C2H"], downsample=1):
+    def __init__(self, include_condensation=True, method="xsec", include_opacities=["C2", "12C13C", "C3", "12C12C13C", "12C13C12C", "CN", "CO", "CP", "CS", "HCN", "NS", "OCS", "C2H2", "C2H4", "H2O", "toluene", "CH", "HeHp", "C2H", "NH3"], downsample=1):
         '''
         All physical parameters are in SI.
 
@@ -47,30 +49,79 @@ class FluxCalculator:
         self.atm.change_wavelength_bins(bins)
 
 
-    def _get_binned_fluxes(self, fluxes, disperser="g235H", n_gauss=10):
+    def _get_binned_fluxes(self, fluxes, disperser="g235H", opac_res=15_000.5, lsf_res_mult=1.15):
         if self.atm.wavelength_bins is None:
             return self.atm.lambda_grid, fluxes, self.atm.lambda_grid, fluxes
-
+        #Detect opacity resolution
+        detected_opac_res = np.median(self.atm.lambda_grid / np.gradient(self.atm.lambda_grid))
+        #pdb.set_trace()
+        if not np.allclose(detected_opac_res, opac_res):
+            raise ValueError("Opacity resolution {} different from configured {}!".format(detected_opac_res, opac_res))
+    
+        
         fluxes = xp.cpu(fluxes)
         wavelengths = xp.cpu(self.atm.lambda_grid)
         if disperser == "prism":
             lsf_waves, lsf_res = np.loadtxt(resource_filename(__name__, "data/prism_resolution.txt"), unpack=True, delimiter=",")
+            lsf_waves *= 1e-6
+            lsf_res *= lsf_res_mult #Real performance better than expected
+            binned_fluxes = []
+            wavelength_bins = xp.cpu(self.atm.wavelength_bins)
+
+            for i in range(len(wavelength_bins)):
+                wave = wavelength_bins[i].mean().item()
+                res = np.interp(wave, lsf_waves, lsf_res)
+                dw = wave / res
+                cond = (wavelengths > wave - 2*dw) & (wavelengths < wave + 2 * dw)
+                sigma = opac_res / res / 2.355
+                smoothed_spec = gaussian_filter(fluxes[cond], sigma)
+                binned_fluxes.append(np.interp(wave, wavelengths[cond], smoothed_spec))
+
         elif disperser == "g235H":
             lsf_waves, lsf_res = np.loadtxt(resource_filename(__name__, "data/g235H_resolution.txt"), unpack=True, delimiter=",")
+            lsf_waves *= 1e-6
+            lsf_res *= lsf_res_mult #Real performance better than expected
+            binned_fluxes = []
+            wavelength_bins = xp.cpu(self.atm.wavelength_bins)
+
+            for i in range(len(wavelength_bins)):
+                wave = wavelength_bins[i].mean().item()
+                res = np.interp(wave, lsf_waves, lsf_res)
+                dw = wave / res
+                cond = (wavelengths > wave - 2*dw) & (wavelengths < wave + 2 * dw)
+                sigma = opac_res / res / 2.355
+                smoothed_spec = gaussian_filter(fluxes[cond], sigma)
+                binned_fluxes.append(np.interp(wave, wavelengths[cond], smoothed_spec))
+                
+        elif disperser == "g235H_alt":
+            lsf_waves, lsf_res = np.loadtxt(resource_filename(__name__, "data/g235H_resolution.txt"), unpack=True, delimiter=",")
+            with open(resource_filename(__name__, "data/g235H_lsfs.pkl"), "rb") as f:
+                lsf_data = pickle.load(f)
+
+            convolved_fluxes = []
+            for i, w in enumerate(lsf_data["waves"]):
+                convolved_fluxes.append(scipy.ndimage.convolve(fluxes, lsf_data["lsfs"][i], mode="nearest"))
+            
+            wavelength_bins = xp.cpu(self.atm.wavelength_bins)
+            convolved_fluxes = np.array(convolved_fluxes)
+            convolved_fluxes_1D = np.zeros(len(wavelengths))
+            #pdb.set_trace()
+            for i in range(len(wavelengths)):
+                #wave = wavelength_bins[i].mean().item()
+                convolved_fluxes_1D[i] = np.interp(1e6*wavelengths[i], lsf_data["waves"], convolved_fluxes[:,i], left=convolved_fluxes[0,i], right=convolved_fluxes[-1,i])
+
+            obs_waves = [bin.mean().item() for bin in wavelength_bins]
+            binned_fluxes = np.interp(obs_waves, wavelengths, convolved_fluxes_1D)
+            #plt.plot(wavelengths, fluxes)
+            #plt.plot(obs_waves, binned_fluxes)
+
+            #plt.show()
+            #pdb.set_trace()
+            
         else:
             assert(False)
-        lsf_waves *= 1e-6
-        binned_fluxes = []
-        wavelength_bins = xp.cpu(self.atm.wavelength_bins)
+            
         
-        for i in range(len(wavelength_bins)):
-            wave = wavelength_bins[i].mean().item()
-            res = np.interp(wave, lsf_waves, lsf_res)
-            dw = wave / res
-            cond = (wavelengths > wave - 5*dw) & (wavelengths < wave + 5 * dw)
-            sigma = 15000 / res / 2.355
-            smoothed_spec = gaussian_filter(fluxes[cond], sigma)
-            binned_fluxes.append(np.interp(wave, wavelengths[cond], smoothed_spec))
 
         #plt.plot(wavelengths, fluxes)
         #plt.plot(wavelength_bins.mean(axis=1), binned_fluxes)
@@ -99,7 +150,7 @@ class FluxCalculator:
                        stellar_blackbody=False,
                        full_output=False, zero_opacities=[],
                        surface_type=None, semimajor_axis=None, surface_temp=None, surface_pressure=xp.inf,
-                       disperser="g235H"
+                       disperser="prism"
                        ):
         '''Most parameters are explained in :func:`~platon.transit_depth_calculator.TransitDepthCalculator.compute_depths`
 

@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import pdb
 from . import _cupy_numpy as xp
 expn=xp.scipy.special.expn
 
@@ -24,10 +25,10 @@ class Profile:
         if profile_type == "isothermal":
             self.set_isothermal(params_dict["T"])
         elif profile_type == "parametric":
-            self.set_parametric(
+             self.set_parametric(
                 params_dict["T0"], 10**params_dict["log_P1"],
                 params_dict["alpha1"], params_dict["alpha2"],
-                10**params_dict["log_P3"], params_dict["T3"])
+                10**params_dict["log_P2"], 10**params_dict["log_P3"])
         elif profile_type == "radiative_solution":
             self.set_from_radiative_solution(**params_dict)
         elif profile_type == "rates":
@@ -62,14 +63,14 @@ class Profile:
     def set_isothermal(self, T_day):
         self.temperatures = xp.ones(len(self.pressures)) * T_day
 
-    def set_parametric(self, T0, P1, alpha1, alpha2, P3, T3):
+    def set_parametric(self, T0, P1, alpha1, alpha2, P2, P3, P0=1e-4):
         '''Parametric model from https://arxiv.org/pdf/0910.1347.pdf'''
-        P0 = xp.amin(self.pressures)
-
-        ln_P2 = alpha2**2*(T0+xp.log(P1/P0)**2/alpha1**2 - T3) - xp.log(P1)**2 + xp.log(P3)**2
-        ln_P2 /= 2 * xp.log(P3/P1)
-        P2 = xp.exp(ln_P2)
-        T2 = T3 - xp.log(P3/P2)**2/alpha2**2
+        if P3 <= P2 or P3 <= P1:# or P2 >= P1:
+            raise AtmosphereError("Invalid T/P profile")
+        
+        T1 = T0 + (xp.log(P1/P0)/alpha1)**2
+        T2 = T1 - (xp.log(P1/P2)/alpha2)**2
+        T3 = T2 + (xp.log(P3/P2)/alpha2)**2
 
         self.temperatures = xp.zeros(len(self.pressures))
         for i, P in enumerate(self.pressures):
@@ -79,7 +80,13 @@ class Profile:
                 self.temperatures[i] = T2 + xp.log(P/P2)**2 / alpha2**2
             else:
                 self.temperatures[i] = T3
-        return P2, T2
+
+        if self.temperatures.max() > 4000:
+            raise AtmosphereError("T/P profile too hot")
+
+        dlnT_dlnP = xp.diff(xp.log(self.temperatures)) / xp.diff(xp.log(self.pressures))
+        if dlnT_dlnP.max() > 0.4:
+            raise AtmosphereError("Temp gradient too high")
 
     def set_from_opacity(self, T_irr, info_dict, visible_cutoff=0.8e-6, T_int=100):
         wavelengths = xp.array(info_dict["unbinned_wavelengths"])

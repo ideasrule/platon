@@ -22,6 +22,7 @@ from ._output_writer import write_param_estimates_file
 from .TP_profile import Profile
 from .retrieval_result import RetrievalResult
 from .custom_dynesty_result import CustomDynestyResult
+from scipy.ndimage import median_filter
 
 class CombinedRetriever:
     def pretty_print(self, fit_info):
@@ -189,7 +190,11 @@ class CombinedRetriever:
                 
             if measured_eclipse_depths is not None:
                 t_p_profile = Profile()
-                t_p_profile.set_from_params_dict(params_dict["profile_type"], params_dict)
+                try:
+                    t_p_profile.set_from_params_dict(params_dict["profile_type"], params_dict)
+                except:
+                    raise AtmosphereError("Invalid T/P profile")
+                
 
                 if np.any(np.isnan(t_p_profile.temperatures)):
                     raise AtmosphereError("Invalid T/P profile")

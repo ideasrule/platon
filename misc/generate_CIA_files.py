@@ -47,4 +47,6 @@ for pair in pairs:
     final_data = scipy.interpolate.interp1d(temperatures, interp_data, axis=0, bounds_error=False, fill_value=(interp_data[0], interp_data[-1]))(grid_temperatures)
     output_dict[pair] = final_data
 
+output_dict[("H2-He", "H2-He")] = 0.85**2 * output_dict[("H2", "H2")] + 0.85*0.15 * output_dict[("H2", "He")]
 pickle.dump(output_dict, output_f)
+output_f.close()

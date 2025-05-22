@@ -108,14 +108,14 @@ class TransitDepthCalculator:
         binned_stellar_spectrum = []
         
         for (start, end) in xp.cpu(self.atm.wavelength_bins):
-            cond = np.logical_and(
-                intermediate_lambdas >= start,
-                intermediate_lambdas < end)
-            binned_wavelengths.append(np.mean(intermediate_lambdas[cond]))
-            binned_depth = np.average(intermediate_depths[cond] * intermediate_correction_factors[cond],
-                                      weights=intermediate_stellar_spectrum[cond])
+            l = np.searchsorted(intermediate_lambdas, start)
+            r = np.searchsorted(intermediate_lambdas, end)
+            
+            binned_wavelengths.append(np.mean(intermediate_lambdas[l:r]))
+            binned_depth = np.average(intermediate_depths[l:r] * intermediate_correction_factors[l:r],
+                                      weights=intermediate_stellar_spectrum[l:r])
             binned_depths.append(binned_depth)
-            binned_stellar_spectrum.append(np.median(intermediate_stellar_spectrum[cond]))
+            binned_stellar_spectrum.append(np.median(intermediate_stellar_spectrum[l:r]))
 
         return xp.array(binned_wavelengths), xp.array(binned_depths), xp.array(binned_stellar_spectrum), xp.array(intermediate_lambdas), xp.array(intermediate_depths), xp.array(intermediate_stellar_spectrum), xp.array(intermediate_correction_factors)
 

@@ -7,9 +7,10 @@ from platon.constants import R_sun, R_jup, M_jup
 
 Pa_to_cgs = 10
 
+#This file must be in descending order of pressure!  If it's in ascending order, remove the [::-1] on the second line.
 data_file = "example_custom_abundances.txt"
-
 data = np.loadtxt(data_file, skiprows=2)[::-1]
+
 P_profile = data[:,0] / Pa_to_cgs
 T_profile = data[:,1]
 T_profile[T_profile > 3000] = 3000

@@ -7,7 +7,6 @@ from platon.constants import R_sun, R_jup, M_jup
 from platon.TP_profile import Profile
 import platon._cupy_numpy as xp
 
-bar_to_cgs = 1e6
 Pa_to_cgs = 10
 
 data_file = "example_custom_abundances.txt"

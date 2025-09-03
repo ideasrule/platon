@@ -5,7 +5,6 @@ import linecache
 from platon.transit_depth_calculator import TransitDepthCalculator
 from platon.constants import R_sun, R_jup, M_jup
 
-bar_to_cgs = 1e6
 Pa_to_cgs = 10
 
 data_file = "example_custom_abundances.txt"

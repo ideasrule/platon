@@ -23,7 +23,7 @@ exoplanet atmospheres. It was written by Michael Zhang and Yayaati Chachan, and
 is based on ExoTransmit by Eliza Kempton.
 
 We welcome any feedback. Please send any comments, suggestions, or bug reports
-to Michael Zhang: zmzhang "at" caltech.edu
+to Michael Zhang: zmzhang "at" uchicago.edu
 **
 To find installation instructions and quickstart examples, read the
 documentation at: https://platon.readthedocs.io

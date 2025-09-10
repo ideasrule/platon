@@ -23,3 +23,16 @@ One can also see the surface temperature after the run::
 
     surface_temp = info_dict['surface_temperature']
 
+A commonly asked question is **how do I generate the emission spectrum of an airless planet?**  We have yet to implement a simple way to do this, but it's easy enough to hack.
+In surface_example.py, set Psurf to a negligible value, set the atmospheric temperature to the surface temperature, and give the atmosphere a composition that has no features::
+
+  Psurf = 2e-4
+  ...
+  abundances = AbundanceGetter().get(0, 0.5)
+  for key in abundances:
+    abundances[key] *= 0
+  abundances["N2"] += 1
+  ...
+  p.set_isothermal(surface_temp)
+
+This is way overkill because the first and third steps alone should be enough to simulate an airless body, but better safe than sorry. 

@@ -6,6 +6,11 @@ from platon.TP_profile import Profile
 from platon.abundance_getter import AbundanceGetter
 from platon.constants import R_sun, AU, R_earth, M_earth
 
+#Are you trying to generate emission spectra of an airless planet?
+#Set Psurf=2e-4 (a very low value), set the atmospheric temperature to
+#surface_temp with p.set_isothermal(surface_temp), and set the atmospheric
+#composition to something with no features (e.g. abundances["N2"] += 1,
+#after getting rid of the CO2 and CO).
 
 #define system parameters
 T_star = 3600

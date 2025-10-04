@@ -15,8 +15,6 @@ default_style = ['default',
         'ytick.direction': 'out',
         }]
 plt.style.use(default_style)
-plt.ion()
-
 
 class Plotter():
     def __init__(self):

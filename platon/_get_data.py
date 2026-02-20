@@ -1,6 +1,6 @@
 from urllib.request import urlopen
 
-from pkg_resources import resource_filename
+import importlib.resources
 from platon import __data_url__, __md5sum__
 
 import sys
@@ -8,16 +8,18 @@ import zipfile
 import os
 import hashlib
 import ssl
+from pathlib import Path
 
 def get_data_if_needed():
-    if not os.path.isdir(resource_filename(__name__, "data/")):
-        get_data(resource_filename(__name__, "./"))
+    basedir = Path(__file__).resolve().parent
+    if not os.path.isdir(basedir / "data"):
+        get_data(basedir)
         
-    with open(resource_filename(__name__, "md5sum")) as f:
+    with open(str(basedir / "md5sum")) as f:
         curr_md5sum = f.read().strip()
 
     if __md5sum__ != curr_md5sum:
-        print("Warning: data files are out of date.  To update, remove the PLATON data directory ({}) and PLATON will automatically download the latest data files on the next run.".format(resource_filename(__name__, "data/")))
+        print("Warning: data files are out of date.  To update, remove the PLATON data directory ({}) and PLATON will automatically download the latest data files on the next run.".format(basedir / "data"))
         
 
 def get_data(target_dir):
@@ -65,8 +67,9 @@ def get_data(target_dir):
 
     if curr_md5sum != __md5sum__:
         raise RuntimeError("Downloaded data file is corrupt (wrong md5sum).  Please try again.")
-    
-    with open(resource_filename(__name__, "md5sum"), "w") as f:
+
+    basedir = Path(__file__).resolve().parent
+    with open(basedir / "md5sum", "w") as f:
         f.write(curr_md5sum)
         
     os.remove(filename)

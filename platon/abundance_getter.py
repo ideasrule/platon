@@ -1,14 +1,15 @@
 from . import _cupy_numpy as xp
 from io import open
 import configparser
-from pkg_resources import resource_filename
+from pathlib import Path
 
 from ._interpolator_3D import regular_grid_interp
 
 class AbundanceGetter:
     def __init__(self, include_condensation=True):
+        basedir = Path(__file__).resolve().parent
         config = configparser.ConfigParser()
-        config.read(resource_filename(__name__, "data/abundances/properties.cfg"))
+        config.read(basedir / "data/abundances/properties.cfg")
         properties = config["DEFAULT"]
         self.min_temperature = float(properties["min_temperature"])
         self.logZs = xp.linspace(float(properties["min_logZ"]),
@@ -24,8 +25,7 @@ class AbundanceGetter:
 
         abundances_path = "data/abundances/{}".format(filename)
 
-        self.log_abundances = xp.log10(xp.load(
-            resource_filename(__name__, abundances_path)))
+        self.log_abundances = xp.log10(xp.load(basedir / abundances_path))
                  
         
     def get(self, logZ, CO_ratio=0.53):

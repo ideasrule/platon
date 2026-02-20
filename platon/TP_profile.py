@@ -2,8 +2,6 @@ import matplotlib.pyplot as plt
 from . import _cupy_numpy as xp
 expn=xp.scipy.special.expn
 
-from pkg_resources import resource_filename
-
 from .constants import h, c, k_B, AMU, G
 from .params import NUM_LAYERS, MIN_P, MAX_P
 

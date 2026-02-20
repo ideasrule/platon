@@ -3,7 +3,7 @@ import scipy.interpolate
 import matplotlib.pyplot as plt
 import warnings
 
-from pkg_resources import resource_filename
+from pathlib import Path
 from ._hist import get_num_bins
 from ._interpolator_3D import interp1d
 from . import _cupy_numpy as xp
@@ -26,9 +26,10 @@ class AtmosphereSolver:
 
         get_data_if_needed()
         
+        basedir = Path(__file__).resolve().parent        
         self.absorption_data, self.mass_data, self.polarizability_data = read_species_data(
-            resource_filename(__name__, "data/Absorption"),
-            resource_filename(__name__, "data/species_info"),
+            basedir / "data/Absorption",
+            basedir / "data/species_info",
             method, include_opacities, downsample)
 
         self.low_res_lambdas = load_numpy("data/low_res_lambdas.npy")

@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import scipy.special
 from astropy.io import ascii
 import pandas as pd
-from pkg_resources import resource_filename
+from pathlib import Path
 
 from .constants import h, c, k_B, R_jup, M_jup, R_sun
 from ._atmosphere_solver import AtmosphereSolver
@@ -35,14 +35,16 @@ class EclipseDepthCalculator:
         
         if surface_library not in ["HES2012", "Paragas"]:
             raise ValueError("The only surface libraries available are HES2012 and Paragas")
-        self.hemi_refls = pd.read_csv(resource_filename(__name__, f"data/{surface_library}/hemi_refls.csv"))
-        self.crust_emission_flux = ascii.read(resource_filename(__name__, f"data/{surface_library}/Crust_EmissionFlux.dat"), delimiter="\t")
+
+        basedir = Path(__file__).resolve().parent
+        self.hemi_refls = pd.read_csv(basedir / f"data/{surface_library}/hemi_refls.csv")
+        self.crust_emission_flux = ascii.read(basedir / f"data/{surface_library}/Crust_EmissionFlux.dat", delimiter="\t")
         if surface_library == "HES2012":
             self.redist_factors = {'Metal-rich': 0.6052, 'Ultramafic': 0.5532, 'Feldspathic': 0.5414,
                         'Basaltic': 0.6004, 'Granitoid': 0.5290, 'Clay': 0.5, 'Ice-rich silicate': 0.5,
                         'Fe-oxidized': 0.5978}
         else:
-            df = pd.read_csv(resource_filename(__name__, f"data/{surface_library}/f_relation_new_samples.csv"))
+            df = pd.read_csv(basedir / f"data/{surface_library}/f_relation_new_samples.csv")
             self.redist_factors = {col: df[col][0] for col in df.columns}
 
     def calc_surface_temp(self, surface_type, stellar_fluxes_orig, a_over_Rs):

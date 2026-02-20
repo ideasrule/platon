@@ -1,4 +1,3 @@
-from pkg_resources import resource_filename
 import matplotlib.pyplot as plt
 import scipy
 import numpy as np

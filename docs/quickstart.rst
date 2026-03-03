@@ -104,7 +104,7 @@ as the background gas.  The VMRs of the non-background gases are given log-unifo
 priors between 1e-12 and 1e-2.  Alternatively, you can do a free retrieval with
 centered-log-ratio (CLR) priors::
 
-  fit_info.add_gases_vmr(["CH4", "CO2", "CO", "H2O", "H2S"])
+  fit_info.add_gases_clr(["CH4", "CO2", "CO", "H2O", "H2S"])
 
 With a CLR prior, all gases are treated equally, and there is no pre-defined background gas.
 

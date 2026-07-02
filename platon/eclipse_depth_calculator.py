@@ -5,11 +5,10 @@ import pandas as pd
 from astropy.io import ascii
 
 from . import _forward_model as fm
-from ._forward_model import ForwardConfig
-from .constants import h, c, k_B, R_jup, M_jup, R_sun
+from ._forward_model import planck_np
 from .errors import AtmosphereError
 from ._atmosphere_solver import AtmosphereSolver
-from .transit_depth_calculator import _prepare_forward_inputs, _atm_info_dict
+from ._forward_prep import prepare_forward_inputs, atm_info_dict
 
 
 class EclipseDepthCalculator:
@@ -57,48 +56,42 @@ class EclipseDepthCalculator:
 
     def _get_surface_arrays(self, surface_type):
         """Reflectance interpolated onto the current and full wavelength
-        grids, plus the crust emission flux lookup table."""
-        key = (surface_type, self.atm.N_lambda)
-        if key not in self._surface_cache:
+        grids (float64), plus the crust emission flux lookup table."""
+        if surface_type not in self._surface_cache:
             wl = np.asarray(self.hemi_refls["Wavelength"], dtype=np.float64)
             rh = np.asarray(self.hemi_refls[surface_type], dtype=np.float64)
-            rh_binned = np.interp(self.atm.lambda_grid, wl, rh).astype(np.float32)
-            rh_orig = np.interp(self.atm.orig_lambda_grid, wl, rh).astype(np.float32)
-            crust_flux = np.asarray(
-                self.crust_emission_flux[surface_type].data, np.float32)
+            rh_binned = np.interp(self.atm.lambda_grid, wl, rh)
+            rh_orig = np.interp(self.atm.orig_lambda_grid, wl, rh)
+            crust_flux = np.asarray(self.crust_emission_flux[surface_type].data,
+                                    np.float64)
             crust_T = np.asarray(
-                self.crust_emission_flux["Temperature [K]"].data, np.float32)
-            self._surface_cache[key] = (rh_binned, rh_orig, crust_flux, crust_T)
-        return self._surface_cache[key]
+                self.crust_emission_flux["Temperature [K]"].data, np.float64)
+            self._surface_cache[surface_type] = (rh_binned, rh_orig,
+                                                 crust_flux, crust_T)
+        return self._surface_cache[surface_type]
+
+    def _check_irrad_in_range(self, irrad, surface_type):
+        crust_flux = self._get_surface_arrays(surface_type)[2]
+        if irrad < crust_flux[0] or irrad > crust_flux[-1]:
+            raise ValueError("Cannot compute surface temperature because "
+                             "irradiation is out of range of the data files")
 
     def calc_surface_temp(self, surface_type, stellar_fluxes_orig, a_over_Rs):
         """Host computation of the surface equilibrium temperature."""
-        wl = np.asarray(self.hemi_refls["Wavelength"], dtype=np.float64)
-        rh = np.asarray(self.hemi_refls[surface_type], dtype=np.float64)
-        interp_rh = np.interp(self.atm.orig_lambda_grid, wl, rh)
+        _, rh_orig, crust_flux, crust_T = self._get_surface_arrays(surface_type)
         irrad = self.redist_factors[surface_type] * np.trapezoid(
-            (1 - interp_rh) * np.asarray(stellar_fluxes_orig) / a_over_Rs**2,
+            (1 - rh_orig) * np.asarray(stellar_fluxes_orig) / a_over_Rs**2,
             self.atm.orig_lambda_grid)
-        flux_table = self.crust_emission_flux[surface_type].data
-        if irrad < flux_table[0] or irrad > flux_table[-1]:
-            raise ValueError("Cannot compute surface temperature because "
-                             "irradiation is out of range of the data files")
-        temperature = np.interp(
-            irrad, np.asarray(flux_table),
-            np.asarray(self.crust_emission_flux["Temperature [K]"].data))
-        return temperature
+        self._check_irrad_in_range(irrad, surface_type)
+        return np.interp(irrad, crust_flux, crust_T)
 
     def calc_surface_flux(self, surface_type, stellar_fluxes, a_over_Rs,
                           temperature):
-        wl = np.asarray(self.hemi_refls["Wavelength"], dtype=np.float64)
-        rh = np.asarray(self.hemi_refls[surface_type], dtype=np.float64)
-        hemi_reflectance = np.interp(self.atm.lambda_grid, wl, rh)
-        directional_emissivity = 1 - hemi_reflectance
-        lam = self.atm.lambda_grid
-        emitted_fluxes = directional_emissivity * np.pi * 2 * h * c**2 / \
-            lam**5 / np.expm1(h * c / (lam * k_B * temperature))
+        rh_binned = self._get_surface_arrays(surface_type)[0]
+        emitted_fluxes = (1 - rh_binned) * np.pi * \
+            planck_np(self.atm.lambda_grid, temperature)
         reflected_fluxes = np.asarray(stellar_fluxes) / a_over_Rs**2 * \
-            hemi_reflectance
+            rh_binned
         return emitted_fluxes + reflected_fluxes
 
     def change_wavelength_bins(self, bins):
@@ -142,28 +135,41 @@ class EclipseDepthCalculator:
             a_over_Rs = semimajor_axis / star_radius
             redist = self.redist_factors[surface_type]
 
-        config_kwargs, inputs, host = _prepare_forward_inputs(
-            self.atm, star_radius, planet_mass, planet_radius,
-            P_profile, T_profile, logZ, CO_ratio, CH4_mult, gases, vmrs,
-            add_gas_absorption, add_H_minus_absorption, add_scattering,
-            scattering_factor, scattering_slope, scattering_ref_wavelength,
-            add_collisional_absorption, cloudtop_pressure, custom_abundances,
-            T_star, T_spot, spot_cov_frac, ri, frac_scale_height,
-            number_density, part_size, part_size_std, P_quench,
-            1e-99, 1e-99, zero_opacities, stellar_blackbody,
+        cfg, inputs, host = prepare_forward_inputs(
+            self.atm, star_radius=star_radius, planet_mass=planet_mass,
+            planet_radius=planet_radius, P_profile=P_profile,
+            T_profile=T_profile, logZ=logZ, CO_ratio=CO_ratio,
+            CH4_mult=CH4_mult, gases=gases, vmrs=vmrs,
+            add_gas_absorption=add_gas_absorption,
+            add_H_minus_absorption=add_H_minus_absorption,
+            add_scattering=add_scattering,
+            scattering_factor=scattering_factor,
+            scattering_slope=scattering_slope,
+            scattering_ref_wavelength=scattering_ref_wavelength,
+            add_collisional_absorption=add_collisional_absorption,
+            cloudtop_pressure=cloudtop_pressure,
+            custom_abundances=custom_abundances, T_star=T_star, T_spot=T_spot,
+            spot_cov_frac=spot_cov_frac, ri=ri,
+            frac_scale_height=frac_scale_height,
+            number_density=number_density, part_size=part_size,
+            part_size_std=part_size_std, P_quench=P_quench,
+            zero_opacities=zero_opacities,
+            stellar_blackbody=stellar_blackbody,
             bot_pressure=bot_pressure, n_t_rows=self.atm.N_T,
             surface_pressure=surface_pressure, a_over_Rs=a_over_Rs,
             surface_temp=surface_temp, redist=redist)
 
-        cfg = ForwardConfig(has_surface=has_surface,
-                            surface_temp_given=surface_temp is not None,
-                            **config_kwargs)
+        cfg = cfg._replace(has_surface=has_surface,
+                           surface_temp_given=surface_temp is not None)
 
         if has_surface:
             rh_binned, rh_orig, crust_flux, crust_T = \
                 self._get_surface_arrays(surface_type)
-            inputs = inputs._replace(rh_binned=rh_binned, rh_orig=rh_orig,
-                                     crust_flux=crust_flux, crust_T=crust_T)
+            inputs = inputs._replace(
+                rh_binned=rh_binned.astype(np.float32),
+                rh_orig=rh_orig.astype(np.float32),
+                crust_flux=crust_flux.astype(np.float32),
+                crust_T=crust_T.astype(np.float32))
 
         out = fm.eclipse_core(cfg, self.atm.device_data(), inputs)
 
@@ -171,25 +177,20 @@ class EclipseDepthCalculator:
             raise AtmosphereError("Atmosphere unbound: height > hill radius")
 
         if has_surface and surface_temp is None:
-            irrad = float(out.irrad)
-            flux_table = self.crust_emission_flux[surface_type].data
-            if irrad < flux_table[0] or irrad > flux_table[-1]:
-                raise ValueError(
-                    "Cannot compute surface temperature because irradiation "
-                    "is out of range of the data files")
+            self._check_irrad_in_range(float(out.irrad), surface_type)
 
         binned_depths = np.array(out.binned_depths, dtype=np.float64)
         if self.atm.wavelength_bins is None:
             binned_wavelengths = np.array(self.atm.lambda_grid)
         else:
             binned_wavelengths = np.array(
-                self.atm._bin_info["eclipse_wavelengths"])
+                self.atm._bin_info["bin_wavelengths"])
 
         if not full_output:
             return binned_wavelengths, binned_depths, None
 
         n = host["n_above"]
-        atm_info = _atm_info_dict(self.atm, out, host)
+        atm_info = atm_info_dict(self.atm, out, host)
         fluxes = np.array(out.fluxes, dtype=np.float64)
         integrand = np.array(out.integrand)[:, :n - 1]
         atm_info["surface_temp"] = float(out.surface_temp) if has_surface \

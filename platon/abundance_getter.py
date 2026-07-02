@@ -5,6 +5,9 @@ from pathlib import Path
 
 from ._interpolator_3D import regular_grid_interp_np
 
+# The log-abundance grid is ~220 MB; share it between getter instances
+_LOG_GRID_CACHE = {}
+
 
 class AbundanceGetter:
     def __init__(self, include_condensation=True):
@@ -24,10 +27,11 @@ class AbundanceGetter:
         else:
             filename = "gas_only.npy"
 
-        abundances_path = "data/abundances/{}".format(filename)
-
-        self.log_abundances = np.log10(
-            np.maximum(np.load(basedir / abundances_path), 1e-99))
+        if filename not in _LOG_GRID_CACHE:
+            abundances_path = "data/abundances/{}".format(filename)
+            _LOG_GRID_CACHE[filename] = np.log10(
+                np.maximum(np.load(basedir / abundances_path), 1e-99))
+        self.log_abundances = _LOG_GRID_CACHE[filename]
 
     def get(self, logZ, CO_ratio=0.53):
         '''Get an abundance grid at the specified logZ and C/O ratio.  This

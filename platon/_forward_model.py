@@ -13,14 +13,14 @@ avoid FP32 overflow/underflow:
   so that sum_pol_sqr and lambda**slope stay in range for slopes up to 15.
 """
 import math
-from typing import NamedTuple, Any, Optional
+from typing import NamedTuple, Any
 
 import numpy as np
 import jax
 import jax.numpy as jnp
 from jax import lax
 
-from .constants import k_B, AMU, G, h, c, M_sun, Teff_sun
+from .constants import k_B, AMU, G, h, c, M_sun
 from ._interpolator_3D import regular_grid_interp, interp1d
 
 N_SCALE = 1e-28          # scaling of number densities in the CIA term
@@ -43,7 +43,7 @@ HC_OVER_KB = h * c / k_B
  SC_N_SCALARS) = range(28)
 
 # Indices into the packed int vector
-IX_T0, IX_FLOOR, IX_BOT, IX_N_INTS = range(4)
+IX_T0, IX_FLOOR, IX_N_INTS = range(3)
 
 
 class DeviceData(NamedTuple):
@@ -74,13 +74,11 @@ class DeviceData(NamedTuple):
     exp3_y: Any             # (NE,)
     bterm_x: Any            # (NB,) tau values for the bottom-boundary term
     bterm_y: Any            # (NB,) tau^2 E1(tau) - tau e^-tau + e^-tau
-    bin_mat_transit: Any    # (B, L) or None
-    bin_mat_eclipse: Any    # (B, L) or None
+    bin_mat: Any            # (B, L) or None
 
 
 class ForwardConfig(NamedTuple):
     """Static (hashable) configuration; changing any field recompiles."""
-    n_master: int
     n_t_rows: int
     abund_mode: str          # 'eq', 'vmr', or 'custom'
     gas_master_idx: tuple    # master indices of fit gases ('vmr' mode)
@@ -94,7 +92,6 @@ class ForwardConfig(NamedTuple):
     use_mie: bool
     has_t_star: bool
     blackbody: bool
-    has_bins: bool
     has_surface: bool = False
     surface_temp_given: bool = False
 
@@ -149,7 +146,7 @@ class EclipseOutputs(NamedTuple):
 
 def _build_log_abundances(cfg, data, sc, inp):
     """Returns (M, NT, NP) log10 abundances on the full T/P grid."""
-    n_master = cfg.n_master
+    n_master = data.masses.shape[0]
     NT, NP = data.T_grid.shape[0], data.P_grid.shape[0]
 
     if cfg.abund_mode == "eq":
@@ -310,6 +307,12 @@ def _planck(lambda_grid, T):
         jnp.expm1(HC_OVER_KB / (lambda_grid * T))
 
 
+def planck_np(lambda_grid, T):
+    """Host (numpy, float64) twin of _planck."""
+    lam = np.asarray(lambda_grid)
+    return TWO_H_C_SQR / lam ** 5 / np.expm1(HC_OVER_KB / (lam * T))
+
+
 def _stellar_spectrum(cfg, data, sc, orig=False):
     """Stellar spectrum and spot correction factors on the wavelength grid."""
     lam = data.orig_lambda_grid if orig else data.lambda_grid
@@ -365,9 +368,9 @@ def _transit_core(cfg, data, inp):
         2.0 / Rs ** 2 * (absorption_fraction @ shell_w)
 
     stellar, corr = _stellar_spectrum(cfg, data, sc)
-    if cfg.has_bins:
-        weighted = data.bin_mat_transit @ (depths * corr * stellar)
-        norm = data.bin_mat_transit @ stellar
+    if data.bin_mat is not None:
+        weighted = data.bin_mat @ (depths * corr * stellar)
+        norm = data.bin_mat @ stellar
         binned = weighted / norm
     else:
         binned = depths * corr
@@ -403,7 +406,8 @@ def _eclipse_core(cfg, data, inp):
     # converge in FP32; the limits are exactly 1 as tau->0 and 0 as tau->inf.)
     bottom_term = jnp.interp(max_taus, data.bterm_x, data.bterm_y,
                              left=1.0, right=0.0)
-    planck_bot = jnp.take(planck, inp.ints[IX_BOT], axis=1)
+    # the deepest included shell is the one above the floor node
+    planck_bot = jnp.take(planck, inp.ints[IX_FLOOR] - 1, axis=1)
 
     cloudtop = sc[SC_CLOUDTOP]
     surface_P = sc[SC_SURFACE_P]
@@ -439,10 +443,10 @@ def _eclipse_core(cfg, data, inp):
 
     depths = fluxes / stellar * (photosphere_radii / Rs) ** 2
 
-    if cfg.has_bins:
+    if data.bin_mat is not None:
         photon_w = stellar * data.lambda_grid  # proportional to photon flux
-        weighted = data.bin_mat_eclipse @ (depths * photon_w)
-        norm = data.bin_mat_eclipse @ photon_w
+        weighted = data.bin_mat @ (depths * photon_w)
+        norm = data.bin_mat @ photon_w
         binned = weighted / norm
     else:
         binned = depths

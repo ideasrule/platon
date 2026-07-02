@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.special import expn
 
-from .constants import h, c, k_B, AMU, G
+from .constants import h, c, k_B, G
 from .params import NUM_LAYERS, MIN_P, MAX_P
 
 

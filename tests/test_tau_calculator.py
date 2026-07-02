@@ -3,7 +3,7 @@ import numpy as np
 import scipy.integrate
 
 from platon import _tau_calculator
-from platon import _cupy_numpy as xp
+xp = np
 
 class TestTauLOS(unittest.TestCase):
     @unittest.skip("Algorithm no longer identical to ExoTransmit")

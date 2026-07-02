@@ -121,47 +121,6 @@ class TestTransitDepthCalculator(unittest.TestCase):
         relative_diffs = np.abs(ratios - 1)
         self.assertTrue(np.all(relative_diffs < 0.001))
 
-    def test_k_coeffs_unbinned(self):
-        xsec_calc = TransitDepthCalculator(method="xsec")
-        ktab_calc = TransitDepthCalculator(method="ktables")
-                
-        xsec_wavelengths, xsec_depths, _ = xsec_calc.compute_depths(R_sun, M_jup, R_jup, 1000)
-
-        #Smooth from R=20k to R=100 to match ktables
-        N = 200
-        smoothed_xsec_wavelengths = uniform_filter(xsec_wavelengths, N)[::N]
-        smoothed_xsec_depths = uniform_filter(xsec_depths, N)[::N]
-        ktab_wavelengths, ktab_depths, _ = ktab_calc.compute_depths(R_sun, M_jup, R_jup, 1000)
-        
-        diffs = np.abs(ktab_depths - smoothed_xsec_depths[:-1])
-        self.assertTrue(np.median(diffs) < 20e-6)
-        self.assertTrue(np.percentile(diffs, 95) < 50e-6)
-        self.assertTrue(np.max(diffs) < 150e-6)
-        
-
-    def test_k_coeffs_binned(self):
-        wavelengths = np.exp(np.arange(np.log(0.31e-6), np.log(29e-6), 1./20))
-        wavelength_bins = np.array([wavelengths[0:-1], wavelengths[1:]]).T
-        
-        xsec_calc = TransitDepthCalculator(method="xsec")
-        xsec_calc.change_wavelength_bins(wavelength_bins)
-        ktab_calc = TransitDepthCalculator(method="ktables")
-        ktab_calc.change_wavelength_bins(wavelength_bins)
-                
-        wavelengths, xsec_depths, _ = xsec_calc.compute_depths(R_sun, M_jup, R_jup, 300, logZ=1, CO_ratio=1.5)
-        wavelengths, ktab_depths, _ = ktab_calc.compute_depths(R_sun, M_jup, R_jup, 300, logZ=1, CO_ratio=1.5)
-        
-        diffs = np.abs(ktab_depths - xsec_depths)
-
-        '''plt.semilogx(wavelengths, xsec_depths)
-        plt.semilogx(wavelengths, ktab_depths)
-        plt.figure()
-        plt.semilogx(wavelengths, 1e6 * diffs)
-        plt.show()'''
-        
-        self.assertTrue(np.median(diffs) < 10e-6)
-        self.assertTrue(np.percentile(diffs, 95) < 20e-6)
-        self.assertTrue(np.max(diffs) < 30e-6)
         
     def test_bounds_checking(self):
         Rp = 7.14e7

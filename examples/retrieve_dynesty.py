@@ -94,7 +94,7 @@ result = retriever.run_dynesty(bins, depths, errors,
                                  None, None, None,
                                  fit_info,
                                  sample="rwalk",
-                                 rad_method="xsec") #"ktables" to use corr-k
+                                 rad_method="xsec")
 with open("example_retrieval_result.pkl", "wb") as f:
     pickle.dump(result, f)
 

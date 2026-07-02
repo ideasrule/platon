@@ -275,7 +275,7 @@ class CombinedRetriever:
             When determining atmospheric abundances, whether to include
             condensation.
         rad_method : string, optional
-            "xsec" for opacity sampling, "ktables" for correlated k
+            "xsec" for opacity sampling (correlated-k is no longer supported)
         zero_opacities : list of strings
             List of molecules to zero opacities for
 
@@ -421,7 +421,7 @@ class CombinedRetriever:
             When determining atmospheric abundances, whether to include
             condensation.
         rad_method : string, optional
-            "xsec" for opacity sampling, "ktables" for correlated k       
+            "xsec" for opacity sampling (correlated-k is no longer supported)       
         nlive : int
             Number of live points to use for nested sampling
         zero_opacities : list of strings                                                                                                                                                                   

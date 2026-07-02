@@ -94,7 +94,7 @@ result = retriever.run_multinest(bins, depths, errors,
                                  None, None, None,
                                  fit_info,
                                  sample="rwalk",
-                                 rad_method="xsec") #"ktables" to use corr-k
+                                 rad_method="xsec", nlive=1000)
 with open("example_retrieval_result.pkl", "wb") as f:
     pickle.dump(result, f)
 

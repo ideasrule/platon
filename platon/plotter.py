@@ -4,7 +4,7 @@ import corner
 from .constants import METRES_TO_UM, BAR_TO_PASCALS, R_jup
 from .retrieval_result import RetrievalResult
 from . TP_profile import Profile
-from . import _cupy_numpy as xp
+import numpy as _np
 import dynesty
 
 default_style = ['default',
@@ -40,14 +40,14 @@ class Plotter():
         indices = np.random.choice(len(equal_samples), num_samples)
         profile_type = retrieval_result.fit_info.all_params['profile_type'].best_guess
         t_p_profile = Profile()
-        profile_pressures = xp.cpu(t_p_profile.pressures)
+        profile_pressures = _np.asarray(t_p_profile.pressures)
 
         temperature_arr = []
         for index in indices:
             params = equal_samples[index]
             params_dict = retrieval_result.fit_info._interpret_param_array(params)
             t_p_profile.set_from_params_dict(profile_type, params_dict)
-            temperature_arr.append(xp.cpu(t_p_profile.temperatures))
+            temperature_arr.append(_np.asarray(t_p_profile.temperatures))
 
         plt.figure()
         if plot_samples:
@@ -58,7 +58,7 @@ class Plotter():
 
         params_dict = retrieval_result.fit_info._interpret_param_array(retrieval_result.best_fit_params)
         t_p_profile.set_from_params_dict(profile_type, params_dict)
-        plt.plot(xp.cpu(t_p_profile.temperatures), profile_pressures / BAR_TO_PASCALS, zorder=3, color='r', label='best fit')
+        plt.plot(_np.asarray(t_p_profile.temperatures), profile_pressures / BAR_TO_PASCALS, zorder=3, color='r', label='best fit')
 
         plt.yscale('log')   
         plt.ylim(min(profile_pressures / BAR_TO_PASCALS), max(profile_pressures / BAR_TO_PASCALS))

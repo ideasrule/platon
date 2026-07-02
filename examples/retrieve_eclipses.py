@@ -81,7 +81,7 @@ result = retriever.run_dynesty(None, None, None,
                                  eclipse_bins, eclipse_depths, eclipse_errors,
                                  fit_info, nlive=200,
                                  sample="rwalk",
-                                 rad_method="xsec") #"ktables" instead of "xsec" for correlated k
+                                 rad_method="xsec")
 
 with open("example_retrieval_result.pkl", "wb") as f:
     pickle.dump(result, f)

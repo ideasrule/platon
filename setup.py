@@ -22,8 +22,9 @@ setuptools.setup(
     include_package_data = True,
     zip_safe = False,
     install_requires = [
-        "numpy",
+        "numpy>=2.0",
         "scipy",
+        "jax",
         "emcee", "dynesty", "corner",
         "future", "nose", "setuptools", "configparser",
         "matplotlib"]

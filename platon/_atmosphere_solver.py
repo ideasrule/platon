@@ -1,76 +1,218 @@
+import warnings
+from pathlib import Path
+
 import numpy as np
 import scipy.interpolate
-import matplotlib.pyplot as plt
-import warnings
+import scipy.ndimage
+import scipy.special
+import jax.numpy as jnp
 
-from pathlib import Path
+from . import _forward_model as fm
+from ._forward_model import DeviceData
 from ._hist import get_num_bins
-from ._interpolator_3D import interp1d
-from . import _cupy_numpy as xp
-from . import _hydrostatic_solver
 from ._loader import load_dict_from_pickle, load_numpy
 from .abundance_getter import AbundanceGetter
 from ._species_data_reader import read_species_data
-from . import _interpolator_3D
-from ._tau_calculator import get_line_of_sight_tau
 from .constants import k_B, AMU, M_sun, Teff_sun, G, h, c
 from ._get_data import get_data_if_needed
 from ._mie_cache import MieCache
 from .errors import AtmosphereError
-from ._interpolator_3D import regular_grid_interp, interp1d
+
+# Data caches shared between calculator instances, so that constructing many
+# calculators doesn't repeatedly read gigabytes from disk or duplicate arrays
+# on the GPU.  All cached arrays are immutable.  The device cache is a small
+# LRU: each binned entry can hold gigabytes of GPU memory, so old bin sets
+# must be evicted (live calculators keep their own references and are
+# unaffected by eviction; only cross-instance sharing is lost).
+_RAW_CACHE = {}
+_LOG_ABUND_CACHE = {}
+_DEVICE_CACHE = {}
+_DEVICE_CACHE_MAX_ENTRIES = 8
+
+
+def _interp_rows_to(lambda_target, lambda_source, data):
+    """Interpolate data (..., len(lambda_source)) onto lambda_target."""
+    return np.array([np.interp(lambda_target, lambda_source, row)
+                     for row in data])
+
+
+def _compute_h_minus_k(T, wavelengths_m):
+    """John (1988) H- bound-free + free-free absorption k(T, lambda), in
+    m^4/N.  Runs in float64 on the host (precomputed once per data load)."""
+    wavelengths = 1e6 * np.asarray(wavelengths_m, dtype=np.float64)
+    alpha = 14391
+    lambda_0 = 1.6419
+
+    k_bf = np.zeros(len(wavelengths))
+    cond = wavelengths < lambda_0
+    C = [152.519, 49.534, -118.858, 92.536, -34.194, 4.982]
+    f_lambda = np.sum([C[i - 1] * (1 / wavelengths[cond] - 1 / lambda_0)**((i - 1) / 2)
+                       for i in range(1, 7)], axis=0)
+    sigma = 1e-18 * wavelengths[cond]**3 * \
+        (1 / wavelengths[cond] - 1 / lambda_0)**1.5 * f_lambda
+    k_bf[cond] = 0.75 * T**-2.5 * np.exp(alpha / lambda_0 / T) * \
+        (1 - np.exp(-alpha / wavelengths[cond] / T)) * sigma
+
+    k_ff = np.zeros(len(wavelengths))
+    mid = np.logical_and(wavelengths > 0.1823, wavelengths < 0.3645)
+    red = wavelengths > 0.3645
+
+    ff_matrix_red = np.array([
+        [0, 0, 0, 0, 0, 0],
+        [2483.346, 285.827, -2054.291, 2827.776, -1341.537, 208.952],
+        [-3449.889, -1158.382, 8746.523, -11485.632, 5303.609, -812.939],
+        [2200.04, 2427.719, -13651.105, 16755.524, -7510.494, 1132.738],
+        [-696.271, -1841.4, 8624.97, -10051.53, 4400.067, -655.02],
+        [88.283, 444.517, -1863.864, 2095.288, -901.788, 132.985]])
+    ff_matrix_mid = np.array([
+        [518.1021, -734.8666, 1021.1775, -479.0721, 93.1373, -6.4285],
+        [473.2636, 1443.4137, -1977.3395, 922.3575, -178.9275, 12.36],
+        [-482.2089, -737.1616, 1096.8827, -521.1341, 101.7963, -7.0571],
+        [115.5291, 169.6374, -245.649, 114.243, -21.9972, 1.5097],
+        [0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0]])
+
+    A_mid = np.array([wavelengths[mid]**i for i in (2, 0, -1, -2, -3, -4)]).T
+    A_red = np.array([wavelengths[red]**i for i in (2, 0, -1, -2, -3, -4)]).T
+    for n in range(1, 7):
+        k_ff[mid] += 1e-29 * (5040 / T)**((n + 1) / 2) * A_mid.dot(ff_matrix_mid[n - 1])
+        k_ff[red] += 1e-29 * (5040 / T)**((n + 1) / 2) * A_red.dot(ff_matrix_red[n - 1])
+
+    # 1e-3 to convert from cm^4/dyne to m^4/N
+    return (k_bf + k_ff) * 1e-3
+
+
+def _load_raw(method, include_opacities, downsample):
+    """Load all wavelength-dependent data at full resolution (CPU, float32)."""
+    # sorted: the same opacity set in a different order must share one entry
+    key = (method, tuple(sorted(include_opacities)), downsample)
+    if key in _RAW_CACHE:
+        return _RAW_CACHE[key]
+
+    basedir = Path(__file__).resolve().parent
+    absorption_data, mass_data, polarizability_data = read_species_data(
+        basedir / "data/Absorption", basedir / "data/species_info",
+        method, include_opacities, downsample)
+
+    lambda_full = load_numpy("data/wavelengths.npy")[::downsample]
+    low_res_lambdas = load_numpy("data/low_res_lambdas.npy")
+
+    master_names = list(mass_data.keys())
+    master_index = {name: i for i, name in enumerate(master_names)}
+    masses = np.array([mass_data[name] for name in master_names], np.float32)
+    pol_sqr = np.array(
+        [(polarizability_data.get(name, 0.0) * fm.POL_SCALE)**2
+         for name in master_names], np.float32)
+
+    opac_names = list(absorption_data.keys())
+    abs_stack = np.stack([absorption_data[name] for name in opac_names]) \
+        if opac_names else np.zeros((0, 40, 13, len(lambda_full)), np.float32)
+    opac_master_idx = np.array(
+        [master_index[name] for name in opac_names], np.int32)
+
+    collisional = load_dict_from_pickle("data/collisional_absorption.pkl")
+    cia_pairs = [(s1, s2) for (s1, s2) in collisional
+                 if s1 in master_index and s2 in master_index]
+    if len(cia_pairs) > 0:
+        cia_stack = np.stack(
+            [(_interp_rows_to(lambda_full, low_res_lambdas,
+                              collisional[pair]) * fm.CIA_DATA_SCALE
+              ).astype(np.float32) for pair in cia_pairs])
+    else:
+        cia_stack = np.zeros((0, 40, len(lambda_full)), np.float32)
+    cia_idx1 = np.array([master_index[s1] for s1, _ in cia_pairs], np.int32)
+    cia_idx2 = np.array([master_index[s2] for _, s2 in cia_pairs], np.int32)
+
+    P_grid = load_numpy("data/pressures.npy").astype(np.float64)
+    T_grid = load_numpy("data/temperatures.npy").astype(np.float64)
+
+    hminus_k = np.array([_compute_h_minus_k(T, lambda_full) / k_B
+                         for T in T_grid], dtype=np.float32)
+
+    stellar_dict = load_dict_from_pickle("data/stellar_spectra.pkl")
+    stellar_temps = np.asarray(stellar_dict["temperatures"], np.float64)
+    stellar_spectra = _interp_rows_to(
+        lambda_full, low_res_lambdas,
+        np.asarray(stellar_dict["spectra"])).astype(np.float32)
+
+    exp3_x = np.logspace(-6, 3, 1000)
+    exp3_y = scipy.special.expn(3, exp3_x)
+
+    # Lookup table for tau^2 E1(tau) - tau e^-tau + e^-tau (float64 host
+    # computation; jax's exp1 is unreliable in FP32)
+    bterm_x = np.logspace(-6, 2.5, 10000)
+    bterm_y = bterm_x**2 * scipy.special.exp1(bterm_x) - \
+        bterm_x * np.exp(-bterm_x) + np.exp(-bterm_x)
+
+    raw = dict(
+        key=key,
+        lambda_full=lambda_full,
+        low_res_lambdas=low_res_lambdas,
+        master_names=master_names, master_index=master_index,
+        masses=masses, pol_sqr=pol_sqr,
+        opac_names=opac_names, abs_stack=abs_stack,
+        opac_master_idx=opac_master_idx,
+        cia_pairs=cia_pairs, cia_stack=cia_stack,
+        cia_idx1=cia_idx1, cia_idx2=cia_idx2,
+        P_grid=P_grid, T_grid=T_grid,
+        hminus_k=hminus_k,
+        stellar_temps=stellar_temps, stellar_spectra=stellar_spectra,
+        exp3_x=exp3_x.astype(np.float32), exp3_y=exp3_y.astype(np.float32),
+        bterm_x=bterm_x.astype(np.float32), bterm_y=bterm_y.astype(np.float32),
+    )
+    _RAW_CACHE[key] = raw
+    return raw
+
+
+def _get_log_abund_grid(include_condensation, eq_species, master_index):
+    """(NZ, NC, S_eq, NT, NP) float32 log10 abundance grid, floored at -99."""
+    if include_condensation in _LOG_ABUND_CACHE:
+        return _LOG_ABUND_CACHE[include_condensation]
+    basedir = Path(__file__).resolve().parent
+    filename = "with_condensation.npy" if include_condensation else "gas_only.npy"
+    grid = np.load(basedir / "data/abundances" / filename)
+    log_grid = np.log10(np.maximum(grid, 1e-99)).astype(np.float32)
+    eq_master_idx = np.array([master_index[s] for s in eq_species], np.int32)
+    result = (log_grid, eq_master_idx)
+    _LOG_ABUND_CACHE[include_condensation] = result
+    return result
+
 
 class AtmosphereSolver:
-    def __init__(self, include_condensation=True, ref_pressure=1e5, method='xsec', include_opacities=[], downsample=1):
+    def __init__(self, include_condensation=True, ref_pressure=1e5,
+                 method='xsec', include_opacities=[], downsample=1):
         self.arguments = locals()
         del self.arguments["self"]
 
+        if method == "ktables":
+            raise NotImplementedError(
+                "Correlated-k support has been removed from this JAX version "
+                "of PLATON; use method='xsec'")
+
         get_data_if_needed()
-        
-        basedir = Path(__file__).resolve().parent        
-        self.absorption_data, self.mass_data, self.polarizability_data = read_species_data(
-            basedir / "data/Absorption",
-            basedir / "data/species_info",
-            method, include_opacities, downsample)
 
-        self.low_res_lambdas = load_numpy("data/low_res_lambdas.npy")
-        self.stellar_spectra_dict = load_dict_from_pickle("data/stellar_spectra.pkl")                    
-        
-        if method == "xsec":
-            self.lambda_grid = xp.copy(load_numpy("data/wavelengths.npy")[::downsample])
-            self.d_ln_lambda = xp.median(xp.diff(xp.log(self.lambda_grid)))
-        else:
-            warnings.warn("Correlated-k is not recommended, and will probably be removed in a future version! Please use xsec")
-            self.lambda_grid = load_numpy("data/k_wavelengths.npy")
-            self.d_ln_lambda = xp.median(xp.diff(xp.log(xp.unique(self.lambda_grid))))
+        self.raw = _load_raw(method, include_opacities, downsample)
+        self.include_condensation = include_condensation
 
-        self.orig_lambda_grid = xp.copy(self.lambda_grid) #In case we truncate with change_wavelength_bins
-        self.stellar_spectra_temps = xp.array(self.stellar_spectra_dict["temperatures"])
-        self.stellar_spectra = list(self.stellar_spectra_dict["spectra"])
-        for i in range(len(self.stellar_spectra)):
-            self.stellar_spectra[i] = xp.interp(self.lambda_grid, self.low_res_lambdas, self.stellar_spectra[i])
-        self.stellar_spectra = xp.array(self.stellar_spectra)
-        self.orig_stellar_spectra = xp.array(self.stellar_spectra)
-            
-        self.collisional_absorption_data = load_dict_from_pickle(
-            "data/collisional_absorption.pkl")
-        
-        for key in self.collisional_absorption_data:
-            val = interp1d(self.lambda_grid, self.low_res_lambdas, self.collisional_absorption_data[key].T).T
-            self.collisional_absorption_data[key] = xp.copy(val, order="C")
-            
-        self.P_grid = load_numpy("data/pressures.npy")
-        self.T_grid = load_numpy("data/temperatures.npy")
+        self.orig_lambda_grid = np.array(self.raw["lambda_full"])
+        self.lambda_grid = np.array(self.raw["lambda_full"])
+        self.d_ln_lambda = np.median(np.diff(np.log(self.lambda_grid)))
 
+        self.P_grid = self.raw["P_grid"]
+        self.T_grid = self.raw["T_grid"]
         self.N_lambda = len(self.lambda_grid)
         self.N_T = len(self.T_grid)
         self.N_P = len(self.P_grid)
+
+        self.stellar_spectra_temps = self.raw["stellar_temps"]
 
         self.wavelength_rebinned = False
         self.wavelength_bins = None
 
         self.abundance_getter = AbundanceGetter(include_condensation)
-        self.min_temperature = max(self.T_grid.min(), self.abundance_getter.min_temperature)
-        self.max_temperature = xp.amax(self.T_grid)
+        self.min_temperature = max(self.T_grid.min(),
+                                   self.abundance_getter.min_temperature)
+        self.max_temperature = self.T_grid.max()
 
         self.ref_pressure = ref_pressure
         self.method = method
@@ -80,11 +222,23 @@ class AtmosphereSolver:
         self.all_radii = load_numpy("data/mie_radii.npy")
         diffs = np.diff(np.log(self.all_radii))
         self.d_ln_radii = np.median(diffs)
-        assert(np.allclose(diffs, self.d_ln_radii))
+        assert np.allclose(diffs, self.d_ln_radii)
 
+        self.low_res_lambdas = self.raw["low_res_lambdas"]
+
+        self.master_names = self.raw["master_names"]
+        self.master_index = self.raw["master_index"]
+
+        self._lambda_cond = None      # boolean mask into lambda_full
+        self._bin_info = None
+        self._device_data = None
+
+    # ------------------------------------------------------------------
+    # Wavelength binning
+    # ------------------------------------------------------------------
     def get_lambda_grid(self):
-        return xp.cpu(self.lambda_grid)
-        
+        return np.array(self.lambda_grid)
+
     def change_wavelength_bins(self, bins):
         """Specify wavelength bins, instead of using the full wavelength grid
         in self.lambda_grid.  This makes the code much faster, as
@@ -97,398 +251,327 @@ class AtmosphereSolver:
             Wavelength bins, where bins[i][0] is the start wavelength and
             bins[i][1] is the end wavelength for bin i. If bins is None, resets
             the calculator to its unbinned state.
-
-        Raises
-        ------
-        NotImplementedError
-            Raised when `change_wavelength_bins` is called more than once,
-            which is not supported.
         """
-        bins = xp.array(bins)
         if self.wavelength_rebinned:
-            self.__init__(**self.arguments)
-            self.wavelength_rebinned = False        
-            
+            # Reset to the unbinned state before applying the new bins
+            self.lambda_grid = np.array(self.orig_lambda_grid)
+            self.N_lambda = len(self.lambda_grid)
+            self.wavelength_rebinned = False
+            self.wavelength_bins = None
+            self._lambda_cond = None
+            self._bin_info = None
+            self._device_data = None
+
         if bins is None:
             return
+        bins = np.asarray(bins, dtype=np.float64)
 
+        full = self.orig_lambda_grid
         for start, end in bins:
-            if start < self.lambda_grid.min() \
-               or start > self.lambda_grid.max() \
-               or end < self.lambda_grid.min() \
-               or end > self.lambda_grid.max():
-                raise ValueError("Invalid wavelength bin: {}-{} meters".format(start, end))
-            num_points = xp.sum(xp.logical_and(self.lambda_grid > start,
-                                               self.lambda_grid < end))
+            if start < full.min() or start > full.max() \
+               or end < full.min() or end > full.max():
+                raise ValueError(
+                    "Invalid wavelength bin: {}-{} meters".format(start, end))
+            num_points = np.sum(np.logical_and(full > start, full < end))
             if num_points == 0:
-                raise ValueError("Wavelength bin too narrow: {}-{} meters".format(start, end))
+                raise ValueError(
+                    "Wavelength bin too narrow: {}-{} meters".format(start, end))
             if num_points <= 5:
-                print("WARNING: only {} points in {}-{} m bin. Results will be inaccurate".format(num_points, start, end))
-        
+                print("WARNING: only {} points in {}-{} m bin. Results will "
+                      "be inaccurate".format(num_points, start, end))
+
         self.wavelength_rebinned = True
         self.wavelength_bins = bins
 
-        cond = xp.any(xp.array([
-            xp.logical_and(self.lambda_grid > start, self.lambda_grid < end) \
-            for (start, end) in bins]), axis=0)
-
-        for key in self.absorption_data:
-            self.absorption_data[key] = self.absorption_data[key][:, :, cond]
-
-        self.lambda_grid = self.lambda_grid[cond]
+        cond = np.any([np.logical_and(full > start, full < end)
+                       for (start, end) in bins], axis=0)
+        self._lambda_cond = cond
+        self.lambda_grid = full[cond]
         self.N_lambda = len(self.lambda_grid)
+        self._bin_info = self._compute_bin_info(bins)
+        self._device_data = None
 
-        self.stellar_spectra = self.stellar_spectra[:,cond]
-            
-        for key in self.collisional_absorption_data:
-            self.collisional_absorption_data[key] = self.collisional_absorption_data[key][:, cond]
-            
-    def _get_k(self, T, wavelengths):
-        wavelengths = 1e6 * xp.copy(wavelengths)
-        alpha = 14391
-        lambda_0 = 1.6419
+    def _compute_bin_info(self, bins):
+        """Precompute per-bin index ranges/masks and averaging matrices."""
+        lam = self.lambda_grid
+        B = len(bins)
+        L = len(lam)
+        mat_transit = np.zeros((B, L), dtype=np.float32)
+        mat_eclipse = np.zeros((B, L), dtype=np.float32)
+        transit_wavelengths = np.zeros(B)
+        eclipse_wavelengths = np.zeros(B)
+        transit_ranges = []
+        for i, (start, end) in enumerate(bins):
+            l = np.searchsorted(lam, start)
+            r = np.searchsorted(lam, end)
+            mat_transit[i, l:r] = 1
+            transit_wavelengths[i] = np.mean(lam[l:r])
+            transit_ranges.append((l, r))
+            cond = np.logical_and(lam >= start, lam < end)
+            mat_eclipse[i, cond] = 1
+            eclipse_wavelengths[i] = np.mean(lam[cond])
+        return dict(mat_transit=mat_transit, mat_eclipse=mat_eclipse,
+                    transit_wavelengths=transit_wavelengths,
+                    eclipse_wavelengths=eclipse_wavelengths,
+                    transit_ranges=transit_ranges)
 
-        #Calculate bound-free absorption coefficient
-        k_bf = xp.zeros(len(wavelengths))
-        cond = wavelengths < lambda_0
-        C = [152.519, 49.534, -118.858, 92.536, -34.194, 4.982]
-        f_lambda = xp.sum(xp.array([C[i-1] * (1/wavelengths[cond] - 1/lambda_0)**((i-1)/2) for i in range(1,7)]), axis=0)
-        sigma = 1e-18 * wavelengths[cond]**3 * (1 / wavelengths[cond] - 1 / lambda_0)**1.5 * f_lambda
-        k_bf[cond] = 0.75 * T**-2.5 * xp.exp(alpha/lambda_0 / T) * (1 - xp.exp(-alpha / wavelengths[cond] / T)) * sigma
+    # ------------------------------------------------------------------
+    # Device data
+    # ------------------------------------------------------------------
+    def device_data(self):
+        if self._device_data is not None:
+            return self._device_data
 
-        #Now calculate free-free absorption coefficient
-        k_ff = xp.zeros(len(wavelengths))
-        mid = xp.logical_and(wavelengths > 0.1823, wavelengths < 0.3645)
-        red = wavelengths > 0.3645
-                    
-        ff_matrix_red = xp.array([
-            [0, 0, 0, 0, 0, 0],
-            [2483.346, 285.827, -2054.291, 2827.776, -1341.537, 208.952],
-            [-3449.889, -1158.382, 8746.523, -11485.632, 5303.609, -812.939],
-            [2200.04, 2427.719, -13651.105, 16755.524, -7510.494, 1132.738],
-            [-696.271, -1841.4, 8624.97, -10051.53, 4400.067, -655.02],
-            [88.283, 444.517, -1863.864, 2095.288, -901.788, 132.985]])
-        ff_matrix_mid = xp.array([
-            [518.1021, -734.8666, 1021.1775, -479.0721, 93.1373, -6.4285],
-            [473.2636, 1443.4137, -1977.3395, 922.3575, -178.9275, 12.36],
-            [-482.2089, -737.1616, 1096.8827, -521.1341, 101.7963, -7.0571],
-            [115.5291, 169.6374, -245.649, 114.243, -21.9972, 1.5097],
-            [0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0]])
+        bins_key = None if self.wavelength_bins is None \
+            else self.wavelength_bins.tobytes()
+        key = (self.raw["key"], self.include_condensation, bins_key)
+        if key in _DEVICE_CACHE:
+            # Move to the end so the LRU eviction below treats it as fresh
+            self._device_data = _DEVICE_CACHE.pop(key)
+            _DEVICE_CACHE[key] = self._device_data
+            return self._device_data
 
-        for n in range(1, 7):
-            A_mid = xp.array([wavelengths[mid]**i for i in (2, 0, -1, -2, -3, -4)]).T
-            #print(A_mid.shape)
-            A_red = xp.array([wavelengths[red]**i for i in (2, 0, -1, -2, -3, -4)]).T
-            
-            k_ff[mid] += 1e-29 * (5040/T)**((n+1)/2) * A_mid.dot(ff_matrix_mid[n-1])
-            k_ff[red] += 1e-29 * (5040/T)**((n+1)/2) * A_red.dot(ff_matrix_red[n-1])
+        raw = self.raw
+        cond = self._lambda_cond
+        if cond is None:
+            cond = slice(None)
 
-        k = k_bf + k_ff
-        
-        #1e-3 to convert from cm^4/dyne to m^4/N
-        return k * 1e-3
-    
-    def _get_H_minus_absorption(self, abundances, P_cond, T_cond):
-        absorption_coeff = xp.zeros(
-            (int(xp.sum(T_cond)), int(xp.sum(P_cond)), self.N_lambda))
-        
-        valid_Ts = self.T_grid[T_cond]
-        trunc_el_abundances = abundances["el"][T_cond][:, P_cond]
-        trunc_H_abundances = abundances["H"][T_cond][:, P_cond]
-        
-        for t in range(len(valid_Ts)):
-            k = self._get_k(valid_Ts[t], self.lambda_grid)          
-            absorption_coeff[t] = k * (trunc_el_abundances[t] * trunc_H_abundances[t] * self.P_grid[P_cond]**2)[:, xp.newaxis] / (k_B * valid_Ts[t])
-                  
-        return absorption_coeff
+        log_abund_grid, eq_master_idx = _get_log_abund_grid(
+            self.include_condensation,
+            self.abundance_getter.included_species, self.master_index)
 
-    def _get_gas_absorption(self, abundances, P_cond, T_cond, zero_opacities=[]):
-        absorption_coeff = xp.zeros(
-            (int(xp.sum(T_cond)), int(xp.sum(P_cond)), self.N_lambda))
+        lam = self.lambda_grid
+        dd = DeviceData(
+            lambda_grid=jnp.asarray(lam, dtype=jnp.float32),
+            lambda_um=jnp.asarray(lam * 1e6, dtype=jnp.float32),
+            T_grid=jnp.asarray(raw["T_grid"], dtype=jnp.float32),
+            P_grid=jnp.asarray(raw["P_grid"], dtype=jnp.float32),
+            ln_P_grid=jnp.asarray(np.log(raw["P_grid"]), dtype=jnp.float32),
+            log10_P_grid=jnp.asarray(np.log10(raw["P_grid"]), dtype=jnp.float32),
+            abs_stack=jnp.asarray(raw["abs_stack"][:, :, :, cond]),
+            opac_master_idx=jnp.asarray(raw["opac_master_idx"]),
+            masses=jnp.asarray(raw["masses"]),
+            pol_sqr=jnp.asarray(raw["pol_sqr"]),
+            log_abund_grid=jnp.asarray(log_abund_grid),
+            logZ_grid=jnp.asarray(self.abundance_getter.logZs, dtype=jnp.float32),
+            CO_grid=jnp.asarray(self.abundance_getter.CO_ratios, dtype=jnp.float32),
+            eq_master_idx=jnp.asarray(eq_master_idx),
+            cia_stack=jnp.asarray(raw["cia_stack"][:, :, cond]),
+            cia_idx1=jnp.asarray(raw["cia_idx1"]),
+            cia_idx2=jnp.asarray(raw["cia_idx2"]),
+            hminus_k_over_kB=jnp.asarray(raw["hminus_k"][:, cond]),
+            stellar_temps=jnp.asarray(raw["stellar_temps"], dtype=jnp.float32),
+            stellar_spectra=jnp.asarray(raw["stellar_spectra"][:, cond]),
+            orig_lambda_grid=jnp.asarray(raw["lambda_full"], dtype=jnp.float32),
+            orig_stellar_spectra=jnp.asarray(raw["stellar_spectra"]),
+            exp3_x=jnp.asarray(raw["exp3_x"]),
+            exp3_y=jnp.asarray(raw["exp3_y"]),
+            bterm_x=jnp.asarray(raw["bterm_x"]),
+            bterm_y=jnp.asarray(raw["bterm_y"]),
+            bin_mat_transit=None if self._bin_info is None
+                else jnp.asarray(self._bin_info["mat_transit"]),
+            bin_mat_eclipse=None if self._bin_info is None
+                else jnp.asarray(self._bin_info["mat_eclipse"]),
+        )
+        _DEVICE_CACHE[key] = dd
+        while len(_DEVICE_CACHE) > _DEVICE_CACHE_MAX_ENTRIES:
+            _DEVICE_CACHE.pop(next(iter(_DEVICE_CACHE)))
+        self._device_data = dd
+        return dd
 
-        for species_name, species_abundance in abundances.items():
-            assert(species_abundance.shape == (self.N_T, self.N_P))
-            
-            if (species_name in self.absorption_data) and (species_name not in zero_opacities):
-                absorption_coeff += self.absorption_data[species_name][T_cond][:,P_cond] * species_abundance[T_cond][:,P_cond,xp.newaxis]
+    # ------------------------------------------------------------------
+    # Host-side helpers
+    # ------------------------------------------------------------------
+    def get_t0(self, T_profile):
+        """First T-grid row of the 2-row slice bracketing an isothermal T."""
+        T = float(np.min(T_profile))
+        return int(np.clip(np.searchsorted(self.T_grid, T, side="right") - 1,
+                           0, self.N_T - 2))
 
-        return absorption_coeff
+    def get_above_info(self, P_profile, bot_pressure):
+        """Node/shell masks for the region above the cloud deck / surface."""
+        above_nodes = np.asarray(P_profile) < bot_pressure
+        if not above_nodes.any():
+            raise AtmosphereError("Entire atmosphere is below the clouds")
+        n_above = int(above_nodes.sum())
+        shell_mask = above_nodes[1:].astype(np.float32)
+        return n_above, shell_mask
 
-    def _get_scattering_absorption(self, abundances, P_cond, T_cond,
-                                   multiple=1, slope=4, ref_wavelength=1e-6):
-        sum_polarizability_sqr = xp.zeros((int(xp.sum(T_cond)), int(xp.sum(P_cond))))
+    def get_mie_ref_pressure(self, P_profile, bot_pressure):
+        """Maximum pressure-grid point included by the old code's
+        get_condition_array, used as the reference for the Mie particle
+        density profile."""
+        P_above = np.asarray(P_profile)[np.asarray(P_profile) < bot_pressure]
+        target = min(P_above.max(), bot_pressure)
+        idx = np.searchsorted(self.P_grid, target)
+        idx = min(idx, self.N_P - 1)
+        return float(self.P_grid[idx])
 
-        for species_name in abundances:
-            if species_name in self.polarizability_data:
-                sum_polarizability_sqr += abundances[species_name][T_cond,:][:,P_cond] * self.polarizability_data[species_name]**2
+    def get_quench_T(self, P_profile, T_profile, P_quench):
+        return float(np.interp(np.log(P_quench), np.log(P_profile), T_profile))
 
-        n = self.P_grid[P_cond] / (k_B * self.T_grid[T_cond][:, xp.newaxis])
-        result = (multiple * (128.0 / 3 * xp.pi**5) * ref_wavelength**(slope - 4) * n * sum_polarizability_sqr)[:, :, xp.newaxis] / self.lambda_grid**slope
+    def custom_abundances_to_log_master(self, custom_abundances):
+        """Convert a species -> (N_T, N_P) abundance dict to a master-species
+        log10 array."""
+        unknown = [key for key in custom_abundances
+                   if key not in self.master_index]
+        if unknown:
+            raise ValueError(
+                "custom_abundances contains unknown species: {}".format(unknown))
+        result = np.full((len(self.master_names), self.N_T, self.N_P),
+                         fm.LOG_MIN_ABUND, dtype=np.float32)
+        for key, value in custom_abundances.items():
+            if not isinstance(value, np.ndarray):
+                raise ValueError(
+                    "custom_abundances must map species names to arrays")
+            if value.shape != (self.N_T, self.N_P):
+                raise ValueError(
+                    "custom_abundances has array of invalid size")
+            with np.errstate(divide="ignore", invalid="ignore"):
+                logv = np.log10(value.astype(np.float64))
+            logv = np.nan_to_num(logv, nan=fm.LOG_MIN_ABUND,
+                                 neginf=fm.LOG_MIN_ABUND)
+            result[self.master_index[key]] = logv
         return result
 
-    def _get_collisional_absorption(self, abundances, P_cond, T_cond):
-        absorption_coeff = xp.zeros(
-            (int(xp.sum(T_cond)), int(xp.sum(P_cond)), self.N_lambda))
-        
-        n = self.P_grid[xp.newaxis, P_cond] / (k_B * self.T_grid[T_cond, xp.newaxis])        
-        for s1, s2 in self.collisional_absorption_data:
-            if s1 in abundances and s2 in abundances:
-                n1 = (abundances[s1][T_cond, :][:, P_cond] * n)
-                n2 = (abundances[s2][T_cond, :][:, P_cond] * n)
-                abs_data = self.collisional_absorption_data[(s1, s2)].reshape(
-                    (self.N_T, 1, -1))[T_cond]
-                absorption_coeff += abs_data * (n1 * n2)[:, :, xp.newaxis]
-
-        return absorption_coeff
-
-    def _get_mie_scattering_absorption(self, P_cond, T_cond, ri, part_size,
-                                       frac_scale_height, max_number_density,
-                                       sigma = 0.5, max_zscore = 5, num_integral_points = 100):
-        if isinstance(ri, str):
-            kernel = sigma / self.d_ln_radii
-            cross_secs = xp.ndimage.gaussian_filter(self.all_cross_secs[ri], kernel)
-            if part_size < self.all_radii[3*int(kernel)] or part_size > self.all_radii[-3*int(kernel)]:
-                raise ValueError("part_size out of bounds: {} m".format(part_size))
-            
-            eff_cross_section = xp.interp(
-                self.lambda_grid,
-                self.low_res_lambdas,
-                interp1d(part_size, self.all_radii, cross_secs.T))
-        else:
-            eff_cross_section = xp.zeros(self.N_lambda)
-            z_scores = -xp.logspace(xp.log10(0.1), xp.log10(max_zscore), int(num_integral_points/2))
-            z_scores = xp.append(z_scores[::-1], -z_scores)
-
-            probs = xp.exp(-z_scores**2/2) / xp.sqrt(2 * xp.pi)
-            radii = part_size * xp.exp(z_scores * sigma)
-            geometric_cross_section = xp.pi * radii**2
-
-            dense_xs = 2*xp.pi*radii[xp.newaxis,:] / self.lambda_grid[:,xp.newaxis]
-            log_dense_xs = xp.log(dense_xs.flatten())
-
-            n_bins = get_num_bins(log_dense_xs)
-            log_x_hist = xp.cpu(xp.histogram(log_dense_xs, bins=n_bins)[1])
-            
-            Qext_hist = self._mie_cache.get_and_update(ri, np.exp(log_x_hist))
-            spl = scipy.interpolate.make_interp_spline(log_x_hist, Qext_hist)
-            spl = xp.interpolate.BSpline(xp.array(spl.t), xp.array(spl.c), spl.k)           
-            Qext_intpl = spl(log_dense_xs).reshape((self.N_lambda, len(radii)))
-            eff_cross_section = xp.trapz(probs*geometric_cross_section*Qext_intpl, z_scores)
-
-        n = max_number_density * xp.power(self.P_grid[P_cond] / max(self.P_grid[P_cond]), 1.0/frac_scale_height)        
-        absorption_coeff = n[xp.newaxis, :, xp.newaxis] * eff_cross_section[xp.newaxis, xp.newaxis, :]
-        return absorption_coeff
-
-    def _get_above_cloud_profiles(self, P_profile, T_profile, abundances,
-                                  planet_mass, planet_radius, star_radius,
-                                  above_cloud_cond, T_star=None):        
-        assert(len(P_profile) == len(T_profile))
-        # First, get atmospheric weight profile
-        mu_profile = xp.zeros(len(P_profile))
-        atm_abundances = {}
-        
-        for species_name in abundances:
-            abund = 10.**regular_grid_interp(self.T_grid, xp.log10(self.P_grid), xp.log10(abundances[species_name]), T_profile, xp.log10(P_profile))
-            atm_abundances[species_name] = abund
-            mu_profile += abund * self.mass_data[species_name]
-
-        radii, dr = _hydrostatic_solver._solve(
-            P_profile, T_profile, self.ref_pressure, mu_profile, planet_mass,
-            planet_radius, star_radius, above_cloud_cond, T_star)
-        
-        for key in atm_abundances:
-            atm_abundances[key] = atm_abundances[key][above_cloud_cond]
-            
-        return radii, dr, atm_abundances, mu_profile
-
-    def _get_abundances_array(self, logZ, CO_ratio, CH4_mult, custom_abundances, gases, vmrs):
-        if custom_abundances is None and logZ is not None and CO_ratio is not None:
-            abunds = self.abundance_getter.get(logZ, CO_ratio)
-            abunds["CH4"] *= CH4_mult
-            return abunds
-
-        if logZ is not None or CO_ratio is not None:
-            raise ValueError(
-                "Must set logZ=None and CO_ratio=None to use custom_abundances")
-
-        if isinstance(custom_abundances, str):
-            # Interpret as filename
-            return AbundanceGetter.from_file(custom_abundances)
-
-        if isinstance(custom_abundances, dict):
-            for key, value in custom_abundances.items():
-                if not isinstance(value, xp.ndarray):
-                    raise ValueError(
-                        "custom_abundances must map species names to arrays")
-                if value.shape != (self.N_T, self.N_P):
-                    raise ValueError(
-                        "custom_abundances has array of invalid size")
-            return custom_abundances
-
-        
-        if custom_abundances is None and vmrs is not None and gases is not None:
-            abundances = {}
-            for i, g in enumerate(gases):
-                abundances[g] = vmrs[i] * xp.ones((len(self.T_grid), len(self.P_grid)))
-            return abundances
-
-        raise ValueError("Unrecognized format for custom_abundances")
-   
-
     def _validate_params(self, T_profile, logZ, CO_ratio, cloudtop_pressure):
-        T_profile = xp.atleast_1d(T_profile)
-        if T_profile.min() < self.min_temperature or\
+        T_profile = np.atleast_1d(np.asarray(T_profile, dtype=np.float64))
+        if T_profile.min() < self.min_temperature or \
            T_profile.max() > self.max_temperature:
             raise AtmosphereError("Invalid temperatures in T/P profile")
-            
+
         if logZ is not None:
-            minimum = self.abundance_getter.logZs.min()
-            maximum = self.abundance_getter.logZs.max()
+            minimum = float(self.abundance_getter.logZs.min())
+            maximum = float(self.abundance_getter.logZs.max())
             if logZ < minimum or logZ > maximum:
                 raise ValueError(
                     "logZ {} is out of bounds ({} to {})".format(
                         logZ, minimum, maximum))
 
         if CO_ratio is not None:
-            minimum = self.abundance_getter.CO_ratios.min()
-            maximum = self.abundance_getter.CO_ratios.max()
+            minimum = float(self.abundance_getter.CO_ratios.min())
+            maximum = float(self.abundance_getter.CO_ratios.max())
             if CO_ratio < minimum or CO_ratio > maximum:
                 raise ValueError(
-                    "C/O ratio {} is out of bounds ({} to {})".format(CO_ratio, minimum, maximum))
+                    "C/O ratio {} is out of bounds ({} to {})".format(
+                        CO_ratio, minimum, maximum))
 
-        if not xp.isinf(cloudtop_pressure):
-            minimum = self.P_grid.min()
-            maximum = self.P_grid.max()
+        if not np.isinf(cloudtop_pressure):
+            minimum = float(self.P_grid.min())
+            maximum = float(self.P_grid.max())
             if cloudtop_pressure <= minimum or cloudtop_pressure > maximum:
                 raise ValueError(
-                    "Cloudtop pressure is {} Pa, but must be between {} and {} Pa unless it is xp.inf".format(
+                    "Cloudtop pressure is {} Pa, but must be between {} and "
+                    "{} Pa unless it is np.inf".format(
                         cloudtop_pressure, minimum, maximum))
 
-    def get_stellar_spectrum(self, T_star, T_spot, spot_cov_frac, blackbody=False, use_full_lambdas=False):
+    def get_stellar_spectrum(self, T_star, T_spot, spot_cov_frac,
+                             blackbody=False, use_full_lambdas=False):
+        """Host (numpy) stellar spectrum, for non-JIT use."""
         if use_full_lambdas:
             lambdas = self.orig_lambda_grid
-            stellar_spectra = self.orig_stellar_spectra
+            stellar_spectra = self.raw["stellar_spectra"]
         else:
             lambdas = self.lambda_grid
-            stellar_spectra = self.stellar_spectra
-            
+            cond = self._lambda_cond
+            stellar_spectra = self.raw["stellar_spectra"] if cond is None \
+                else self.raw["stellar_spectra"][:, cond]
+
         if spot_cov_frac is None:
             spot_cov_frac = 0
 
         if T_spot is None:
             T_spot = T_star
-            
+
+        temps = self.stellar_spectra_temps
         if T_star is None:
-            unspotted_spectrum = xp.ones(len(lambdas))
-            spot_spectrum = xp.ones(len(lambdas))
-            
-        elif T_star >= self.stellar_spectra_temps.min() and T_star <= self.stellar_spectra_temps.max() and not blackbody:            
-            unspotted_spectrum = interp1d(T_star, self.stellar_spectra_temps, stellar_spectra)
-            spot_spectrum = interp1d(T_spot, self.stellar_spectra_temps, stellar_spectra)
-            if len(spot_spectrum) != len(lambdas):
-                raise ValueError("Stellar spectra has a different length ({}) than opacities ({})!  If you are using high resolution opacities, pass stellar_blackbody=True to compute_depths".format(len(spot_spectrum), len(lambdas)))
+            unspotted_spectrum = np.ones(len(lambdas))
+            spot_spectrum = np.ones(len(lambdas))
+        elif T_star >= temps.min() and T_star <= temps.max() and not blackbody:
+            unspotted_spectrum = self._interp_stellar_row(
+                T_star, temps, stellar_spectra)
+            spot_spectrum = self._interp_stellar_row(
+                T_spot, temps, stellar_spectra)
         else:
-            d_lambda = self.d_ln_lambda * lambdas
-            unspotted_spectrum = 2 * c * xp.pi / lambdas**4 / \
-                (xp.exp(h * c / lambdas / k_B / T_star) - 1) * h * c / lambdas
-            spot_spectrum = 2 * c * xp.pi / lambdas**4 / \
-                (xp.exp(h * c / lambdas / k_B / T_spot) - 1) * h * c / lambdas
+            unspotted_spectrum = np.pi * 2 * h * c**2 / lambdas**5 / \
+                np.expm1(h * c / lambdas / k_B / T_star)
+            spot_spectrum = np.pi * 2 * h * c**2 / lambdas**5 / \
+                np.expm1(h * c / lambdas / k_B / T_spot)
 
         stellar_spectrum = spot_cov_frac * spot_spectrum + \
-                           (1 - spot_cov_frac) * unspotted_spectrum
-        correction_factors = unspotted_spectrum/stellar_spectrum
+            (1 - spot_cov_frac) * unspotted_spectrum
+        correction_factors = unspotted_spectrum / stellar_spectrum
         return stellar_spectrum, correction_factors
 
-    def compute_params(self, star_radius, planet_mass, planet_radius,
-                       P_profile, T_profile,
-                       logZ=0, CO_ratio=0.53, CH4_mult=1,
-                       gases=None, vmrs=None,
-                       add_gas_absorption=True,
-                       add_H_minus_absorption=False,
-                       add_scattering=True, scattering_factor=1,
-                       scattering_slope=4, scattering_ref_wavelength=1e-6,
-                       add_collisional_absorption=True,
-                       cloudtop_pressure=xp.inf, custom_abundances=None,
-                       T_star=None, T_spot=None, spot_cov_frac=None,
-                       ri=None, frac_scale_height=1, number_density=0,
-                       part_size=1e-6, part_size_std=0.5,
-                       P_quench=1e-99,
-                       min_abundance=1e-99, min_cross_sec=1e-99, zero_opacities=[]):
-        self._validate_params(T_profile, logZ, CO_ratio, cloudtop_pressure)
-       
-        abundances = self._get_abundances_array(
-            logZ, CO_ratio, CH4_mult, custom_abundances, gases, vmrs)
+    @staticmethod
+    def _interp_stellar_row(T, temps, spectra):
+        index = np.interp(T, temps, np.arange(len(temps)))
+        lower = int(np.floor(index))
+        upper = int(np.ceil(index))
+        frac = index - lower
+        return spectra[lower] * (1 - frac) + spectra[upper] * frac
 
-        T_quench = xp.interp(xp.log(P_quench), xp.log(P_profile), T_profile)
-        for name in abundances:
-            abundances[name][xp.isnan(abundances[name])] = min_abundance
-            abundances[name][abundances[name] < min_abundance] = min_abundance
-            quench_abund = 10.**regular_grid_interp(self.T_grid, xp.log10(self.P_grid), xp.log10(abundances[name]), T_quench, xp.log10(P_quench))
-            abundances[name][:, self.P_grid <= P_quench] = quench_abund
+    # ------------------------------------------------------------------
+    # Mie scattering (host side; effective cross sections are passed into
+    # the JIT core as an input array)
+    # ------------------------------------------------------------------
+    def get_mie_eff_cross_section(self, ri, part_size, sigma=0.5,
+                                  max_zscore=5, num_integral_points=100):
+        """Effective extinction cross section vs wavelength for a log-normal
+        particle size distribution.  float64, on the host."""
+        if isinstance(ri, str):
+            if ri not in self.all_cross_secs:
+                raise ValueError("Unknown aerosol species: {}".format(ri))
+            if sigma <= 0.05:
+                raise ValueError(
+                    "part_size_std must be > 0.05 for aerosol-species Mie "
+                    "scattering (got {})".format(sigma))
+            kernel = sigma / self.d_ln_radii
+            cross_secs = scipy.ndimage.gaussian_filter(
+                self.all_cross_secs[ri], kernel)
+            if part_size < self.all_radii[3 * int(kernel)] or \
+               part_size > self.all_radii[-3 * int(kernel)]:
+                raise ValueError("part_size out of bounds: {} m".format(part_size))
 
-        above_clouds = P_profile < cloudtop_pressure
+            index = np.interp(part_size, self.all_radii,
+                              np.arange(len(self.all_radii)))
+            lower, upper = int(np.floor(index)), int(np.ceil(index))
+            frac = index - lower
+            at_radius = cross_secs[:, lower] * (1 - frac) + \
+                cross_secs[:, upper] * frac
+            return np.interp(self.lambda_grid, self.low_res_lambdas, at_radius)
 
-        radii, dr, atm_abundances, mu_profile = self._get_above_cloud_profiles(
-            P_profile, T_profile, abundances, planet_mass, planet_radius,
-            star_radius, above_clouds, T_star)
-            
-        P_profile = P_profile[above_clouds]
-        T_profile = T_profile[above_clouds]
+        z_scores = -np.logspace(np.log10(0.1), np.log10(max_zscore),
+                                int(num_integral_points / 2))
+        z_scores = np.append(z_scores[::-1], -z_scores)
 
-        T_cond = _interpolator_3D.get_condition_array(T_profile, self.T_grid)
-        P_cond = _interpolator_3D.get_condition_array(
-            P_profile, self.P_grid, cloudtop_pressure)
+        probs = np.exp(-z_scores**2 / 2) / np.sqrt(2 * np.pi)
+        radii = part_size * np.exp(z_scores * sigma)
+        geometric_cross_section = np.pi * radii**2
 
-        absorption_coeff = xp.zeros((int(xp.sum(T_cond)), int(xp.sum(P_cond)), len(self.lambda_grid)))
-        if add_gas_absorption:
-            absorption_coeff += self._get_gas_absorption(abundances, P_cond, T_cond, zero_opacities=zero_opacities)
-        if add_H_minus_absorption:
-            absorption_coeff += self._get_H_minus_absorption(abundances, P_cond, T_cond)
-        if add_scattering:
-            if ri is not None:
-                if scattering_factor != 1 or scattering_slope != 4:
-                    raise ValueError("Cannot use both parametric and Mie scattering at the same time")
-                
-                absorption_coeff += self._get_mie_scattering_absorption(
-                    P_cond, T_cond, ri, part_size,
-                    frac_scale_height, number_density, sigma=part_size_std)
-                absorption_coeff += self._get_scattering_absorption(
-                    abundances, P_cond, T_cond)
-                
-            else:
-                absorption_coeff += self._get_scattering_absorption(abundances,
-                P_cond, T_cond, scattering_factor, scattering_slope,
-                scattering_ref_wavelength)
+        # log(2 pi r / lambda) computed by broadcasting logs (cheaper than
+        # taking the log of the full L x n_radii matrix)
+        log_dense_xs = (np.log(2 * np.pi * radii)[np.newaxis, :] -
+                        np.log(self.lambda_grid)[:, np.newaxis])
 
-        if add_collisional_absorption:
-            absorption_coeff += self._get_collisional_absorption(
-                abundances, P_cond, T_cond)
+        n_bins = get_num_bins(log_dense_xs.flatten())
+        log_x_hist = np.histogram(log_dense_xs.flatten(), bins=n_bins)[1]
 
-        # Cross sections vary less than absorption coefficients by pressure
-        # and temperature, so interpolation should be done with cross sections
-        cross_secs = absorption_coeff / (self.P_grid[P_cond][xp.newaxis, :, xp.newaxis] / k_B / self.T_grid[T_cond][:, xp.newaxis, xp.newaxis])
-        cross_secs[cross_secs < min_cross_sec] = min_cross_sec
-        
-        if len(self.T_grid[T_cond]) == 1:
-            cross_secs_atm = xp.exp(interp1d(xp.log(P_profile), xp.log(self.P_grid[P_cond]), xp.log(cross_secs[0])))
-        else:            
-            ln_cross = regular_grid_interp(
-                1.0/self.T_grid[T_cond][::-1],
-                xp.log(self.P_grid[P_cond]),
-                xp.log(cross_secs[::-1]),
-                1.0 / T_profile,
-                xp.log(P_profile))
-         
-            cross_secs_atm = xp.exp(ln_cross)
+        Qext_hist = self._mie_cache.get_and_update(ri, np.exp(log_x_hist))
+        spl = scipy.interpolate.make_interp_spline(log_x_hist, Qext_hist)
+        Qext_intpl = spl(log_dense_xs)
+        return np.trapezoid(probs * geometric_cross_section * Qext_intpl,
+                            z_scores, axis=1)
 
-        absorption_coeff_atm = cross_secs_atm * (P_profile / k_B / T_profile)[:, xp.newaxis]
-        output_dict = {"absorption_coeff_atm": absorption_coeff_atm,
-                       "radii": radii,
-                       "dr": dr,
-                       "P_profile": P_profile,
-                       "T_profile": T_profile,
-                       "mu_profile": mu_profile,
-                       "atm_abundances": atm_abundances}
-        
-        return output_dict
+    def _get_mie_scattering_absorption(self, P_cond, T_cond, ri, part_size,
+                                       frac_scale_height, max_number_density,
+                                       sigma=0.5, max_zscore=5,
+                                       num_integral_points=100):
+        """Backward-compatible host implementation returning absorption
+        coefficients of shape (1, sum(P_cond), N_lambda)."""
+        eff_cross_section = self.get_mie_eff_cross_section(
+            ri, part_size, sigma, max_zscore, num_integral_points)
+        P = np.asarray(self.P_grid)[np.asarray(P_cond)]
+        n = max_number_density * np.power(P / max(P), 1.0 / frac_scale_height)
+        return n[np.newaxis, :, np.newaxis] * \
+            eff_cross_section[np.newaxis, np.newaxis, :]

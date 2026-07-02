@@ -1,23 +1,199 @@
-import matplotlib.pyplot as plt
-import scipy
+import math
+
 import numpy as np
 
-from . import _cupy_numpy as xp
-from . import _hydrostatic_solver
-from .abundance_getter import AbundanceGetter
-from ._species_data_reader import read_species_data
-from . import _interpolator_3D
-from ._tau_calculator import get_line_of_sight_tau
+from . import _forward_model as fm
+from ._forward_model import ForwardConfig, ForwardInputs
 from .constants import k_B, AMU, M_sun, Teff_sun, G, h, c
-from ._get_data import get_data
-from ._mie_cache import MieCache
 from .errors import AtmosphereError
 from ._atmosphere_solver import AtmosphereSolver
 from .params import NUM_LAYERS
 
 
+def _pack_scalars(**kwargs):
+    scalars = np.zeros(fm.SC_N_SCALARS, dtype=np.float64)
+    for name, value in kwargs.items():
+        scalars[getattr(fm, "SC_" + name.upper())] = value
+    return scalars.astype(np.float32)
+
+
+def _prepare_forward_inputs(atm, star_radius, planet_mass, planet_radius,
+                            P_profile, T_profile, logZ, CO_ratio, CH4_mult,
+                            gases, vmrs, add_gas_absorption,
+                            add_H_minus_absorption, add_scattering,
+                            scattering_factor, scattering_slope,
+                            scattering_ref_wavelength,
+                            add_collisional_absorption, cloudtop_pressure,
+                            custom_abundances, T_star, T_spot, spot_cov_frac,
+                            ri, frac_scale_height, number_density, part_size,
+                            part_size_std, P_quench, min_abundance,
+                            min_cross_sec, zero_opacities, stellar_blackbody,
+                            bot_pressure, n_t_rows, surface_pressure=np.inf,
+                            a_over_Rs=0.0, surface_temp=None, redist=0.0):
+    """Host-side preparation shared by the transit and eclipse calculators.
+    Returns (config kwargs dict, ForwardInputs, host bookkeeping dict)."""
+    # bot_pressure is min(cloudtop_pressure, surface_pressure): the deepest
+    # level light can reach, which is what must lie within the pressure grid
+    atm._validate_params(T_profile, logZ, CO_ratio, bot_pressure)
+
+    P_profile = np.asarray(P_profile, dtype=np.float64)
+    T_profile = np.asarray(T_profile, dtype=np.float64)
+    if not np.all(np.diff(P_profile) > 0):
+        raise ValueError(
+            "P_profile must be monotonically increasing in pressure")
+
+    # Abundance mode
+    vmrs_arr = None
+    custom_log_abund = None
+    gas_master_idx = ()
+    if custom_abundances is None and logZ is not None and CO_ratio is not None:
+        abund_mode = "eq"
+        active_species = list(atm.abundance_getter.included_species)
+    else:
+        if logZ is not None or CO_ratio is not None:
+            raise ValueError(
+                "Must set logZ=None and CO_ratio=None to use custom_abundances")
+        if custom_abundances is not None:
+            if isinstance(custom_abundances, str):
+                from .abundance_getter import AbundanceGetter
+                custom_abundances = AbundanceGetter.from_file(custom_abundances)
+            if not isinstance(custom_abundances, dict):
+                raise ValueError("Unrecognized format for custom_abundances")
+            abund_mode = "custom"
+            custom_log_abund = atm.custom_abundances_to_log_master(
+                custom_abundances)
+            active_species = list(custom_abundances.keys())
+        elif vmrs is not None and gases is not None:
+            abund_mode = "vmr"
+            for gas in gases:
+                if gas not in atm.master_index:
+                    raise ValueError("Unknown gas: {}".format(gas))
+            gas_master_idx = tuple(int(atm.master_index[g]) for g in gases)
+            vmrs_arr = np.asarray(vmrs, dtype=np.float32)
+            active_species = list(gases)
+        else:
+            raise ValueError("Unrecognized format for custom_abundances")
+
+    if add_H_minus_absorption and \
+       ("el" not in active_species or "H" not in active_species):
+        raise ValueError(
+            "add_H_minus_absorption requires 'el' and 'H' abundances, which "
+            "are missing from the provided gases/custom_abundances")
+
+    # Mie scattering
+    eff_xsec = None
+    mie_ref_P = 1.0
+    use_mie = ri is not None
+    if use_mie:
+        if scattering_factor != 1 or scattering_slope != 4:
+            raise ValueError(
+                "Cannot use both parametric and Mie scattering at the same time")
+        eff_xsec = atm.get_mie_eff_cross_section(
+            ri, part_size, sigma=part_size_std).astype(np.float32)
+        mie_ref_P = atm.get_mie_ref_pressure(P_profile, bot_pressure)
+
+    opac_mask = np.ones(len(atm.raw["opac_names"]), dtype=np.float32)
+    for name in zero_opacities:
+        if name in atm.raw["opac_names"]:
+            opac_mask[atm.raw["opac_names"].index(name)] = 0
+
+    n_above, shell_mask = atm.get_above_info(P_profile, bot_pressure)
+    T_quench = atm.get_quench_T(P_profile, T_profile, P_quench)
+
+    if T_spot is None:
+        T_spot = T_star
+    if spot_cov_frac is None:
+        spot_cov_frac = 0.0
+
+    scalars = _pack_scalars(
+        rs=star_radius, mp=planet_mass, rp=planet_radius,
+        logz=0.0 if logZ is None else logZ,
+        co=0.0 if CO_ratio is None else CO_ratio,
+        log_ch4=math.log10(max(CH4_mult, 1e-99)),
+        scat_factor=scattering_factor, scat_slope=scattering_slope,
+        scat_ref_um=scattering_ref_wavelength * 1e6,
+        cloudtop=cloudtop_pressure,
+        t_quench=T_quench, p_quench=P_quench,
+        log10_p_quench=math.log10(max(P_quench, 1e-99)),
+        t_star=0.0 if T_star is None else T_star,
+        t_spot=0.0 if T_spot is None else T_spot,
+        spot_frac=spot_cov_frac,
+        fsh=frac_scale_height, num_den=number_density,
+        ln_min_xsec=math.log(min_cross_sec),
+        log_min_abund=math.log10(min_abundance),
+        ref_pressure=atm.ref_pressure,
+        t_star_hydro=Teff_sun if T_star is None else T_star,
+        mie_ref_p=mie_ref_P,
+        surface_p=surface_pressure,
+        a_over_rs=a_over_Rs,
+        surface_temp=0.0 if surface_temp is None else surface_temp,
+        redist=redist,
+    )
+
+    if n_t_rows == 2:
+        t0 = atm.get_t0(T_profile)
+    else:
+        t0 = 0
+    idx_bot = int(shell_mask.sum()) - 1
+    ints = np.array([t0, n_above - 1, idx_bot], dtype=np.int32)
+
+    config_kwargs = dict(
+        n_master=len(atm.master_names),
+        n_t_rows=n_t_rows,
+        abund_mode=abund_mode,
+        gas_master_idx=gas_master_idx,
+        ch4_idx=int(atm.master_index.get("CH4", -1)),
+        el_idx=int(atm.master_index.get("el", 0)),
+        h_idx=int(atm.master_index.get("H", 0)),
+        add_gas=bool(add_gas_absorption),
+        add_hminus=bool(add_H_minus_absorption),
+        add_scattering=bool(add_scattering),
+        add_collisional=bool(add_collisional_absorption),
+        use_mie=use_mie and add_scattering,
+        has_t_star=T_star is not None,
+        blackbody=bool(stellar_blackbody),
+        has_bins=atm.wavelength_bins is not None,
+    )
+
+    inputs = ForwardInputs(
+        scalars=scalars, ints=ints,
+        T_profile=T_profile.astype(np.float32),
+        P_profile=P_profile.astype(np.float32),
+        shell_mask=shell_mask, opac_mask=opac_mask,
+        vmrs=vmrs_arr, custom_log_abund=custom_log_abund, eff_xsec=eff_xsec)
+
+    host = dict(n_above=n_above, active_species=active_species,
+                P_profile=P_profile, T_profile=T_profile)
+    return config_kwargs, inputs, host
+
+
+def _atm_info_dict(atm, out, host):
+    """Build the backward-compatible full_output info dict entries shared by
+    both calculators (arrays truncated to the above-cloud region)."""
+    n = host["n_above"]
+    atm_out = out.atm
+    atm_abund = np.array(atm_out.atm_abund)      # (N, M)
+    abundances = {}
+    for name in host["active_species"]:
+        idx = atm.master_index[name]
+        abundances[name] = atm_abund[:n, idx]
+    return dict(
+        absorption_coeff_atm=np.array(atm_out.absorption_coeff_atm)[:n],
+        radii=np.array(atm_out.radii)[:n],
+        dr=np.array(atm_out.dr)[:n - 1],
+        P_profile=np.array(host["P_profile"])[:n],
+        T_profile=np.array(host["T_profile"])[:n],
+        mu_profile=np.array(atm_out.mu_profile),
+        atm_abundances=abundances,
+    )
+
+
 class TransitDepthCalculator:
-    def __init__(self, include_condensation=True, ref_pressure=1e5, method='xsec', include_opacities=["CH4", "CO2", "CO", "H2O", "H2S", "HCN", "K", "Na", "NH3", "SO2", "TiO", "VO"], downsample=1):
+    def __init__(self, include_condensation=True, ref_pressure=1e5,
+                 method='xsec',
+                 include_opacities=["CH4", "CO2", "CO", "H2O", "H2S", "HCN",
+                                    "K", "Na", "NH3", "SO2", "TiO", "VO"],
+                 downsample=1):
         '''
         All physical parameters are in SI.
 
@@ -29,9 +205,10 @@ class TransitDepthCalculator:
         ref_pressure : float
             The planetary radius is defined as the radius at this pressure
         method : string
-            "xsec" for opacity sampling, "ktables" for correlated k
+            "xsec" for opacity sampling (correlated-k is no longer supported)
         '''
-        self.atm = AtmosphereSolver(include_condensation, ref_pressure, method, include_opacities, downsample)
+        self.atm = AtmosphereSolver(include_condensation, ref_pressure,
+                                    method, include_opacities, downsample)
 
     def change_wavelength_bins(self, bins):
         """Specify wavelength bins, instead of using the full wavelength grid
@@ -45,84 +222,12 @@ class TransitDepthCalculator:
             Wavelength bins, where bins[i][0] is the start wavelength and
             bins[i][1] is the end wavelength for bin i. If bins is None, resets
             the calculator to its unbinned state.
-
-        Raises
-        ------
-        NotImplementedError
-            Raised when `change_wavelength_bins` is called more than once,
-            which is not supported.
         """
         self.atm.change_wavelength_bins(bins)
-        
-
-    def _get_binned_corrected_depths(self, depths, T_star, T_spot,
-                                     spot_cov_frac, blackbody=False, n_gauss=10):
-        depths = xp.cpu(depths)
-        unbinned_lambdas = xp.cpu(self.atm.lambda_grid)
-        stellar_spectrum, correction_factors = self.atm.get_stellar_spectrum(
-            T_star, T_spot, spot_cov_frac, blackbody)
-        stellar_spectrum = xp.cpu(stellar_spectrum)
-        correction_factors = xp.cpu(correction_factors)
-        
-        #Step 1: do a first binning if using k-coeffs; first binning is a
-        #no-op otherwise
-        if self.atm.method == "ktables":
-            #Do a first binning based on ktables
-            points, weights = scipy.special.roots_legendre(n_gauss)
-            percentiles = 100 * (points + 1) / 2
-            weights /= 2
-            assert(len(depths) % n_gauss == 0)
-            num_binned = int(len(depths) / n_gauss)
-            intermediate_lambdas = np.zeros(num_binned)
-            intermediate_depths = np.zeros(num_binned)
-
-            for chunk in range(num_binned):
-                start = chunk * n_gauss
-                end = (chunk + 1 ) * n_gauss
-                intermediate_depths[chunk] = np.sum(depths[start : end] * weights)
-
-            intermediate_lambdas = unbinned_lambdas[::n_gauss]
-            intermediate_stellar_spectrum = stellar_spectrum[::n_gauss]
-            intermediate_correction_factors = correction_factors[::n_gauss]
-            
-        elif self.atm.method == "xsec":
-            intermediate_lambdas = unbinned_lambdas
-            intermediate_depths = depths
-            intermediate_stellar_spectrum = stellar_spectrum
-            intermediate_correction_factors = correction_factors
-        else:
-            assert(False)                  
-                
-        if self.atm.wavelength_bins is None:
-            return xp.array(intermediate_lambdas),\
-                xp.array(intermediate_depths * intermediate_correction_factors),\
-                xp.array(intermediate_stellar_spectrum),\
-                xp.array(intermediate_lambdas),\
-                xp.array(intermediate_depths * intermediate_correction_factors),\
-                xp.array(intermediate_stellar_spectrum),\
-                xp.array(intermediate_correction_factors)
-                        
-        binned_wavelengths = []
-        binned_depths = []
-        binned_stellar_spectrum = []
-        
-        for (start, end) in xp.cpu(self.atm.wavelength_bins):
-            l = np.searchsorted(intermediate_lambdas, start)
-            r = np.searchsorted(intermediate_lambdas, end)
-            
-            binned_wavelengths.append(np.mean(intermediate_lambdas[l:r]))
-            binned_depth = np.average(intermediate_depths[l:r] * intermediate_correction_factors[l:r],
-                                      weights=intermediate_stellar_spectrum[l:r])
-            binned_depths.append(binned_depth)
-            binned_stellar_spectrum.append(np.median(intermediate_stellar_spectrum[l:r]))
-
-        return xp.array(binned_wavelengths), xp.array(binned_depths), xp.array(binned_stellar_spectrum), xp.array(intermediate_lambdas), xp.array(intermediate_depths), xp.array(intermediate_stellar_spectrum), xp.array(intermediate_correction_factors)
 
     def _validate_params(self, T, logZ, CO_ratio, cloudtop_pressure):
-        T_profile = xp.ones(NUM_LAYERS) * T
         self.atm._validate_params(T, logZ, CO_ratio, cloudtop_pressure)
-        
-    
+
     def compute_depths(self, star_radius, planet_mass, planet_radius,
                        temperature, logZ=0, CO_ratio=0.53, CH4_mult=1,
                        gases=None, vmrs=None,
@@ -130,12 +235,14 @@ class TransitDepthCalculator:
                        add_scattering=True, scattering_factor=1,
                        scattering_slope=4, scattering_ref_wavelength=1e-6,
                        add_collisional_absorption=True,
-                       cloudtop_pressure=xp.inf, custom_abundances=None,
+                       cloudtop_pressure=np.inf, custom_abundances=None,
                        custom_T_profile=None, custom_P_profile=None,
                        T_star=None, T_spot=None, spot_cov_frac=None,
                        ri=None, frac_scale_height=1, number_density=0,
                        part_size=1e-6, part_size_std=0.5, P_quench=1e-99,
-                       full_output=False, min_abundance=1e-99, min_cross_sec=1e-99, stellar_blackbody=False, zero_opacities=[]):
+                       full_output=False, min_abundance=1e-99,
+                       min_cross_sec=1e-99, stellar_blackbody=False,
+                       zero_opacities=[]):
         '''
         Computes transit depths at a range of wavelengths, assuming an
         isothermal atmosphere.  To choose bins, call change_wavelength_bins().
@@ -179,8 +286,8 @@ class TransitDepthCalculator:
             Whether collisionally induced absorption is taken into account
         cloudtop_pressure : float, optional
             Pressure level (in Pa) below which light cannot penetrate.
-            Use xp.inf for a cloudless atmosphere.
-        custom_abundances : str or dict of xp.ndarray, optional
+            Use np.inf for a cloudless atmosphere.
+        custom_abundances : str or dict of np.ndarray, optional
             If specified, overrides `logZ` and `CO_ratio`.  Can specify a
             filename, in which case the abundances are read from a file in the
             format of the EOS/ files.  These are identical to ExoTransmit's
@@ -227,12 +334,12 @@ class TransitDepthCalculator:
         P_quench : float, optional
             Quench pressure in Pa.
         stellar_blackbody : bool, optional
-            Whether to use a PHOENIX model for the stellar spectrum, or a blackbody
-        zero_opacities : list of strings                                                                                                                                                                   
+            Whether to use a blackbody for the stellar spectrum instead of a
+            PHOENIX model
+        zero_opacities : list of strings
             List of molecules to zero opacities for
         full_output : bool, optional
             If True, returns info_dict as a third return value.
-
 
         Raises
         ------
@@ -260,55 +367,61 @@ class TransitDepthCalculator:
             if temperature is not None:
                 raise ValueError(
                     "Cannot specify both temperature and custom T profile")
-            
-            P_profile = custom_P_profile
-            T_profile = custom_T_profile
+            P_profile = np.asarray(custom_P_profile, dtype=np.float64)
+            T_profile = np.asarray(custom_T_profile, dtype=np.float64)
         else:
-            P_profile = xp.logspace(
-                xp.log10(self.atm.P_grid[0]),
-                xp.log10(self.atm.P_grid[-1]),
+            P_profile = np.logspace(
+                np.log10(self.atm.P_grid[0]),
+                np.log10(self.atm.P_grid[-1]),
                 NUM_LAYERS)
-            T_profile = xp.ones(len(P_profile)) * temperature
+            T_profile = np.ones(len(P_profile)) * temperature
 
-        atm_info = self.atm.compute_params(
-            star_radius, planet_mass, planet_radius, P_profile, T_profile,
-            logZ, CO_ratio, CH4_mult, gases, vmrs, add_gas_absorption, add_H_minus_absorption,
-            add_scattering,
+        n_t_rows = 2 if T_profile.max() == T_profile.min() else self.atm.N_T
+
+        config_kwargs, inputs, host = _prepare_forward_inputs(
+            self.atm, star_radius, planet_mass, planet_radius,
+            P_profile, T_profile, logZ, CO_ratio, CH4_mult, gases, vmrs,
+            add_gas_absorption, add_H_minus_absorption, add_scattering,
             scattering_factor, scattering_slope, scattering_ref_wavelength,
             add_collisional_absorption, cloudtop_pressure, custom_abundances,
             T_star, T_spot, spot_cov_frac, ri, frac_scale_height,
-            number_density, part_size, part_size_std, P_quench, zero_opacities=zero_opacities)
+            number_density, part_size, part_size_std, P_quench,
+            min_abundance, min_cross_sec, zero_opacities, stellar_blackbody,
+            bot_pressure=cloudtop_pressure, n_t_rows=n_t_rows)
 
-        radii = atm_info["radii"]
-        dr = atm_info["dr"]
-        tau_los = get_line_of_sight_tau(atm_info["absorption_coeff_atm"],
-                                        radii)
-        absorption_fraction = 1 - xp.exp(-tau_los)
+        cfg = ForwardConfig(**config_kwargs)
+        out = fm.transit_core(cfg, self.atm.device_data(), inputs)
 
-        transit_depths = (radii.min() / star_radius)**2 \
-            + 2 / star_radius**2 * absorption_fraction.dot(radii[1:] * dr)
-        
-        #For correlated-k: transit_depths has n_gauss points for every wavelength; unbinned_depths
-        #has 1 point for every wavelength
-        binned_wavelengths, binned_depths, binned_stellar_spectrum, unbinned_wavelengths, unbinned_depths, unbinned_stellar_spectrum, unbinned_correction_factors = self._get_binned_corrected_depths(transit_depths, T_star, T_spot, spot_cov_frac, stellar_blackbody)
-        
-        if full_output:
-            atm_info["tau_los"] = xp.cpu(tau_los)
-            atm_info["binned_stellar_spectrum"] = xp.cpu(binned_stellar_spectrum)
-            atm_info["unbinned_wavelengths"] = xp.cpu(unbinned_wavelengths)
-            atm_info["unbinned_depths"] = xp.cpu(unbinned_depths)
-            atm_info["unbinned_stellar_spectrum"] = xp.cpu(unbinned_stellar_spectrum)
-            atm_info["unbinned_correction_factors"] = xp.cpu(unbinned_correction_factors)
-            atm_info["contrib"] = xp.cpu(absorption_fraction)
-            
-            for key in atm_info:
-                if type(atm_info[key]) == dict:
-                    for subkey in atm_info[key]:
-                        atm_info[key][subkey] = xp.cpu(atm_info[key][subkey])
-                else:
-                    atm_info[key] = xp.cpu(atm_info[key])
-            return xp.cpu(binned_wavelengths), xp.cpu(binned_depths), atm_info
+        if bool(out.atm.unbound):
+            raise AtmosphereError("Atmosphere unbound: height > hill radius")
 
-        return xp.cpu(binned_wavelengths), xp.cpu(binned_depths), None
-        
-        
+        binned_depths = np.array(out.binned_depths, dtype=np.float64)
+        if self.atm.wavelength_bins is None:
+            binned_wavelengths = np.array(self.atm.lambda_grid)
+        else:
+            binned_wavelengths = np.array(
+                self.atm._bin_info["transit_wavelengths"])
+
+        if not full_output:
+            return binned_wavelengths, binned_depths, None
+
+        n = host["n_above"]
+        atm_info = _atm_info_dict(self.atm, out, host)
+        stellar = np.array(out.stellar_spectrum, dtype=np.float64)
+        corr = np.array(out.correction_factors, dtype=np.float64)
+        depths_uncorr = np.array(out.depths, dtype=np.float64)
+        atm_info["tau_los"] = np.array(out.tau_los)[:, :n - 1]
+        atm_info["contrib"] = np.array(out.absorption_fraction)[:, :n - 1]
+        atm_info["unbinned_wavelengths"] = np.array(self.atm.lambda_grid)
+        atm_info["unbinned_stellar_spectrum"] = stellar
+        atm_info["unbinned_correction_factors"] = corr
+        if self.atm.wavelength_bins is None:
+            atm_info["unbinned_depths"] = depths_uncorr * corr
+            atm_info["binned_stellar_spectrum"] = stellar
+        else:
+            atm_info["unbinned_depths"] = depths_uncorr
+            atm_info["binned_stellar_spectrum"] = np.array(
+                [np.median(stellar[l:r])
+                 for (l, r) in self.atm._bin_info["transit_ranges"]])
+
+        return binned_wavelengths, binned_depths, atm_info

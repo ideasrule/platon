@@ -96,7 +96,7 @@ fit_info.add_uniform_fit_param("error_multiple", 0, np.inf, 0.5, 5)
 result = retriever.run_emcee(bins, depths, errors,
                              None, None, None,
                              fit_info,
-                             rad_method="xsec" #"ktables" for corr-k
+                             rad_method="xsec"
 )
 
 with open("example_retrieval_result.pkl", "wb") as f:

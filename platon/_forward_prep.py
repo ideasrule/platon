@@ -26,7 +26,7 @@ def prepare_forward_inputs(atm, *, star_radius, planet_mass, planet_radius,
                            custom_abundances, T_star, T_spot, spot_cov_frac,
                            ri, frac_scale_height, number_density, part_size,
                            part_size_std, P_quench, zero_opacities,
-                           stellar_blackbody, bot_pressure, n_t_rows,
+                           stellar_blackbody, bot_pressure,
                            min_abundance=1e-99, min_cross_sec=1e-99,
                            surface_pressure=np.inf, a_over_Rs=0.0,
                            surface_temp=None, redist=0.0):
@@ -61,7 +61,7 @@ def prepare_forward_inputs(atm, *, star_radius, planet_mass, planet_radius,
                 raise ValueError("Unrecognized format for custom_abundances")
             abund_mode = "custom"
             custom_log_abund = atm.custom_abundances_to_log_master(
-                custom_abundances)
+                custom_abundances, T_profile, P_profile)
             active_species = list(custom_abundances.keys())
         elif vmrs is not None and gases is not None:
             abund_mode = "vmr"
@@ -99,7 +99,6 @@ def prepare_forward_inputs(atm, *, star_radius, planet_mass, planet_radius,
             opac_mask[atm.raw["opac_names"].index(name)] = 0
 
     n_above, shell_mask = atm.get_above_info(P_profile, bot_pressure)
-    T_quench = atm.get_quench_T(P_profile, T_profile, P_quench)
 
     if T_spot is None:
         T_spot = T_star
@@ -114,7 +113,7 @@ def prepare_forward_inputs(atm, *, star_radius, planet_mass, planet_radius,
         scat_factor=scattering_factor, scat_slope=scattering_slope,
         scat_ref_um=scattering_ref_wavelength * 1e6,
         cloudtop=cloudtop_pressure,
-        t_quench=T_quench, p_quench=P_quench,
+        p_quench=P_quench,
         log10_p_quench=math.log10(max(P_quench, 1e-99)),
         t_star=0.0 if T_star is None else T_star,
         t_spot=0.0 if T_spot is None else T_spot,
@@ -131,15 +130,12 @@ def prepare_forward_inputs(atm, *, star_radius, planet_mass, planet_radius,
         redist=redist,
     )
 
-    t0 = atm.get_t0(T_profile) if n_t_rows == 2 else 0
     ints = np.zeros(fm.IX_N_INTS, dtype=np.int32)
-    ints[fm.IX_T0] = t0
     ints[fm.IX_FLOOR] = n_above - 1
 
     # el/H indices are only meaningful (and validated above) when H-
     # absorption is on; -1 makes any unintended use fail loudly downstream
     config = ForwardConfig(
-        n_t_rows=n_t_rows,
         abund_mode=abund_mode,
         gas_master_idx=gas_master_idx,
         ch4_idx=int(atm.master_index.get("CH4", -1)),

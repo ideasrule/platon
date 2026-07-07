@@ -107,14 +107,21 @@ class TransitDepthCalculator:
             Pressure level (in Pa) below which light cannot penetrate.
             Use np.inf for a cloudless atmosphere.
         custom_abundances : str or dict of np.ndarray, optional
-            If specified, overrides `logZ` and `CO_ratio`.  Can specify a
-            filename, in which case the abundances are read from a file in the
-            format of the EOS/ files.  These are identical to ExoTransmit's
-            EOS files.  It is also possible, though highly discouraged, to
-            specify a dictionary mapping species names to numpy arrays, so that
+            If specified, overrides `logZ` and `CO_ratio`.  The recommended
+            format is a dictionary mapping species names to abundance
+            profiles: 1D arrays with one element per atmospheric layer
+            (ordered by increasing pressure, matching custom_P_profile or
+            the default pressure grid), so that custom_abundances['Na'][i]
+            is the fractional number abundance of Na at the i-th layer.
+            Alternatively, can specify a filename, in which case the
+            abundances are read from a file in the format of the EOS/ files
+            (identical to ExoTransmit's EOS files); or, in the legacy
+            format, a dictionary mapping species names to (N_T, N_P) arrays
+            on the temperature/pressure grid, so that
             custom_abundances['Na'][3,4] would mean the fractional number
-            abundance of Na at a temperature of self.T_grid[3] and pressure of
-            self.P_grid[4].
+            abundance of Na at a temperature of self.T_grid[3] and pressure
+            of self.P_grid[4].  Grid-format abundances are interpolated
+            onto the atmospheric layers.
         custom_T_profile : array-like, optional
             If specified and custom_P_profile is also specified, divides the
             atmosphere into user-specified P/T points, instead of assuming an
@@ -195,8 +202,6 @@ class TransitDepthCalculator:
                 NUM_LAYERS)
             T_profile = np.ones(len(P_profile)) * temperature
 
-        n_t_rows = 2 if T_profile.max() == T_profile.min() else self.atm.N_T
-
         cfg, inputs, host = prepare_forward_inputs(
             self.atm, star_radius=star_radius, planet_mass=planet_mass,
             planet_radius=planet_radius, P_profile=P_profile,
@@ -218,7 +223,7 @@ class TransitDepthCalculator:
             min_abundance=min_abundance, min_cross_sec=min_cross_sec,
             zero_opacities=zero_opacities,
             stellar_blackbody=stellar_blackbody,
-            bot_pressure=cloudtop_pressure, n_t_rows=n_t_rows)
+            bot_pressure=cloudtop_pressure)
 
         out = fm.transit_core(cfg, self.atm.device_data(), inputs)
 

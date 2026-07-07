@@ -155,7 +155,7 @@ class EclipseDepthCalculator:
             part_size_std=part_size_std, P_quench=P_quench,
             zero_opacities=zero_opacities,
             stellar_blackbody=stellar_blackbody,
-            bot_pressure=bot_pressure, n_t_rows=self.atm.N_T,
+            bot_pressure=bot_pressure,
             surface_pressure=surface_pressure, a_over_Rs=a_over_Rs,
             surface_temp=surface_temp, redist=redist)
 

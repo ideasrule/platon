@@ -8,7 +8,7 @@ import jax.numpy as jnp
 
 from . import _forward_model as fm
 from ._forward_model import DeviceData, planck_np
-from ._interpolator_3D import interp1d_np
+from ._interpolator_3D import interp1d_np, regular_grid_interp_np
 from ._hist import get_num_bins
 from ._loader import load_dict_from_pickle, load_numpy
 from .abundance_getter import AbundanceGetter
@@ -108,16 +108,28 @@ def _load_raw(method, include_opacities, downsample):
         [(polarizability_data.get(name, 0.0) * fm.POL_SCALE)**2
          for name in master_names], np.float32)
 
+    P_grid = load_numpy("data/pressures.npy").astype(np.float64)
+    T_grid = load_numpy("data/temperatures.npy").astype(np.float64)
+
     # Load each opacity file straight into a preallocated float32 stack
-    # (float32 is the working precision of the JAX pipeline); avoids a
-    # second multi-GB copy from np.stack
+    # (float32 is the working precision of the JAX pipeline; avoids a
+    # second multi-GB copy from np.stack), then convert in place to log
+    # cross sections: the per-layer pipeline interpolates each species'
+    # ln(sigma) onto the atmospheric layers.  The data files store
+    # absorption coefficients at unit abundance, i.e. sigma * n(T, P).
     opac_names = list(absorption_files.keys())
-    NT_g, NP_g = 40, 13
-    abs_stack = np.empty((len(opac_names), NT_g, NP_g, len(lambda_full)),
-                         np.float32)
+    NT_g, NP_g = len(T_grid), len(P_grid)
+    ln_n_grid = np.log(P_grid[None, :] / (k_B * T_grid[:, None])
+                       ).astype(np.float32)              # (NT, NP)
+    ln_xsec_stack = np.empty((len(opac_names), NT_g, NP_g, len(lambda_full)),
+                             np.float32)
     for i, name in enumerate(opac_names):
         raw = np.load(absorption_files[name], mmap_mode="r")
-        abs_stack[i] = raw[:, :, ::downsample]
+        ln_xsec_stack[i] = raw[:, :, ::downsample]
+        with np.errstate(divide="ignore"):
+            np.log(ln_xsec_stack[i], out=ln_xsec_stack[i])
+        ln_xsec_stack[i] -= ln_n_grid[:, :, None]
+        np.maximum(ln_xsec_stack[i], fm.LN_MIN_XSEC, out=ln_xsec_stack[i])
     opac_master_idx = np.array(
         [master_index[name] for name in opac_names], np.int32)
 
@@ -125,20 +137,21 @@ def _load_raw(method, include_opacities, downsample):
     cia_pairs = [(s1, s2) for (s1, s2) in collisional
                  if s1 in master_index and s2 in master_index]
     if len(cia_pairs) > 0:
-        cia_stack = np.stack(
-            [(_interp_rows_to(lambda_full, low_res_lambdas,
-                              collisional[pair]) * fm.CIA_DATA_SCALE
-              ).astype(np.float32) for pair in cia_pairs])
+        with np.errstate(divide="ignore"):
+            ln_cia_stack = np.stack(
+                [np.log(_interp_rows_to(lambda_full, low_res_lambdas,
+                                        collisional[pair])
+                        * fm.CIA_DATA_SCALE).astype(np.float32)
+                 for pair in cia_pairs])
+        ln_cia_stack = np.maximum(ln_cia_stack, fm.LN_MIN_XSEC)
     else:
-        cia_stack = np.zeros((0, 40, len(lambda_full)), np.float32)
+        ln_cia_stack = np.zeros((0, NT_g, len(lambda_full)), np.float32)
     cia_idx1 = np.array([master_index[s1] for s1, _ in cia_pairs], np.int32)
     cia_idx2 = np.array([master_index[s2] for _, s2 in cia_pairs], np.int32)
 
-    P_grid = load_numpy("data/pressures.npy").astype(np.float64)
-    T_grid = load_numpy("data/temperatures.npy").astype(np.float64)
-
-    hminus_k = (_compute_h_minus_k(T_grid, lambda_full) / k_B
-                ).astype(np.float32)
+    with np.errstate(divide="ignore"):
+        ln_hminus_k = np.log(_compute_h_minus_k(T_grid, lambda_full) / k_B)
+    ln_hminus_k = np.maximum(ln_hminus_k, fm.LN_MIN_XSEC).astype(np.float32)
 
     stellar_dict = load_dict_from_pickle("data/stellar_spectra.pkl")
     stellar_temps = np.asarray(stellar_dict["temperatures"], np.float64)
@@ -161,12 +174,12 @@ def _load_raw(method, include_opacities, downsample):
         low_res_lambdas=low_res_lambdas,
         master_names=master_names, master_index=master_index,
         masses=masses, pol_sqr=pol_sqr,
-        opac_names=opac_names, abs_stack=abs_stack,
+        opac_names=opac_names, ln_xsec_stack=ln_xsec_stack,
         opac_master_idx=opac_master_idx,
-        cia_stack=cia_stack,
+        ln_cia_stack=ln_cia_stack,
         cia_idx1=cia_idx1, cia_idx2=cia_idx2,
         P_grid=P_grid, T_grid=T_grid,
-        hminus_k=hminus_k,
+        ln_hminus_k=ln_hminus_k,
         stellar_temps=stellar_temps, stellar_spectra=stellar_spectra,
         exp3_x=exp3_x.astype(np.float32), exp3_y=exp3_y.astype(np.float32),
         bterm_x=bterm_x.astype(np.float32), bterm_y=bterm_y.astype(np.float32),
@@ -345,7 +358,7 @@ class AtmosphereSolver:
             P_grid=jnp.asarray(raw["P_grid"], dtype=jnp.float32),
             ln_P_grid=jnp.asarray(np.log(raw["P_grid"]), dtype=jnp.float32),
             log10_P_grid=jnp.asarray(np.log10(raw["P_grid"]), dtype=jnp.float32),
-            abs_stack=jnp.asarray(raw["abs_stack"][:, :, :, cond]),
+            ln_xsec_stack=jnp.asarray(raw["ln_xsec_stack"][:, :, :, cond]),
             opac_master_idx=jnp.asarray(raw["opac_master_idx"]),
             masses=jnp.asarray(raw["masses"]),
             pol_sqr=jnp.asarray(raw["pol_sqr"]),
@@ -353,10 +366,10 @@ class AtmosphereSolver:
             logZ_grid=jnp.asarray(self.abundance_getter.logZs, dtype=jnp.float32),
             CO_grid=jnp.asarray(self.abundance_getter.CO_ratios, dtype=jnp.float32),
             eq_master_idx=jnp.asarray(eq_master_idx),
-            cia_stack=jnp.asarray(raw["cia_stack"][:, :, cond]),
+            ln_cia_stack=jnp.asarray(raw["ln_cia_stack"][:, :, cond]),
             cia_idx1=jnp.asarray(raw["cia_idx1"]),
             cia_idx2=jnp.asarray(raw["cia_idx2"]),
-            hminus_k_over_kB=jnp.asarray(raw["hminus_k"][:, cond]),
+            ln_hminus_k=jnp.asarray(raw["ln_hminus_k"][:, cond]),
             stellar_temps=jnp.asarray(raw["stellar_temps"], dtype=jnp.float32),
             stellar_spectra=jnp.asarray(raw["stellar_spectra"][:, cond]),
             orig_lambda_grid=jnp.asarray(raw["lambda_full"], dtype=jnp.float32),
@@ -377,12 +390,6 @@ class AtmosphereSolver:
     # ------------------------------------------------------------------
     # Host-side helpers
     # ------------------------------------------------------------------
-    def get_t0(self, T_profile):
-        """First T-grid row of the 2-row slice bracketing an isothermal T."""
-        T = float(np.min(T_profile))
-        return int(np.clip(np.searchsorted(self.T_grid, T, side="right") - 1,
-                           0, self.N_T - 2))
-
     def get_above_info(self, P_profile, bot_pressure):
         """Node/shell masks for the region above the cloud deck / surface."""
         above_nodes = np.asarray(P_profile) < bot_pressure
@@ -402,31 +409,41 @@ class AtmosphereSolver:
         idx = min(idx, self.N_P - 1)
         return float(self.P_grid[idx])
 
-    def get_quench_T(self, P_profile, T_profile, P_quench):
-        return float(np.interp(np.log(P_quench), np.log(P_profile), T_profile))
-
-    def custom_abundances_to_log_master(self, custom_abundances):
-        """Convert a species -> (N_T, N_P) abundance dict to a master-species
-        log10 array."""
+    def custom_abundances_to_log_master(self, custom_abundances, T_profile,
+                                        P_profile):
+        """Convert a species -> abundance-profile dict to an (N_layers,
+        n_master) log10 array.  Each species maps to a 1D array giving its
+        abundance at every atmospheric layer.  The legacy grid format --
+        (N_T, N_P) arrays on the temperature/pressure grid, e.g. from
+        AbundanceGetter.from_file -- is also accepted, and interpolated onto
+        the layers."""
+        n_layers = len(P_profile)
         unknown = [key for key in custom_abundances
                    if key not in self.master_index]
         if unknown:
             raise ValueError(
                 "custom_abundances contains unknown species: {}".format(unknown))
-        result = np.full((len(self.master_names), self.N_T, self.N_P),
+        result = np.full((n_layers, len(self.master_names)),
                          fm.LOG_MIN_ABUND, dtype=np.float32)
         for key, value in custom_abundances.items():
             if not isinstance(value, np.ndarray):
                 raise ValueError(
                     "custom_abundances must map species names to arrays")
-            if value.shape != (self.N_T, self.N_P):
-                raise ValueError(
-                    "custom_abundances has array of invalid size")
             with np.errstate(divide="ignore", invalid="ignore"):
                 logv = np.log10(value.astype(np.float64))
             logv = np.nan_to_num(logv, nan=fm.LOG_MIN_ABUND,
                                  neginf=fm.LOG_MIN_ABUND)
-            result[self.master_index[key]] = logv
+            if value.shape == (n_layers,):
+                result[:, self.master_index[key]] = logv
+            elif value.shape == (self.N_T, self.N_P):
+                result[:, self.master_index[key]] = regular_grid_interp_np(
+                    self.T_grid, np.log10(self.P_grid), logv,
+                    T_profile, np.log10(P_profile))
+            else:
+                raise ValueError(
+                    "custom_abundances arrays must have shape (n_layers,) = "
+                    "({},) or (N_T, N_P) = ({}, {}); got {} for {}".format(
+                        n_layers, self.N_T, self.N_P, value.shape, key))
         return result
 
     def _validate_params(self, T_profile, logZ, CO_ratio, cloudtop_pressure):

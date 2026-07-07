@@ -171,15 +171,22 @@ class EclipseDepthCalculator:
                 crust_flux=crust_flux.astype(np.float32),
                 crust_T=crust_T.astype(np.float32))
 
-        out = fm.eclipse_core(cfg, self.atm.device_data(), inputs)
+        if full_output:
+            out = fm.eclipse_core(cfg, self.atm.device_data(), inputs)
+            binned, unbound, irrad = out.binned_depths, \
+                bool(out.atm.unbound), out.irrad
+        else:
+            res = np.asarray(fm.eclipse_depths_core(
+                cfg, self.atm.device_data(), inputs))
+            binned, unbound, irrad = res[:-3], res[-3] > 0, res[-2]
 
-        if bool(out.atm.unbound):
+        if unbound:
             raise AtmosphereError("Atmosphere unbound: height > hill radius")
 
         if has_surface and surface_temp is None:
-            self._check_irrad_in_range(float(out.irrad), surface_type)
+            self._check_irrad_in_range(float(irrad), surface_type)
 
-        binned_depths = np.array(out.binned_depths, dtype=np.float64)
+        binned_depths = np.array(binned, dtype=np.float64)
         if self.atm.wavelength_bins is None:
             binned_wavelengths = np.array(self.atm.lambda_grid)
         else:

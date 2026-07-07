@@ -11,6 +11,9 @@ avoid FP32 overflow/underflow:
 - Polarizabilities (~1e-30) are stored scaled by POL_SCALE=1e30 and the
   Rayleigh/haze scattering power law is evaluated with wavelengths in microns,
   so that sum_pol_sqr and lambda**slope stay in range for slopes up to 15.
+
+All per-layer: opacities and abundances are computed on the 1D grid of
+atmospheric layers, never on the 2D temperature-pressure grid.
 """
 import math
 from typing import NamedTuple, Any
@@ -18,9 +21,10 @@ from typing import NamedTuple, Any
 import numpy as np
 import jax
 import jax.numpy as jnp
+from jax import lax
 
 from .constants import k_B, AMU, G, h, c, M_sun
-from ._interpolator_3D import regular_grid_interp, interp1d
+from ._interpolator_3D import regular_grid_interp, interp1d, fractional_index
 
 N_SCALE = 1e-28          # scaling of number densities in the CIA term
 CIA_DATA_SCALE = 1e56    # compensates N_SCALE**2 in the stored CIA data
@@ -30,10 +34,9 @@ POL_SCALE = 1e30         # polarizabilities are stored multiplied by this
 #         * ref_um^(slope-4) / lambda_um^slope
 RAYLEIGH_PREF = 128.0 / 3 * math.pi ** 5 * 1e-36
 LOG_MIN_ABUND = -99.0
+LN_MIN_XSEC = math.log(1e-99)   # floor of the stored log cross sections
 TWO_H_C_SQR = 2 * h * c ** 2
 HC_OVER_KB = h * c / k_B
-
-LN_MIN_XSEC = math.log(1e-99)   # floor of the stored log cross sections
 
 # Indices into the packed scalar-parameter vector
 (SC_RS, SC_MP, SC_RP, SC_LOGZ, SC_CO, SC_LOG_CH4, SC_SCAT_FACTOR,
@@ -55,14 +58,15 @@ class DeviceData(NamedTuple):
     P_grid: Any             # (NP,)
     ln_P_grid: Any          # (NP,)
     log10_P_grid: Any       # (NP,)
+    inv_T_grid: Any         # (NT,) 1 / T_grid
     ln_xsec_stack: Any      # (S, NT, NP, L) ln cross sections per species
     opac_master_idx: Any    # (S,) int32: index into master species list
     masses: Any             # (M,) AMU
     pol_sqr: Any            # (M,) (polarizability * POL_SCALE)**2
-    log_abund_grid: Any     # (NZ, NC, S_eq, NT, NP) log10 abundances
+    log_abund_grid: Any     # (NZ, NC, NT, NP, M) log10 abundances, padded
+                            # to the full master species list
     logZ_grid: Any          # (NZ,)
     CO_grid: Any            # (NC,)
-    eq_master_idx: Any      # (S_eq,) int32
     ln_cia_stack: Any       # (K, NT, L): ln(CIA data * CIA_DATA_SCALE)
     cia_idx1: Any           # (K,) int32
     cia_idx2: Any           # (K,) int32
@@ -75,11 +79,13 @@ class DeviceData(NamedTuple):
     exp3_y: Any             # (NE,)
     bterm_x: Any            # (NB,) tau values for the bottom-boundary term
     bterm_y: Any            # (NB,) tau^2 E1(tau) - tau e^-tau + e^-tau
-    bin_mat: Any            # (B, L) or None
+    bin_idx: Any            # (B, W) int32 gather indices per bin, or None
+    bin_w: Any              # (B, W) 1/0 weights (0 marks padding), or None
 
 
 class ForwardConfig(NamedTuple):
     """Static (hashable) configuration; changing any field recompiles."""
+    n_layers: int            # number of levels in the T/P profile
     abund_mode: str          # 'eq', 'vmr', or 'custom'
     gas_master_idx: tuple    # master indices of fit gases ('vmr' mode)
     ch4_idx: int
@@ -89,20 +95,23 @@ class ForwardConfig(NamedTuple):
     add_hminus: bool
     add_scattering: bool
     add_collisional: bool
+    sort_layers: bool        # non-isothermal profile: sort layers by cell
     use_mie: bool
     has_t_star: bool
-    blackbody: bool
+    stellar_in_grid: bool    # PHOENIX grid interp vs blackbody (host-known)
+    has_spots: bool
     has_surface: bool = False
     surface_temp_given: bool = False
 
 
 class ForwardInputs(NamedTuple):
-    scalars: Any            # (SC_N_SCALARS,) float32
-    ints: Any               # (IX_N_INTS,) int32
-    T_profile: Any          # (N,)
-    P_profile: Any          # (N,)
-    shell_mask: Any         # (N-1,) 1.0 where the shell is above cloud/surface
-    opac_mask: Any          # (S,)
+    """Per-call inputs.  The small dense arrays (scalars, ints, T/P profiles,
+    masks) are packed host-side into the single `packed` vector so each call
+    makes one host-to-device transfer instead of many; the cores unpack it
+    (cheap, fusable slices) via `unpack_inputs`.  Layout:
+    [scalars (SC_N_SCALARS) | ints-as-floats (IX_N_INTS) | T_profile (N) |
+     P_profile (N) | shell_mask (N-1) | opac_mask (S)]."""
+    packed: Any             # see layout above
     vmrs: Any = None        # (n_gases,) for 'vmr' mode
     custom_log_abund: Any = None  # (N, M) per-layer, for 'custom' mode
     eff_xsec: Any = None    # (L,) Mie effective cross sections
@@ -112,13 +121,59 @@ class ForwardInputs(NamedTuple):
     crust_T: Any = None     # (NC2,)
 
 
+class UnpackedInputs(NamedTuple):
+    scalars: Any            # (SC_N_SCALARS,) float32
+    ints: Any               # (IX_N_INTS,) int32
+    T_profile: Any          # (N,)
+    P_profile: Any          # (N,)
+    shell_mask: Any         # (N-1,) 1.0 where the shell is above cloud/surface
+    opac_mask: Any          # (S,)
+    vmrs: Any = None
+    custom_log_abund: Any = None
+    eff_xsec: Any = None
+    rh_binned: Any = None
+    rh_orig: Any = None
+    crust_flux: Any = None
+    crust_T: Any = None
+
+
+def unpack_inputs(cfg, pin):
+    """Slice the packed per-call vector back into named fields (traced)."""
+    v = pin.packed
+    n = cfg.n_layers
+    o = SC_N_SCALARS
+    scalars = v[:o]
+    ints = v[o:o + IX_N_INTS].astype(jnp.int32)
+    o += IX_N_INTS
+    T_profile = v[o:o + n]
+    P_profile = v[o + n:o + 2 * n]
+    shell_mask = v[o + 2 * n:o + 3 * n - 1]
+    opac_mask = v[o + 3 * n - 1:]
+    return UnpackedInputs(scalars, ints, T_profile, P_profile, shell_mask,
+                          opac_mask, pin.vmrs, pin.custom_log_abund,
+                          pin.eff_xsec, pin.rh_binned, pin.rh_orig,
+                          pin.crust_flux, pin.crust_T)
+
+
 class AtmosphereOutputs(NamedTuple):
     radii: Any
     dr: Any
     mu_profile: Any
     atm_abund: Any          # (N, M)
-    absorption_coeff_atm: Any  # (N, L)
+    coeff_perm: Any         # (L, N) absorption coefficients, transposed and
+                            # (when perm is not None) column-permuted
+    perm: Any               # (N,) layer sort order, or None
+    inv_perm: Any           # (N,) inverse permutation, or None
+    anchor: Any             # (L,) reduce co-output anchoring the opacity
+                            # fusion (see _opacity); must stay live
     unbound: Any            # bool scalar
+
+    @property
+    def absorption_coeff_atm(self):
+        """(N, L) array in original layer order, for full_output consumers."""
+        coeff_T = self.coeff_perm if self.perm is None \
+            else self.coeff_perm[:, self.inv_perm]
+        return coeff_T.T
 
 
 class TransitOutputs(NamedTuple):
@@ -153,14 +208,12 @@ def _layer_log_abundances(cfg, data, sc, inp):
     N = inp.T_profile.shape[0]
 
     if cfg.abund_mode == "eq":
-        la_eq = regular_grid_interp(
+        la_grid = regular_grid_interp(
             data.logZ_grid, data.CO_grid, data.log_abund_grid,
-            sc[SC_LOGZ], sc[SC_CO])                     # (S_eq, NT, NP)
-        la_eq_atm = regular_grid_interp(
-            data.T_grid, data.log10_P_grid, jnp.transpose(la_eq, (1, 2, 0)),
-            inp.T_profile, jnp.log10(inp.P_profile))    # (N, S_eq)
-        la = jnp.full((N, n_master), LOG_MIN_ABUND, dtype=jnp.float32)
-        la = la.at[:, data.eq_master_idx].set(la_eq_atm)
+            sc[SC_LOGZ], sc[SC_CO])                     # (NT, NP, M)
+        la = regular_grid_interp(
+            data.T_grid, data.log10_P_grid, la_grid,
+            inp.T_profile, jnp.log10(inp.P_profile))    # (N, M)
         if cfg.ch4_idx >= 0:
             la = la.at[:, cfg.ch4_idx].add(sc[SC_LOG_CH4])
     elif cfg.abund_mode == "vmr":
@@ -176,11 +229,7 @@ def _layer_log_abundances(cfg, data, sc, inp):
 
     # Quenching: above the quench point (P <= P_quench), hold every species
     # at its abundance at P_quench, interpolated along the profile itself
-    log10_P = jnp.log10(inp.P_profile)
-    fi = jnp.interp(sc[SC_LOG10_P_QUENCH], log10_P,
-                    jnp.arange(N, dtype=jnp.float32))
-    k = jnp.clip(jnp.floor(fi).astype(jnp.int32), 0, N - 2)
-    f = fi - k
+    k, f = fractional_index(sc[SC_LOG10_P_QUENCH], jnp.log10(inp.P_profile))
     quench_la = la[k] * (1 - f) + la[k + 1] * f         # (M,)
     la = jnp.where((inp.P_profile <= sc[SC_P_QUENCH])[:, None],
                    quench_la[None, :], la)
@@ -202,10 +251,9 @@ def _hydrostatic(sc, P_profile, T_profile, mu_profile):
 
     # Integral value at the reference pressure (piecewise-linear T, mu in lnP)
     ln_ref = jnp.log(sc[SC_REF_PRESSURE])
-    fi = jnp.interp(ln_ref, ln_P, jnp.arange(len(ln_P), dtype=jnp.float32))
-    k = jnp.clip(jnp.floor(fi).astype(jnp.int32), 0, len(ln_P) - 2)
-    T_ref = jnp.interp(ln_ref, ln_P, T_profile)
-    mu_ref = jnp.interp(ln_ref, ln_P, mu_profile)
+    k, f = fractional_index(ln_ref, ln_P)
+    T_ref = T_profile[k] + f * (T_profile[k + 1] - T_profile[k])
+    mu_ref = mu_profile[k] + f * (mu_profile[k + 1] - mu_profile[k])
     seg_partial = (ln_ref - ln_P[k]) * k_B * 0.5 * (T_profile[k] + T_ref) / \
         (G * Mp * 0.5 * (mu_profile[k] + mu_ref) * AMU)
     C_ref = C[k] + seg_partial
@@ -226,59 +274,59 @@ def _hydrostatic(sc, P_profile, T_profile, mu_profile):
 
 
 def _opacity(cfg, data, sc, inp, atm_abund, T_profile, P_profile):
-    """Per-layer absorption coefficients (N, L), computed directly at each
-    layer's (T, P) instead of on the 2D opacity grid: each opacity source is
+    """Per-layer absorption coefficients, computed directly at each layer's
+    (T, P) instead of on the 2D opacity grid: each opacity source is
     interpolated from its data grid onto the layers (log cross sections,
     linear in 1/T and ln P -- the same coordinates the grid version used) and
-    combined with the per-layer abundances."""
+    combined with the per-layer abundances.
+
+    Returns the TRANSPOSED coefficients (L, N).  This shape is deliberate,
+    and worth 2x on GPU: with layers innermost, consecutive threads of the
+    fused opacity kernel share the same wavelength and read the same handful
+    of opacity-grid cells (broadcast/cache hits), and consecutive thread
+    blocks stream through the wavelength axis so each grid cell is fetched
+    from DRAM about once.  With wavelength innermost (an (N, L) output), the
+    whole bracketing-row working set (tens to hundreds of MB) is re-read for
+    every layer, which thrashes L2.  Both consumers (the transit path-length
+    matmul and the eclipse cumulative sum) want (L, N) anyway.
+
+    The species loop is unrolled for the same reason: each (L, N) term fuses
+    its 4 corner gathers, the exp, and the abundance weighting into one
+    elementwise accumulation, so no (S, L, N) intermediate is materialized.
+
+    When the T/P profile is not isothermal (cfg.sort_layers), the layers are
+    additionally processed in order of their bracketing grid cell:
+    neighboring GPU threads then read the same grid rows instead of up-to-32
+    scattered ones, which is worth ~3x on profiles with strong temperature
+    gradients.  The permutation only reorders per-layer computations, so
+    results are unchanged; the columns are left in sorted order (cheaper for
+    the matmul consumers, which fold the permutation into their small
+    matrices) along with the permutation arrays.
+
+    Returns (coeff_perm, perm, inv_perm, anchor).  `anchor` is a reduce over
+    layers emitted from the same fusion: reduce-rooted fusions iterate with
+    the layer axis innermost per thread, keeping each layer run's grid cells
+    in registers, which is another ~2x over a plain materializing fusion.
+    The anchor output must be kept live (it is protected by an
+    optimization_barrier together with the coefficients).
+    """
     L = data.lambda_grid.shape[0]
     N = T_profile.shape[0]
-    NT = data.T_grid.shape[0]
-    NP = data.P_grid.shape[0]
     n_atm = P_profile / (k_B * T_profile)                          # (N,)
 
-    # Bracketing grid rows/columns and interpolation weights for each layer
-    fi_t = jnp.interp(T_profile, data.T_grid,
-                      jnp.arange(NT, dtype=jnp.float32))
-    t_lo = jnp.clip(jnp.floor(fi_t).astype(jnp.int32), 0, NT - 2)
-    inv_T_lo = 1.0 / data.T_grid[t_lo]
-    a = (1.0 / T_profile - inv_T_lo) / \
-        (1.0 / data.T_grid[t_lo + 1] - inv_T_lo)
+    # Bracketing grid rows/columns and interpolation weights for each layer.
+    # The T weight is recomputed in 1/T (the interpolation coordinate).
+    t_lo, _ = fractional_index(T_profile, data.T_grid)
+    inv_T_lo = data.inv_T_grid[t_lo]
+    a = (1.0 / T_profile - inv_T_lo) / (data.inv_T_grid[t_lo + 1] - inv_T_lo)
     a = jnp.clip(a, 0.0, 1.0)                                      # (N,)
+    p_lo, b = fractional_index(jnp.log(P_profile), data.ln_P_grid)
 
-    ln_P = jnp.log(P_profile)
-    fi_p = jnp.interp(ln_P, data.ln_P_grid,
-                      jnp.arange(NP, dtype=jnp.float32))
-    p_lo = jnp.clip(jnp.floor(fi_p).astype(jnp.int32), 0, NP - 2)
-    b = (ln_P - data.ln_P_grid[p_lo]) / \
-        (data.ln_P_grid[p_lo + 1] - data.ln_P_grid[p_lo])
-    b = jnp.clip(b, 0.0, 1.0)                                      # (N,)
-
-    coeff = jnp.zeros((N, L), dtype=jnp.float32)
-
-    if cfg.add_gas:
-        aw = a[None, :, None]
-        bw = b[None, :, None]
-        ln_sig = data.ln_xsec_stack
-        ln_sig_atm = \
-            ln_sig[:, t_lo, p_lo] * (1 - aw) * (1 - bw) + \
-            ln_sig[:, t_lo, p_lo + 1] * (1 - aw) * bw + \
-            ln_sig[:, t_lo + 1, p_lo] * aw * (1 - bw) + \
-            ln_sig[:, t_lo + 1, p_lo + 1] * aw * bw                # (S, N, L)
-        ln_sig_atm = jnp.maximum(ln_sig_atm, sc[SC_LN_MIN_XSEC])
-        gas_ab = atm_abund[:, data.opac_master_idx] * \
-            inp.opac_mask[None, :]                                 # (N, S)
-        coeff += jnp.einsum("snl,ns->nl", jnp.exp(ln_sig_atm), gas_ab) * \
-            n_atm[:, None]
-
-    if cfg.add_hminus:
-        a1 = a[:, None]
-        ln_k_atm = data.ln_hminus_k[t_lo] * (1 - a1) + \
-            data.ln_hminus_k[t_lo + 1] * a1                        # (N, L)
-        w = atm_abund[:, cfg.el_idx] * atm_abund[:, cfg.h_idx] * \
-            P_profile ** 2 / T_profile                             # (N,)
-        coeff += jnp.exp(ln_k_atm) * w[:, None]
-
+    # The accumulator is seeded with the scattering term rather than zeros,
+    # and -- in the sorted case -- that seed is passed through a column
+    # gather.  Both details steer XLA's fusion/layout decisions for the whole
+    # accumulation chain; with a plain zero seed the fused kernel re-reads
+    # every species' grid rows per output element and runs 2-5x slower.
     if cfg.add_scattering:
         if cfg.use_mie:
             factor, slope, ref_um = 1.0, 4.0, 1.0
@@ -288,24 +336,79 @@ def _opacity(cfg, data, sc, inp, atm_abund, T_profile, P_profile):
             ref_um = sc[SC_SCAT_REF_UM]
         sum_pol = atm_abund @ data.pol_sqr                         # (N,)
         pow_term = ref_um ** (slope - 4) / data.lambda_um ** slope  # (L,)
-        coeff += (factor * RAYLEIGH_PREF) * \
-            (n_atm * sum_pol)[:, None] * pow_term[None, :]
+        # materialize: fused into the (L, N) coeff kernel, the expensive
+        # pow would be recomputed for every layer
+        pow_term = lax.optimization_barrier(pow_term)
+        seed = (factor * RAYLEIGH_PREF) * \
+            (n_atm * sum_pol)[None, :] * pow_term[:, None]
+    else:
+        seed = lax.optimization_barrier(
+            jnp.zeros((L, N), dtype=jnp.float32))
+
+    if cfg.sort_layers:
+        NP = data.P_grid.shape[0]
+        perm = jnp.argsort(t_lo * NP + p_lo)
+        inv_perm = jnp.argsort(perm)
+        t_lo = t_lo[perm]
+        a = a[perm]
+        p_lo = p_lo[perm]
+        b = b[perm]
+        n_atm = n_atm[perm]
+        atm_abund = atm_abund[perm]
+        T_profile = T_profile[perm]
+        P_profile = P_profile[perm]
+        seed = seed[:, perm]
+    else:
+        perm = None
+        inv_perm = None
+
+    coeff_T = seed
+
+    if cfg.add_gas:
+        aw = a[None, :]
+        bw = b[None, :]
+        w00 = (1 - aw) * (1 - bw)
+        w01 = (1 - aw) * bw
+        w10 = aw * (1 - bw)
+        w11 = aw * bw
+        gas_ab = atm_abund[:, data.opac_master_idx] * \
+            inp.opac_mask[None, :] * n_atm[:, None]                # (N, S)
+        for s in range(data.ln_xsec_stack.shape[0]):
+            ln_sig = data.ln_xsec_stack[s]
+            ln_sig_atm = ln_sig[t_lo, p_lo].T * w00 + \
+                ln_sig[t_lo, p_lo + 1].T * w01 + \
+                ln_sig[t_lo + 1, p_lo].T * w10 + \
+                ln_sig[t_lo + 1, p_lo + 1].T * w11                 # (L, N)
+            ln_sig_atm = jnp.maximum(ln_sig_atm, sc[SC_LN_MIN_XSEC])
+            coeff_T += jnp.exp(ln_sig_atm) * gas_ab[:, s][None, :]
+
+    if cfg.add_hminus:
+        a1 = a[None, :]
+        ln_k_atm = data.ln_hminus_k[t_lo].T * (1 - a1) + \
+            data.ln_hminus_k[t_lo + 1].T * a1                      # (L, N)
+        w = atm_abund[:, cfg.el_idx] * atm_abund[:, cfg.h_idx] * \
+            P_profile ** 2 / T_profile                             # (N,)
+        coeff_T += jnp.exp(ln_k_atm) * w[None, :]
 
     if cfg.use_mie:
         n_mie = sc[SC_NUM_DEN] * \
             (P_profile / sc[SC_MIE_REF_P]) ** (1.0 / sc[SC_FSH])   # (N,)
-        coeff += n_mie[:, None] * inp.eff_xsec[None, :]
+        coeff_T += n_mie[None, :] * inp.eff_xsec[:, None]
 
     if cfg.add_collisional:
-        a2 = a[None, :, None]
-        cia_atm = jnp.exp(data.ln_cia_stack[:, t_lo] * (1 - a2) +
-                          data.ln_cia_stack[:, t_lo + 1] * a2)     # (K, N, L)
+        a1 = a[None, :]
         ns = n_atm * N_SCALE
-        w = atm_abund[:, data.cia_idx1] * atm_abund[:, data.cia_idx2] * \
+        wc = atm_abund[:, data.cia_idx1] * atm_abund[:, data.cia_idx2] * \
             (ns * ns)[:, None]                                     # (N, K)
-        coeff += jnp.einsum("knl,nk->nl", cia_atm, w)
+        for k in range(data.ln_cia_stack.shape[0]):
+            ln_cia = data.ln_cia_stack[k]
+            ln_cia_atm = ln_cia[t_lo].T * (1 - a1) + \
+                ln_cia[t_lo + 1].T * a1                            # (L, N)
+            coeff_T += jnp.exp(ln_cia_atm) * wc[:, k][None, :]
 
-    return coeff
+    anchor = jnp.sum(coeff_T, axis=1)
+    coeff_T, anchor = lax.optimization_barrier((coeff_T, anchor))
+    return coeff_T, perm, inv_perm, anchor
 
 
 def _compute_atmosphere(cfg, data, inp):
@@ -318,9 +421,10 @@ def _compute_atmosphere(cfg, data, inp):
     mu_profile = atm_abund @ data.masses                 # (N,)
 
     radii, dr, unbound = _hydrostatic(sc, P_profile, T_profile, mu_profile)
-    coeff_atm = _opacity(cfg, data, sc, inp, atm_abund, T_profile, P_profile)
-    return AtmosphereOutputs(radii, dr, mu_profile, atm_abund, coeff_atm,
-                             unbound)
+    coeff_perm, perm, inv_perm, anchor = _opacity(
+        cfg, data, sc, inp, atm_abund, T_profile, P_profile)
+    return AtmosphereOutputs(radii, dr, mu_profile, atm_abund, coeff_perm,
+                             perm, inv_perm, anchor, unbound)
 
 
 def _planck(lambda_grid, T):
@@ -336,7 +440,9 @@ def planck_np(lambda_grid, T):
 
 
 def _stellar_spectrum(cfg, data, sc, orig=False):
-    """Stellar spectrum and spot correction factors on the wavelength grid."""
+    """Stellar spectrum and spot correction factors on the wavelength grid.
+    Whether the PHOENIX grid or a blackbody is used, and whether spots are
+    present, are host-known and static, so only the needed branch is traced."""
     lam = data.orig_lambda_grid if orig else data.lambda_grid
     spectra = data.orig_stellar_spectra if orig else data.stellar_spectra
     L = lam.shape[0]
@@ -348,18 +454,38 @@ def _stellar_spectrum(cfg, data, sc, orig=False):
     T_spot = sc[SC_T_SPOT]
     f_spot = sc[SC_SPOT_FRAC]
 
-    in_grid = (T_star >= data.stellar_temps[0]) & \
-              (T_star <= data.stellar_temps[-1]) & (not cfg.blackbody)
-    unspotted = jnp.where(
-        in_grid, interp1d(T_star, data.stellar_temps, spectra),
-        math.pi * _planck(lam, T_star))
-    spot = jnp.where(
-        in_grid, interp1d(T_spot, data.stellar_temps, spectra),
-        math.pi * _planck(lam, T_spot))
+    if cfg.stellar_in_grid:
+        unspotted = interp1d(T_star, data.stellar_temps, spectra)
+    else:
+        unspotted = math.pi * _planck(lam, T_star)
+    if not cfg.has_spots:
+        return unspotted, jnp.ones(L, dtype=jnp.float32)
 
+    if cfg.stellar_in_grid:
+        spot = interp1d(T_spot, data.stellar_temps, spectra)
+    else:
+        spot = math.pi * _planck(lam, T_spot)
     spectrum = f_spot * spot + (1 - f_spot) * unspotted
     correction_factors = unspotted / spectrum
     return spectrum, correction_factors
+
+
+def _uniform_log_lookup(x, table_x, table_y, left, right):
+    """Linear interpolation of (table_x, table_y) at x, where table_x is
+    uniform in log10 (np.logspace): the bracketing segment is found
+    analytically instead of by binary search.  The interpolation weight within
+    the segment is linear in x, matching jnp.interp; `left`/`right` are the
+    values returned outside the table range."""
+    n = table_x.shape[0]
+    log_x0 = jnp.log10(table_x[0])
+    scale = (n - 1) / (jnp.log10(table_x[-1]) - log_x0)
+    idx = (jnp.log10(x) - log_x0) * scale
+    idx = jnp.clip(idx, 0, n - 2).astype(jnp.int32)
+    x0 = table_x[idx]
+    frac = (x - x0) / (table_x[idx + 1] - x0)
+    y = table_y[idx] * (1 - frac) + table_y[idx + 1] * frac
+    y = jnp.where(x < table_x[0], left, y)
+    return jnp.where(x > table_x[-1], right, y)
 
 
 def _get_dl(radii):
@@ -373,15 +499,24 @@ def _get_dl(radii):
     return lengths[:-1] - lengths[1:]
 
 
-def _transit_core(cfg, data, inp):
+def _transit_core(cfg, data, pin):
+    inp = unpack_inputs(cfg, pin)
     sc = inp.scalars
     atm = _compute_atmosphere(cfg, data, inp)
     Rs = sc[SC_RS]
 
-    intermediate_coeff = 0.5 * (atm.absorption_coeff_atm[:-1] +
-                                atm.absorption_coeff_atm[1:])  # (N-1, L)
+    # tau_los[l,j] = sum_i 0.5*(k[i]+k[i+1]) * dl[i,j]: rather than averaging
+    # the (L, N) coefficients to midpoints (an extra full-size pass), fold the
+    # averaging into the small dl matrix: sum_i k[i] * 0.5*(dl[i]+dl[i-1]).
+    # The layer sort from _opacity is likewise folded in by permuting the
+    # rows of the small matrix instead of un-permuting the coefficients
     dl = _get_dl(atm.radii)                                    # (N-1, N-1)
-    tau_los = intermediate_coeff.T @ dl                        # (L, N-1)
+    pad = jnp.zeros((1, dl.shape[1]), dtype=dl.dtype)
+    dl_mid = 0.5 * (jnp.concatenate([dl, pad]) +
+                    jnp.concatenate([pad, dl]))                # (N, N-1)
+    if atm.perm is not None:
+        dl_mid = dl_mid[atm.perm]
+    tau_los = atm.coeff_perm @ dl_mid                          # (L, N-1)
     absorption_fraction = -jnp.expm1(-tau_los)
 
     shell_w = inp.shell_mask * atm.radii[1:] * atm.dr
@@ -390,9 +525,10 @@ def _transit_core(cfg, data, inp):
         2.0 / Rs ** 2 * (absorption_fraction @ shell_w)
 
     stellar, corr = _stellar_spectrum(cfg, data, sc)
-    if data.bin_mat is not None:
-        weighted = data.bin_mat @ (depths * corr * stellar)
-        norm = data.bin_mat @ stellar
+    if data.bin_idx is not None:
+        weighted = jnp.sum((depths * corr * stellar)[data.bin_idx] *
+                           data.bin_w, axis=1)
+        norm = jnp.sum(stellar[data.bin_idx] * data.bin_w, axis=1)
         binned = weighted / norm
     else:
         binned = depths * corr
@@ -401,22 +537,35 @@ def _transit_core(cfg, data, inp):
                           absorption_fraction, atm)
 
 
-def _eclipse_core(cfg, data, inp):
+def _eclipse_core(cfg, data, pin):
+    inp = unpack_inputs(cfg, pin)
     sc = inp.scalars
     atm = _compute_atmosphere(cfg, data, inp)
     Rs = sc[SC_RS]
     Rp = sc[SC_RP]
 
-    intermediate_coeff = 0.5 * (atm.absorption_coeff_atm[:-1] +
-                                atm.absorption_coeff_atm[1:])   # (N-1, L)
+    # taus[l,j] = sum_{i<=j} 0.5*(k[i]+k[i+1]) * dm[i], with dm = dr * mask:
+    # expressed as a matmul with a small triangular weight matrix (instead
+    # of a midpoint average + cumsum) so the opacity coefficients are read
+    # by a single consumer, in their sorted column order
     intermediate_T = 0.5 * (inp.T_profile[:-1] + inp.T_profile[1:])
-    d_taus = intermediate_coeff.T * (atm.dr * inp.shell_mask)[None, :]
-    taus = jnp.cumsum(d_taus, axis=1)                           # (L, N-1)
+    N = cfg.n_layers
+    dm = atm.dr * inp.shell_mask                                # (N-1,)
+    zero = jnp.zeros(1, dtype=dm.dtype)
+    dmn = jnp.concatenate([dm, zero])                           # dm[n]
+    dmp = jnp.concatenate([zero, dm])                           # dm[n-1]
+    n_idx = jnp.arange(N, dtype=jnp.int32)[:, None]
+    j_idx = jnp.arange(N - 1, dtype=jnp.int32)[None, :]
+    tau_w = 0.5 * (dmn[:, None] * (n_idx <= j_idx) +
+                   dmp[:, None] * (n_idx <= j_idx + 1))         # (N, N-1)
+    if atm.perm is not None:
+        tau_w = tau_w[atm.perm]
+    taus = atm.coeff_perm @ tau_w                               # (L, N-1)
 
     planck = _planck(data.lambda_grid[:, None], intermediate_T[None, :])
 
-    exp3 = jnp.interp(taus.ravel(), data.exp3_x, data.exp3_y,
-                      left=0.5, right=0.0).reshape(taus.shape)
+    exp3 = _uniform_log_lookup(taus, data.exp3_x, data.exp3_y,
+                               left=0.5, right=0.0)
     exp3_padded = jnp.concatenate(
         [jnp.full((taus.shape[0], 1), 0.5, dtype=taus.dtype), exp3], axis=1)
     integrand = planck * jnp.diff(exp3_padded, axis=1)
@@ -426,8 +575,8 @@ def _eclipse_core(cfg, data, inp):
     # tau^2 E1(tau) - tau e^-tau + e^-tau via a float64-precomputed lookup
     # table.  (jax.scipy.special.exp1's iterative implementation can fail to
     # converge in FP32; the limits are exactly 1 as tau->0 and 0 as tau->inf.)
-    bottom_term = jnp.interp(max_taus, data.bterm_x, data.bterm_y,
-                             left=1.0, right=0.0)
+    bottom_term = _uniform_log_lookup(max_taus, data.bterm_x, data.bterm_y,
+                                      left=1.0, right=0.0)
     # the deepest included shell is the one above the floor node
     planck_bot = jnp.take(planck, inp.ints[IX_FLOOR] - 1, axis=1)
 
@@ -449,7 +598,9 @@ def _eclipse_core(cfg, data, inp):
             irrad = sc[SC_REDIST] * jnp.trapezoid(
                 (1 - inp.rh_orig) * stellar_orig / sc[SC_A_OVER_RS] ** 2,
                 data.orig_lambda_grid)
-            surface_temp = jnp.interp(irrad, inp.crust_flux, inp.crust_T)
+            ci, cf = fractional_index(irrad, inp.crust_flux)
+            surface_temp = inp.crust_T[ci] + \
+                cf * (inp.crust_T[ci + 1] - inp.crust_T[ci])
         emitted = (1 - inp.rh_binned) * math.pi * \
             _planck(data.lambda_grid, surface_temp)
         reflected = stellar / sc[SC_A_OVER_RS] ** 2 * inp.rh_binned
@@ -465,10 +616,11 @@ def _eclipse_core(cfg, data, inp):
 
     depths = fluxes / stellar * (photosphere_radii / Rs) ** 2
 
-    if data.bin_mat is not None:
+    if data.bin_idx is not None:
         photon_w = stellar * data.lambda_grid  # proportional to photon flux
-        weighted = data.bin_mat @ (depths * photon_w)
-        norm = data.bin_mat @ photon_w
+        weighted = jnp.sum((depths * photon_w)[data.bin_idx] * data.bin_w,
+                           axis=1)
+        norm = jnp.sum(photon_w[data.bin_idx] * data.bin_w, axis=1)
         binned = weighted / norm
     else:
         binned = depths
@@ -477,5 +629,31 @@ def _eclipse_core(cfg, data, inp):
                           photosphere_radii, surface_temp, irrad, atm)
 
 
+def _transit_depths_only(cfg, data, pin):
+    """Depths-only variant: returning just the small arrays lets XLA skip
+    materializing the large diagnostic outputs (tau_los, absorption_fraction,
+    absorption_coeff_atm, ...).  The unbound flag and one element of the
+    opacity-fusion anchor (which must stay live; see _opacity) are appended
+    to the depths so one device-to-host transfer returns everything."""
+    out = _transit_core(cfg, data, pin)
+    flag = jnp.where(out.atm.unbound, 1.0, 0.0)
+    # keep the flag's reduction chain out of the output-concatenate fusion:
+    # fused there it runs as a single-threaded scalar epilogue (tens of us)
+    flag = lax.optimization_barrier(flag)
+    return jnp.concatenate([out.binned_depths, flag[None],
+                            out.atm.anchor[:1]])
+
+
+def _eclipse_depths_only(cfg, data, pin):
+    """Depths + [unbound flag, irradiation, anchor] in one output array."""
+    out = _eclipse_core(cfg, data, pin)
+    flag = jnp.where(out.atm.unbound, 1.0, 0.0)
+    tail = lax.optimization_barrier(
+        jnp.stack([flag, jnp.asarray(out.irrad, dtype=jnp.float32)]))
+    return jnp.concatenate([out.binned_depths, tail, out.atm.anchor[:1]])
+
+
 transit_core = jax.jit(_transit_core, static_argnums=0)
 eclipse_core = jax.jit(_eclipse_core, static_argnums=0)
+transit_depths_core = jax.jit(_transit_depths_only, static_argnums=0)
+eclipse_depths_core = jax.jit(_eclipse_depths_only, static_argnums=0)

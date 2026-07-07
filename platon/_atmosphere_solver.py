@@ -30,6 +30,56 @@ _DEVICE_CACHE = {}
 _DEVICE_CACHE_MAX_ENTRIES = 8
 
 
+_EVAL_POOL = None
+_EVAL_WORKERS = 8
+
+
+def _mie_lognormal_integral(log_lam, log_r, knots, values, weights):
+    """out[i] = sum_j weights[j] * S(log_r[j] - log_lam[i]), where S is the
+    not-a-knot cubic through (knots, values) with uniformly spaced knots
+    (the same spline make_interp_spline/CubicSpline build).  The interval
+    index is computed arithmetically and the piecewise cubics evaluated with
+    vectorized Horner steps, chunked across a thread pool (the numpy kernels
+    release the GIL) -- ~30x faster than scipy's per-point evaluator, and the
+    (L, R) matrix is never materialized whole."""
+    global _EVAL_POOL
+    spl = scipy.interpolate.CubicSpline(knots, values)
+    n_int = len(knots) - 1
+    scale = n_int / (knots[-1] - knots[0])
+    c0, c1, c2, c3 = spl.c
+
+    def eval_chunk(lam_c, out):
+        x = log_r[np.newaxis, :] - lam_c[:, np.newaxis]
+        scaled = x - knots[0]
+        scaled *= scale
+        idx = scaled.astype(np.int32)
+        np.clip(idx, 0, n_int - 1, out=idx)
+        t = np.subtract(x, knots[idx], out=scaled)
+        r = c0[idx]
+        r *= t
+        r += c1[idx]
+        r *= t
+        r += c2[idx]
+        r *= t
+        r += c3[idx]
+        out[:] = r @ weights
+
+    L = log_lam.shape[0]
+    out = np.empty(L)
+    if L < 4 * _EVAL_WORKERS:
+        eval_chunk(log_lam, out)
+        return out
+    if _EVAL_POOL is None:
+        from concurrent.futures import ThreadPoolExecutor
+        _EVAL_POOL = ThreadPoolExecutor(max_workers=_EVAL_WORKERS)
+    bounds = np.linspace(0, L, _EVAL_WORKERS + 1).astype(int)
+    list(_EVAL_POOL.map(
+        lambda i: eval_chunk(log_lam[bounds[i]:bounds[i + 1]],
+                             out[bounds[i]:bounds[i + 1]]),
+        range(_EVAL_WORKERS)))
+    return out
+
+
 def _interp_rows_to(lambda_target, lambda_source, data):
     """Interpolate data (..., len(lambda_source)) onto lambda_target."""
     return np.array([np.interp(lambda_target, lambda_source, row)
@@ -189,16 +239,22 @@ def _load_raw(method, include_opacities, downsample):
 
 
 def _get_log_abund_grid(include_condensation, abundance_getter, master_index):
-    """(NZ, NC, S_eq, NT, NP) float32 log10 abundance grid, floored at -99.
-    Derived from the AbundanceGetter's grid (already loaded from disk)."""
+    """(NZ, NC, NT, NP, M) float32 log10 abundance grid on the full master
+    species list (species without equilibrium data filled with -99), so the
+    per-call interpolation needs no scatter and its output feeds the layer
+    interpolation directly.  Derived from the AbundanceGetter's grid (already
+    loaded from disk)."""
     if include_condensation in _LOG_ABUND_CACHE:
         return _LOG_ABUND_CACHE[include_condensation]
     log_grid = abundance_getter.log_abundances.astype(np.float32)
     eq_master_idx = np.array(
         [master_index[s] for s in abundance_getter.included_species], np.int32)
-    result = (log_grid, eq_master_idx)
-    _LOG_ABUND_CACHE[include_condensation] = result
-    return result
+    NZ, NC, _, NT, NP = log_grid.shape
+    padded = np.full((NZ, NC, NT, NP, len(master_index)), fm.LOG_MIN_ABUND,
+                     np.float32)
+    padded[..., eq_master_idx] = np.moveaxis(log_grid, 2, -1)
+    _LOG_ABUND_CACHE[include_condensation] = padded
+    return padded
 
 
 class AtmosphereSolver:
@@ -235,6 +291,9 @@ class AtmosphereSolver:
         self.ref_pressure = ref_pressure
         self._mie_cache = MieCache()
         self._filtered_cross_secs = {}   # (species, sigma) -> smoothed array
+        self._mie_eff_xsec_cache = {}    # full-argument memo (per lambda grid)
+        self._mie_nbins_cache = {}       # histogram bin counts (see below)
+        self._log_lambda_grid = None     # lazy log(lambda_grid)
 
         self.all_cross_secs = load_dict_from_pickle("data/all_cross_secs.pkl")
         self.all_radii = load_numpy("data/mie_radii.npy")
@@ -270,6 +329,9 @@ class AtmosphereSolver:
             bins[i][1] is the end wavelength for bin i. If bins is None, resets
             the calculator to its unbinned state.
         """
+        self._mie_eff_xsec_cache = {}    # results depend on lambda_grid
+        self._mie_nbins_cache = {}
+        self._log_lambda_grid = None
         if self.wavelength_bins is not None:
             # Reset to the unbinned state before applying the new bins
             self.lambda_grid = np.array(self.orig_lambda_grid)
@@ -313,17 +375,23 @@ class AtmosphereSolver:
         [l:r) selects exactly the points with start <= lambda < end."""
         lam = self.lambda_grid
         B = len(bins)
-        bin_mat = np.zeros((B, len(lam)), dtype=np.float32)
         bin_wavelengths = np.zeros(B)
         bin_ranges = []
         for i, (start, end) in enumerate(bins):
             l = np.searchsorted(lam, start)
             r = np.searchsorted(lam, end)
-            bin_mat[i, l:r] = 1
             bin_wavelengths[i] = np.mean(lam[l:r])
             bin_ranges.append((l, r))
-        return dict(bin_mat=bin_mat, bin_wavelengths=bin_wavelengths,
-                    bin_ranges=bin_ranges)
+        # Bin averaging as a (B, W) gather + masked row sum (W = widest bin):
+        # far cheaper on device than a (B, L) 0/1 matrix-vector product
+        W = max(r - l for l, r in bin_ranges)
+        bin_idx = np.zeros((B, W), dtype=np.int32)
+        bin_w = np.zeros((B, W), dtype=np.float32)
+        for i, (l, r) in enumerate(bin_ranges):
+            bin_idx[i, :r - l] = np.arange(l, r)
+            bin_w[i, :r - l] = 1.0
+        return dict(bin_idx=bin_idx, bin_w=bin_w,
+                    bin_wavelengths=bin_wavelengths, bin_ranges=bin_ranges)
 
     # ------------------------------------------------------------------
     # Device data
@@ -346,7 +414,7 @@ class AtmosphereSolver:
         if cond is None:
             cond = slice(None)
 
-        log_abund_grid, eq_master_idx = _get_log_abund_grid(
+        log_abund_grid = _get_log_abund_grid(
             self.include_condensation, self.abundance_getter,
             self.master_index)
 
@@ -358,6 +426,7 @@ class AtmosphereSolver:
             P_grid=jnp.asarray(raw["P_grid"], dtype=jnp.float32),
             ln_P_grid=jnp.asarray(np.log(raw["P_grid"]), dtype=jnp.float32),
             log10_P_grid=jnp.asarray(np.log10(raw["P_grid"]), dtype=jnp.float32),
+            inv_T_grid=jnp.asarray(1.0 / raw["T_grid"], dtype=jnp.float32),
             ln_xsec_stack=jnp.asarray(raw["ln_xsec_stack"][:, :, :, cond]),
             opac_master_idx=jnp.asarray(raw["opac_master_idx"]),
             masses=jnp.asarray(raw["masses"]),
@@ -365,7 +434,6 @@ class AtmosphereSolver:
             log_abund_grid=jnp.asarray(log_abund_grid),
             logZ_grid=jnp.asarray(self.abundance_getter.logZs, dtype=jnp.float32),
             CO_grid=jnp.asarray(self.abundance_getter.CO_ratios, dtype=jnp.float32),
-            eq_master_idx=jnp.asarray(eq_master_idx),
             ln_cia_stack=jnp.asarray(raw["ln_cia_stack"][:, :, cond]),
             cia_idx1=jnp.asarray(raw["cia_idx1"]),
             cia_idx2=jnp.asarray(raw["cia_idx2"]),
@@ -378,8 +446,10 @@ class AtmosphereSolver:
             exp3_y=jnp.asarray(raw["exp3_y"]),
             bterm_x=jnp.asarray(raw["bterm_x"]),
             bterm_y=jnp.asarray(raw["bterm_y"]),
-            bin_mat=None if self._bin_info is None
-                else jnp.asarray(self._bin_info["bin_mat"]),
+            bin_idx=None if self._bin_info is None
+                else jnp.asarray(self._bin_info["bin_idx"]),
+            bin_w=None if self._bin_info is None
+                else jnp.asarray(self._bin_info["bin_w"]),
         )
         _DEVICE_CACHE[key] = dd
         while len(_DEVICE_CACHE) > _DEVICE_CACHE_MAX_ENTRIES:
@@ -539,6 +609,10 @@ class AtmosphereSolver:
             at_radius = interp1d_np(part_size, self.all_radii, cross_secs.T)
             return np.interp(self.lambda_grid, self.low_res_lambdas, at_radius)
 
+        cache_key = (ri, part_size, sigma, max_zscore, num_integral_points)
+        if cache_key in self._mie_eff_xsec_cache:
+            return self._mie_eff_xsec_cache[cache_key]
+
         z_scores = -np.logspace(np.log10(0.1), np.log10(max_zscore),
                                 int(num_integral_points / 2))
         z_scores = np.append(z_scores[::-1], -z_scores)
@@ -549,17 +623,43 @@ class AtmosphereSolver:
 
         # log(2 pi r / lambda) computed by broadcasting logs (cheaper than
         # taking the log of the full L x n_radii matrix)
-        log_dense_xs = (np.log(2 * np.pi * radii)[np.newaxis, :] -
-                        np.log(self.lambda_grid)[:, np.newaxis])
+        log_r = np.log(2 * np.pi * radii)
+        if self._log_lambda_grid is None:
+            self._log_lambda_grid = np.log(self.lambda_grid)
+        log_lam = self._log_lambda_grid
 
-        n_bins = get_num_bins(log_dense_xs.flatten())
-        log_x_hist = np.histogram(log_dense_xs.flatten(), bins=n_bins)[1]
+        # Extremes of the pairwise differences: fl(a - b) is monotone in both
+        # operands, so they are attained at the operand extremes -- no full
+        # pass over the (L, R) matrix needed.  np.histogram's equal-width bin
+        # edges are np.linspace(min, max, n + 1), computed directly here to
+        # skip its counting pass.
+        lo = log_r.min() - log_lam.max()
+        hi = log_r.max() - log_lam.min()
+        # n_bins is exactly invariant under part_size changes (they rigidly
+        # shift the log-x distribution; the binning rule uses only the IQR,
+        # range, and count), so it is computed once per (sigma, ...) key
+        nb_key = (sigma, max_zscore, num_integral_points)
+        n_bins = self._mie_nbins_cache.get(nb_key)
+        if n_bins is None:
+            log_dense_xs = log_r[np.newaxis, :] - log_lam[:, np.newaxis]
+            n_bins = get_num_bins(log_dense_xs.ravel(), lo, hi)
+            self._mie_nbins_cache[nb_key] = n_bins
+        log_x_hist = np.linspace(lo, hi, n_bins + 1)
 
         Qext_hist = self._mie_cache.get_and_update(ri, np.exp(log_x_hist))
-        spl = scipy.interpolate.make_interp_spline(log_x_hist, Qext_hist)
-        Qext_intpl = spl(log_dense_xs)
-        return np.trapezoid(probs * geometric_cross_section * Qext_intpl,
-                            z_scores, axis=1)
+        # trapezoid rule folded into per-row BLAS dots with fixed weights
+        dz = np.diff(z_scores)
+        w = np.zeros(len(z_scores))
+        w[:-1] += 0.5 * dz
+        w[1:] += 0.5 * dz
+        result = _mie_lognormal_integral(
+            log_lam, log_r, log_x_hist, Qext_hist,
+            w * probs * geometric_cross_section)
+
+        if len(self._mie_eff_xsec_cache) > 64:
+            self._mie_eff_xsec_cache.pop(next(iter(self._mie_eff_xsec_cache)))
+        self._mie_eff_xsec_cache[cache_key] = result
+        return result
 
     def _get_mie_scattering_absorption(self, P_cond, T_cond, ri, part_size,
                                        frac_scale_height, max_number_density,

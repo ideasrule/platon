@@ -196,11 +196,13 @@ class TransitDepthCalculator:
             P_profile = np.asarray(custom_P_profile, dtype=np.float64)
             T_profile = np.asarray(custom_T_profile, dtype=np.float64)
         else:
-            P_profile = np.logspace(
-                np.log10(self.atm.P_grid[0]),
-                np.log10(self.atm.P_grid[-1]),
-                NUM_LAYERS)
-            T_profile = np.ones(len(P_profile)) * temperature
+            if not hasattr(self, "_default_P_profile"):
+                self._default_P_profile = np.logspace(
+                    np.log10(self.atm.P_grid[0]),
+                    np.log10(self.atm.P_grid[-1]),
+                    NUM_LAYERS)
+            P_profile = self._default_P_profile
+            T_profile = np.full(len(P_profile), float(temperature))
 
         cfg, inputs, host = prepare_forward_inputs(
             self.atm, star_radius=star_radius, planet_mass=planet_mass,
@@ -225,12 +227,18 @@ class TransitDepthCalculator:
             stellar_blackbody=stellar_blackbody,
             bot_pressure=cloudtop_pressure)
 
-        out = fm.transit_core(cfg, self.atm.device_data(), inputs)
+        if full_output:
+            out = fm.transit_core(cfg, self.atm.device_data(), inputs)
+            binned, unbound = out.binned_depths, bool(out.atm.unbound)
+        else:
+            res = np.asarray(fm.transit_depths_core(
+                cfg, self.atm.device_data(), inputs))
+            binned, unbound = res[:-2], res[-2] > 0
 
-        if bool(out.atm.unbound):
+        if unbound:
             raise AtmosphereError("Atmosphere unbound: height > hill radius")
 
-        binned_depths = np.array(out.binned_depths, dtype=np.float64)
+        binned_depths = np.array(binned, dtype=np.float64)
         if self.atm.wavelength_bins is None:
             binned_wavelengths = np.array(self.atm.lambda_grid)
         else:

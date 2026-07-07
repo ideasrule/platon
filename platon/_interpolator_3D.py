@@ -4,6 +4,20 @@ import jax.numpy as jnp
 import numpy as np
 
 
+def fractional_index(target_xs, xs):
+    """Locate target_xs in the sorted 1-D grid xs: returns (idx, frac) with
+    idx in [0, len(xs)-2] and frac clamped to [0, 1] (so out-of-range targets
+    take the endpoint values, matching jnp.interp).  Computed with a one-shot
+    vectorized comparison instead of jnp.searchsorted, whose scan-based binary
+    search lowers to a multi-kernel while loop."""
+    n = xs.shape[0]
+    idx = jnp.sum(target_xs[..., None] >= xs, axis=-1) - 1
+    idx = jnp.clip(idx, 0, n - 2).astype(jnp.int32)
+    x0 = xs[idx]
+    frac = jnp.clip((target_xs - x0) / (xs[idx + 1] - x0), 0.0, 1.0)
+    return idx, frac
+
+
 def interp1d(target_xs, xs, data):
     """Linearly interpolate `data` (whose first axis corresponds to the sorted
     coordinates `xs`) at target_xs.  JAX-traceable."""
@@ -11,13 +25,10 @@ def interp1d(target_xs, xs, data):
     target_xs = jnp.atleast_1d(target_xs)
     assert data.shape[0] == xs.shape[0]
 
-    x_indices = jnp.interp(target_xs, xs, jnp.arange(len(xs), dtype=data.dtype))
-    x_lower = jnp.floor(x_indices).astype(jnp.int32)
-    x_upper = jnp.ceil(x_indices).astype(jnp.int32)
-    x_frac = x_indices - x_lower
+    x_lower, x_frac = fractional_index(target_xs, xs)
 
     x_frac = x_frac.reshape(x_frac.shape + (1,) * (data.ndim - 1))
-    result = data[x_lower] * (1 - x_frac) + data[x_upper] * x_frac
+    result = data[x_lower] * (1 - x_frac) + data[x_lower + 1] * x_frac
 
     if isscalar:
         return result[0]
@@ -52,17 +63,22 @@ def _regular_grid_interp(ys, xs, data, target_ys, target_xs, xp):
 
     assert data.shape[0] == len(ys) and data.shape[1] == len(xs)
 
-    index_dtype = data.dtype if xp is jnp else np.float64
-    x_indices = xp.interp(target_xs, xs, xp.arange(len(xs), dtype=index_dtype))
-    y_indices = xp.interp(target_ys, ys, xp.arange(len(ys), dtype=index_dtype))
+    if xp is jnp:
+        x_lower, x_frac = fractional_index(target_xs, xs)
+        y_lower, y_frac = fractional_index(target_ys, ys)
+        x_upper = x_lower + 1
+        y_upper = y_lower + 1
+    else:
+        x_indices = np.interp(target_xs, xs, np.arange(len(xs)))
+        y_indices = np.interp(target_ys, ys, np.arange(len(ys)))
 
-    x_lower = xp.floor(x_indices).astype(jnp.int32 if xp is jnp else int)
-    x_upper = xp.ceil(x_indices).astype(jnp.int32 if xp is jnp else int)
-    x_frac = x_indices - x_lower
+        x_lower = np.floor(x_indices).astype(int)
+        x_upper = np.ceil(x_indices).astype(int)
+        x_frac = x_indices - x_lower
 
-    y_lower = xp.floor(y_indices).astype(jnp.int32 if xp is jnp else int)
-    y_upper = xp.ceil(y_indices).astype(jnp.int32 if xp is jnp else int)
-    y_frac = y_indices - y_lower
+        y_lower = np.floor(y_indices).astype(int)
+        y_upper = np.ceil(y_indices).astype(int)
+        y_frac = y_indices - y_lower
 
     extra_dims = data.ndim - 2
     x_frac = x_frac.reshape(x_frac.shape + (1,) * extra_dims)

@@ -193,7 +193,7 @@ def _load_raw(method, include_opacities, downsample):
                                         collisional[pair])
                         * fm.CIA_DATA_SCALE).astype(np.float32)
                  for pair in cia_pairs])
-        ln_cia_stack = np.maximum(ln_cia_stack, fm.LN_MIN_XSEC)
+        np.maximum(ln_cia_stack, fm.LN_MIN_XSEC, out=ln_cia_stack)
     else:
         ln_cia_stack = np.zeros((0, NT_g, len(lambda_full)), np.float32)
     cia_idx1 = np.array([master_index[s1] for s1, _ in cia_pairs], np.int32)
@@ -201,7 +201,8 @@ def _load_raw(method, include_opacities, downsample):
 
     with np.errstate(divide="ignore"):
         ln_hminus_k = np.log(_compute_h_minus_k(T_grid, lambda_full) / k_B)
-    ln_hminus_k = np.maximum(ln_hminus_k, fm.LN_MIN_XSEC).astype(np.float32)
+    np.maximum(ln_hminus_k, fm.LN_MIN_XSEC, out=ln_hminus_k)
+    ln_hminus_k = ln_hminus_k.astype(np.float32)
 
     stellar_dict = load_dict_from_pickle("data/stellar_spectra.pkl")
     stellar_temps = np.asarray(stellar_dict["temperatures"], np.float64)
@@ -423,7 +424,6 @@ class AtmosphereSolver:
             lambda_grid=jnp.asarray(lam, dtype=jnp.float32),
             lambda_um=jnp.asarray(lam * 1e6, dtype=jnp.float32),
             T_grid=jnp.asarray(raw["T_grid"], dtype=jnp.float32),
-            P_grid=jnp.asarray(raw["P_grid"], dtype=jnp.float32),
             ln_P_grid=jnp.asarray(np.log(raw["P_grid"]), dtype=jnp.float32),
             log10_P_grid=jnp.asarray(np.log10(raw["P_grid"]), dtype=jnp.float32),
             inv_T_grid=jnp.asarray(1.0 / raw["T_grid"], dtype=jnp.float32),
@@ -495,6 +495,8 @@ class AtmosphereSolver:
                 "custom_abundances contains unknown species: {}".format(unknown))
         result = np.full((n_layers, len(self.master_names)),
                          fm.LOG_MIN_ABUND, dtype=np.float32)
+        log10_P_grid = np.log10(self.P_grid)
+        log10_P_profile = np.log10(P_profile)
         for key, value in custom_abundances.items():
             if not isinstance(value, np.ndarray):
                 raise ValueError(
@@ -507,8 +509,8 @@ class AtmosphereSolver:
                 result[:, self.master_index[key]] = logv
             elif value.shape == (self.N_T, self.N_P):
                 result[:, self.master_index[key]] = regular_grid_interp_np(
-                    self.T_grid, np.log10(self.P_grid), logv,
-                    T_profile, np.log10(P_profile))
+                    self.T_grid, log10_P_grid, logv,
+                    T_profile, log10_P_profile)
             else:
                 raise ValueError(
                     "custom_abundances arrays must have shape (n_layers,) = "
@@ -588,7 +590,12 @@ class AtmosphereSolver:
     def get_mie_eff_cross_section(self, ri, part_size, sigma=0.5,
                                   max_zscore=5, num_integral_points=100):
         """Effective extinction cross section vs wavelength for a log-normal
-        particle size distribution.  float64, on the host."""
+        particle size distribution.  Computed on the host in float64;
+        returned (and memoized) as a float32 device array."""
+        cache_key = (ri, part_size, sigma, max_zscore, num_integral_points)
+        if cache_key in self._mie_eff_xsec_cache:
+            return self._mie_eff_xsec_cache[cache_key]
+
         if isinstance(ri, str):
             if ri not in self.all_cross_secs:
                 raise ValueError("Unknown aerosol species: {}".format(ri))
@@ -607,11 +614,8 @@ class AtmosphereSolver:
                 raise ValueError("part_size out of bounds: {} m".format(part_size))
 
             at_radius = interp1d_np(part_size, self.all_radii, cross_secs.T)
-            return np.interp(self.lambda_grid, self.low_res_lambdas, at_radius)
-
-        cache_key = (ri, part_size, sigma, max_zscore, num_integral_points)
-        if cache_key in self._mie_eff_xsec_cache:
-            return self._mie_eff_xsec_cache[cache_key]
+            return self._cache_mie_eff_xsec(cache_key, np.interp(
+                self.lambda_grid, self.low_res_lambdas, at_radius))
 
         z_scores = -np.logspace(np.log10(0.1), np.log10(max_zscore),
                                 int(num_integral_points / 2))
@@ -656,6 +660,13 @@ class AtmosphereSolver:
             log_lam, log_r, log_x_hist, Qext_hist,
             w * probs * geometric_cross_section)
 
+        return self._cache_mie_eff_xsec(cache_key, result)
+
+    def _cache_mie_eff_xsec(self, cache_key, result):
+        """Memoize an effective cross section as a float32 device array, so
+        cache hits skip both the conversion and the host-to-device transfer
+        (float32 is the precision the forward model uses anyway)."""
+        result = jnp.asarray(result, dtype=jnp.float32)
         if len(self._mie_eff_xsec_cache) > 64:
             self._mie_eff_xsec_cache.pop(next(iter(self._mie_eff_xsec_cache)))
         self._mie_eff_xsec_cache[cache_key] = result

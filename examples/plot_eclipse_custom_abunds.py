@@ -1,5 +1,4 @@
 import numpy as np
-import sys
 import matplotlib.pyplot as plt
 import linecache
 from platon.eclipse_depth_calculator import EclipseDepthCalculator
@@ -23,7 +22,7 @@ header = linecache.getline(data_file, 2).split()
 included_species = ["CO", "CO2", "C2H2", "H2", "H", "H2O", "HCN", "He", "NH3", "O2", "NO", "OH"]
 atm_abundances = {}
 
-for i, s in enumerate(included_species):
+for s in included_species:
     index = header.index(s)
     atm_abundances[s] = data[:, index]
     #plt.loglog(P_profile, atm_abundances[s], label=s)

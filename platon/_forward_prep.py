@@ -9,15 +9,11 @@ from ._forward_model import ForwardConfig, ForwardInputs
 from .constants import Teff_sun
 
 
-_SCALAR_INDEX = {name[3:].lower(): idx for name, idx in vars(fm).items()
-                 if name.startswith("SC_") and name != "SC_N_SCALARS"}
-
-
 def _pack_scalars(**kwargs):
-    scalars = np.zeros(fm.SC_N_SCALARS, dtype=np.float64)
+    scalars = np.zeros(fm.SC_N_SCALARS)
     for name, value in kwargs.items():
-        scalars[_SCALAR_INDEX[name]] = value
-    return scalars.astype(np.float32)
+        scalars[fm.SCALAR_INDEX[name]] = value
+    return scalars
 
 
 def prepare_forward_inputs(atm, *, star_radius, planet_mass, planet_radius,
@@ -94,7 +90,7 @@ def prepare_forward_inputs(atm, *, star_radius, planet_mass, planet_radius,
             raise ValueError(
                 "Cannot use both parametric and Mie scattering at the same time")
         eff_xsec = atm.get_mie_eff_cross_section(
-            ri, part_size, sigma=part_size_std).astype(np.float32)
+            ri, part_size, sigma=part_size_std)   # float32, device-resident
         mie_ref_P = atm.get_mie_ref_pressure(P_profile, bot_pressure)
 
     opac_mask = np.ones(len(atm.raw["opac_names"]), dtype=np.float32)
@@ -141,24 +137,14 @@ def prepare_forward_inputs(atm, *, star_radius, planet_mass, planet_radius,
     )
 
     # Pack all small per-call arrays into one vector: a single host-to-device
-    # transfer per call (see ForwardInputs).  The int fields are stored as
-    # floats (they are small indices, exactly representable) and cast back on
-    # device.
-    n = len(P_profile)
-    n_scal = fm.SC_N_SCALARS
-    o = n_scal + fm.IX_N_INTS
-    packed = np.zeros(o + 3 * n - 1 + len(opac_mask), dtype=np.float32)
-    packed[:n_scal] = scalars
-    packed[n_scal + fm.IX_FLOOR] = n_above - 1
-    packed[o:o + n] = T_profile
-    packed[o + n:o + 2 * n] = P_profile
-    packed[o + 2 * n:o + 3 * n - 1] = shell_mask
-    packed[o + 3 * n - 1:] = opac_mask
+    # transfer per call (see ForwardInputs)
+    packed = fm.pack_inputs(scalars, n_above - 1, T_profile, P_profile,
+                            shell_mask, opac_mask)
 
     # el/H indices are only meaningful (and validated above) when H-
     # absorption is on; -1 makes any unintended use fail loudly downstream
     config = ForwardConfig(
-        n_layers=n,
+        n_layers=len(P_profile),
         abund_mode=abund_mode,
         gas_master_idx=gas_master_idx,
         ch4_idx=int(atm.master_index.get("CH4", -1)),
@@ -169,8 +155,7 @@ def prepare_forward_inputs(atm, *, star_radius, planet_mass, planet_radius,
         add_scattering=bool(add_scattering),
         add_collisional=bool(add_collisional_absorption),
         # Layer sorting only pays off when layers span multiple T-grid rows
-        # (see _opacity); T_grid has ~9% spacing, so isothermal-to-mildly
-        # graded profiles skip it
+        # (see _opacity); exactly isothermal profiles skip it
         sort_layers=bool(T_profile.max() > T_profile.min()),
         use_mie=use_mie and add_scattering,
         has_t_star=T_star is not None,

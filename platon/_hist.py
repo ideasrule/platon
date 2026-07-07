@@ -20,13 +20,10 @@ def _hist_bin_auto(x, lo, hi):
         return sturges_bw
 
 
-def get_num_bins(x, lo=None, hi=None):
-    """Number of histogram bins (numpy's 'auto' rule).  `lo`/`hi` may be
-    passed when the extremes are already known, to skip two full passes."""
-    if lo is None:
-        lo = x.min()
-    if hi is None:
-        hi = x.max()
+def get_num_bins(x, lo, hi):
+    """Number of histogram bins (numpy's 'auto' rule).  `lo`/`hi` are the
+    extremes of x, passed in because the caller already knows them (skipping
+    two full passes over x)."""
     width = _hist_bin_auto(x, lo, hi)
     n = int(np.ceil((hi - lo) / width))
     return n

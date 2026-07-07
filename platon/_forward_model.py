@@ -24,7 +24,8 @@ import jax.numpy as jnp
 from jax import lax
 
 from .constants import k_B, AMU, G, h, c, M_sun
-from ._interpolator_3D import regular_grid_interp, interp1d, fractional_index
+from ._interpolator_3D import (regular_grid_interp, interp1d,
+                               fractional_index, uniform_log_lookup)
 
 N_SCALE = 1e-28          # scaling of number densities in the CIA term
 CIA_DATA_SCALE = 1e56    # compensates N_SCALE**2 in the stored CIA data
@@ -49,13 +50,19 @@ HC_OVER_KB = h * c / k_B
 # Indices into the packed int vector
 IX_FLOOR, IX_N_INTS = range(2)
 
+# name -> index map for host-side scalar packing, kept next to the enum so
+# new SC_ entries stay in sync (every SC_* name except the count must be a
+# packed-scalar index)
+SCALAR_INDEX = {name[3:].lower(): value
+                for name, value in list(globals().items())
+                if name.startswith("SC_") and name != "SC_N_SCALARS"}
+
 
 class DeviceData(NamedTuple):
     """All device-resident model data.  Fields are jnp arrays (or None)."""
     lambda_grid: Any        # (L,)
     lambda_um: Any          # (L,)
     T_grid: Any             # (NT,)
-    P_grid: Any             # (NP,)
     ln_P_grid: Any          # (NP,)
     log10_P_grid: Any       # (NP,)
     inv_T_grid: Any         # (NT,) 1 / T_grid
@@ -137,6 +144,24 @@ class UnpackedInputs(NamedTuple):
     crust_T: Any = None
 
 
+def pack_inputs(scalars, floor_idx, T_profile, P_profile, shell_mask,
+                opac_mask):
+    """Host-side (numpy) builder of the packed per-call vector, kept next to
+    unpack_inputs so the layout is defined in one place.  Assignments into
+    the float32 vector cast as needed (the int fields are small indices,
+    exactly representable as floats)."""
+    n = len(T_profile)
+    o = SC_N_SCALARS + IX_N_INTS
+    packed = np.zeros(o + 3 * n - 1 + len(opac_mask), dtype=np.float32)
+    packed[:SC_N_SCALARS] = scalars
+    packed[SC_N_SCALARS + IX_FLOOR] = floor_idx
+    packed[o:o + n] = T_profile
+    packed[o + n:o + 2 * n] = P_profile
+    packed[o + 2 * n:o + 3 * n - 1] = shell_mask
+    packed[o + 3 * n - 1:] = opac_mask
+    return packed
+
+
 def unpack_inputs(cfg, pin):
     """Slice the packed per-call vector back into named fields (traced)."""
     v = pin.packed
@@ -149,10 +174,9 @@ def unpack_inputs(cfg, pin):
     P_profile = v[o + n:o + 2 * n]
     shell_mask = v[o + 2 * n:o + 3 * n - 1]
     opac_mask = v[o + 3 * n - 1:]
+    # the tail fields of ForwardInputs and UnpackedInputs are shared, in order
     return UnpackedInputs(scalars, ints, T_profile, P_profile, shell_mask,
-                          opac_mask, pin.vmrs, pin.custom_log_abund,
-                          pin.eff_xsec, pin.rh_binned, pin.rh_orig,
-                          pin.crust_flux, pin.crust_T)
+                          opac_mask, *pin[1:])
 
 
 class AtmosphereOutputs(NamedTuple):
@@ -229,8 +253,8 @@ def _layer_log_abundances(cfg, data, sc, inp):
 
     # Quenching: above the quench point (P <= P_quench), hold every species
     # at its abundance at P_quench, interpolated along the profile itself
-    k, f = fractional_index(sc[SC_LOG10_P_QUENCH], jnp.log10(inp.P_profile))
-    quench_la = la[k] * (1 - f) + la[k + 1] * f         # (M,)
+    quench_la = interp1d(sc[SC_LOG10_P_QUENCH],
+                         jnp.log10(inp.P_profile), la)  # (M,)
     la = jnp.where((inp.P_profile <= sc[SC_P_QUENCH])[:, None],
                    quench_la[None, :], la)
     return la
@@ -346,7 +370,7 @@ def _opacity(cfg, data, sc, inp, atm_abund, T_profile, P_profile):
             jnp.zeros((L, N), dtype=jnp.float32))
 
     if cfg.sort_layers:
-        NP = data.P_grid.shape[0]
+        NP = data.ln_P_grid.shape[0]
         perm = jnp.argsort(t_lo * NP + p_lo)
         inv_perm = jnp.argsort(perm)
         t_lo = t_lo[perm]
@@ -470,22 +494,12 @@ def _stellar_spectrum(cfg, data, sc, orig=False):
     return spectrum, correction_factors
 
 
-def _uniform_log_lookup(x, table_x, table_y, left, right):
-    """Linear interpolation of (table_x, table_y) at x, where table_x is
-    uniform in log10 (np.logspace): the bracketing segment is found
-    analytically instead of by binary search.  The interpolation weight within
-    the segment is linear in x, matching jnp.interp; `left`/`right` are the
-    values returned outside the table range."""
-    n = table_x.shape[0]
-    log_x0 = jnp.log10(table_x[0])
-    scale = (n - 1) / (jnp.log10(table_x[-1]) - log_x0)
-    idx = (jnp.log10(x) - log_x0) * scale
-    idx = jnp.clip(idx, 0, n - 2).astype(jnp.int32)
-    x0 = table_x[idx]
-    frac = (x - x0) / (table_x[idx + 1] - x0)
-    y = table_y[idx] * (1 - frac) + table_y[idx + 1] * frac
-    y = jnp.where(x < table_x[0], left, y)
-    return jnp.where(x > table_x[-1], right, y)
+def _bin_average(values, weights, data):
+    """Weighted average of `values` within each wavelength bin, as a gather
+    plus masked row sum (see _compute_bin_info)."""
+    weighted = jnp.sum((values * weights)[data.bin_idx] * data.bin_w, axis=1)
+    norm = jnp.sum(weights[data.bin_idx] * data.bin_w, axis=1)
+    return weighted / norm
 
 
 def _get_dl(radii):
@@ -526,10 +540,7 @@ def _transit_core(cfg, data, pin):
 
     stellar, corr = _stellar_spectrum(cfg, data, sc)
     if data.bin_idx is not None:
-        weighted = jnp.sum((depths * corr * stellar)[data.bin_idx] *
-                           data.bin_w, axis=1)
-        norm = jnp.sum(stellar[data.bin_idx] * data.bin_w, axis=1)
-        binned = weighted / norm
+        binned = _bin_average(depths * corr, stellar, data)
     else:
         binned = depths * corr
 
@@ -564,7 +575,7 @@ def _eclipse_core(cfg, data, pin):
 
     planck = _planck(data.lambda_grid[:, None], intermediate_T[None, :])
 
-    exp3 = _uniform_log_lookup(taus, data.exp3_x, data.exp3_y,
+    exp3 = uniform_log_lookup(taus, data.exp3_x, data.exp3_y,
                                left=0.5, right=0.0)
     exp3_padded = jnp.concatenate(
         [jnp.full((taus.shape[0], 1), 0.5, dtype=taus.dtype), exp3], axis=1)
@@ -575,7 +586,7 @@ def _eclipse_core(cfg, data, pin):
     # tau^2 E1(tau) - tau e^-tau + e^-tau via a float64-precomputed lookup
     # table.  (jax.scipy.special.exp1's iterative implementation can fail to
     # converge in FP32; the limits are exactly 1 as tau->0 and 0 as tau->inf.)
-    bottom_term = _uniform_log_lookup(max_taus, data.bterm_x, data.bterm_y,
+    bottom_term = uniform_log_lookup(max_taus, data.bterm_x, data.bterm_y,
                                       left=1.0, right=0.0)
     # the deepest included shell is the one above the floor node
     planck_bot = jnp.take(planck, inp.ints[IX_FLOOR] - 1, axis=1)
@@ -598,9 +609,7 @@ def _eclipse_core(cfg, data, pin):
             irrad = sc[SC_REDIST] * jnp.trapezoid(
                 (1 - inp.rh_orig) * stellar_orig / sc[SC_A_OVER_RS] ** 2,
                 data.orig_lambda_grid)
-            ci, cf = fractional_index(irrad, inp.crust_flux)
-            surface_temp = inp.crust_T[ci] + \
-                cf * (inp.crust_T[ci + 1] - inp.crust_T[ci])
+            surface_temp = interp1d(irrad, inp.crust_flux, inp.crust_T)
         emitted = (1 - inp.rh_binned) * math.pi * \
             _planck(data.lambda_grid, surface_temp)
         reflected = stellar / sc[SC_A_OVER_RS] ** 2 * inp.rh_binned
@@ -618,10 +627,7 @@ def _eclipse_core(cfg, data, pin):
 
     if data.bin_idx is not None:
         photon_w = stellar * data.lambda_grid  # proportional to photon flux
-        weighted = jnp.sum((depths * photon_w)[data.bin_idx] * data.bin_w,
-                           axis=1)
-        norm = jnp.sum(photon_w[data.bin_idx] * data.bin_w, axis=1)
-        binned = weighted / norm
+        binned = _bin_average(depths, photon_w, data)
     else:
         binned = depths
 
@@ -651,6 +657,18 @@ def _eclipse_depths_only(cfg, data, pin):
     tail = lax.optimization_barrier(
         jnp.stack([flag, jnp.asarray(out.irrad, dtype=jnp.float32)]))
     return jnp.concatenate([out.binned_depths, tail, out.atm.anchor[:1]])
+
+
+def split_transit_result(res):
+    """Decode transit_depths_core's packed output [depths..., flag, anchor];
+    kept next to the packing so the layout is defined in one place."""
+    return res[:-2], bool(res[-2] > 0)
+
+
+def split_eclipse_result(res):
+    """Decode eclipse_depths_core's packed output
+    [depths..., flag, irrad, anchor]."""
+    return res[:-3], bool(res[-3] > 0), res[-2]
 
 
 transit_core = jax.jit(_transit_core, static_argnums=0)

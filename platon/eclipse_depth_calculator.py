@@ -176,9 +176,8 @@ class EclipseDepthCalculator:
             binned, unbound, irrad = out.binned_depths, \
                 bool(out.atm.unbound), out.irrad
         else:
-            res = np.asarray(fm.eclipse_depths_core(
-                cfg, self.atm.device_data(), inputs))
-            binned, unbound, irrad = res[:-3], res[-3] > 0, res[-2]
+            binned, unbound, irrad = fm.split_eclipse_result(np.asarray(
+                fm.eclipse_depths_core(cfg, self.atm.device_data(), inputs)))
 
         if unbound:
             raise AtmosphereError("Atmosphere unbound: height > hill radius")

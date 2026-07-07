@@ -28,6 +28,9 @@ class TransitDepthCalculator:
         '''
         self.atm = AtmosphereSolver(include_condensation, ref_pressure,
                                     method, include_opacities, downsample)
+        self._default_P_profile = np.logspace(
+            np.log10(self.atm.P_grid[0]), np.log10(self.atm.P_grid[-1]),
+            NUM_LAYERS)
 
     def change_wavelength_bins(self, bins):
         """Specify wavelength bins, instead of using the full wavelength grid
@@ -196,11 +199,6 @@ class TransitDepthCalculator:
             P_profile = np.asarray(custom_P_profile, dtype=np.float64)
             T_profile = np.asarray(custom_T_profile, dtype=np.float64)
         else:
-            if not hasattr(self, "_default_P_profile"):
-                self._default_P_profile = np.logspace(
-                    np.log10(self.atm.P_grid[0]),
-                    np.log10(self.atm.P_grid[-1]),
-                    NUM_LAYERS)
             P_profile = self._default_P_profile
             T_profile = np.full(len(P_profile), float(temperature))
 
@@ -231,9 +229,8 @@ class TransitDepthCalculator:
             out = fm.transit_core(cfg, self.atm.device_data(), inputs)
             binned, unbound = out.binned_depths, bool(out.atm.unbound)
         else:
-            res = np.asarray(fm.transit_depths_core(
-                cfg, self.atm.device_data(), inputs))
-            binned, unbound = res[:-2], res[-2] > 0
+            binned, unbound = fm.split_transit_result(np.asarray(
+                fm.transit_depths_core(cfg, self.atm.device_data(), inputs)))
 
         if unbound:
             raise AtmosphereError("Atmosphere unbound: height > hill radius")

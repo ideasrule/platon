@@ -95,3 +95,21 @@ def _regular_grid_interp(ys, xs, data, target_ys, target_xs, xp):
 
 regular_grid_interp = partial(_regular_grid_interp, xp=jnp)     # JAX-traceable
 regular_grid_interp_np = partial(_regular_grid_interp, xp=np)   # host float64
+
+
+def uniform_log_lookup(x, table_x, table_y, left, right):
+    """Linear interpolation of (table_x, table_y) at x, where table_x is
+    uniform in log10 (np.logspace): the bracketing segment is found
+    analytically instead of by binary search.  The interpolation weight within
+    the segment is linear in x, matching jnp.interp; `left`/`right` are the
+    values returned outside the table range."""
+    n = table_x.shape[0]
+    log_x0 = jnp.log10(table_x[0])
+    scale = (n - 1) / (jnp.log10(table_x[-1]) - log_x0)
+    idx = (jnp.log10(x) - log_x0) * scale
+    idx = jnp.clip(idx, 0, n - 2).astype(jnp.int32)
+    x0 = table_x[idx]
+    frac = (x - x0) / (table_x[idx + 1] - x0)
+    y = table_y[idx] * (1 - frac) + table_y[idx + 1] * frac
+    y = jnp.where(x < table_x[0], left, y)
+    return jnp.where(x > table_x[-1], right, y)

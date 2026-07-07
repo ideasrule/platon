@@ -403,7 +403,6 @@ def _opacity(cfg, data, sc, inp, atm_abund, T_profile, P_profile):
                 ln_sig[t_lo, p_lo + 1].T * w01 + \
                 ln_sig[t_lo + 1, p_lo].T * w10 + \
                 ln_sig[t_lo + 1, p_lo + 1].T * w11                 # (L, N)
-            ln_sig_atm = jnp.maximum(ln_sig_atm, sc[SC_LN_MIN_XSEC])
             coeff_T += jnp.exp(ln_sig_atm) * gas_ab[:, s][None, :]
 
     if cfg.add_hminus:
@@ -429,6 +428,12 @@ def _opacity(cfg, data, sc, inp, atm_abund, T_profile, P_profile):
             ln_cia_atm = ln_cia[t_lo].T * (1 - a1) + \
                 ln_cia[t_lo + 1].T * a1                            # (L, N)
             coeff_T += jnp.exp(ln_cia_atm) * wc[:, k][None, :]
+
+    # min_cross_sec floors the TOTAL per-layer cross section, matching the
+    # grid version's semantics.  exp(ln(1e-99)) underflows to 0 in FP32, so
+    # at the default the floor is a no-op.
+    coeff_T = jnp.maximum(coeff_T,
+                          jnp.exp(sc[SC_LN_MIN_XSEC]) * n_atm[None, :])
 
     anchor = jnp.sum(coeff_T, axis=1)
     coeff_T, anchor = lax.optimization_barrier((coeff_T, anchor))

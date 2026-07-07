@@ -90,7 +90,7 @@ def prepare_forward_inputs(atm, *, star_radius, planet_mass, planet_radius,
             raise ValueError(
                 "Cannot use both parametric and Mie scattering at the same time")
         eff_xsec = atm.get_mie_eff_cross_section(
-            ri, part_size, sigma=part_size_std)   # float32, device-resident
+            ri, part_size, sigma=part_size_std)   # float32
         mie_ref_P = atm.get_mie_ref_pressure(P_profile, bot_pressure)
 
     opac_mask = np.ones(len(atm.raw["opac_names"]), dtype=np.float32)

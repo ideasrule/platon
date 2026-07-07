@@ -532,7 +532,7 @@ class CombinedRetriever:
                       **dynesty_kwargs):
         """multinest_kwargs are forwarded to pymultinest.solve/run (e.g.
         sampling_efficiency, const_efficiency_mode, evidence_tolerance,
-        multimodal)."""
+        multimodal, outputfiles_basename)."""
         import pymultinest
         
         self.params_to_lnlike = {}
@@ -568,12 +568,13 @@ class CombinedRetriever:
             return ln_like
 
         num_dim = fit_info._get_num_fit_params()
-        basename = "multinest_" + str(np.random.randint(1000))
-        solve_kwargs = dict(verbose=True, resume=False, n_live_points=nlive)
+        solve_kwargs = dict(
+            verbose=True, resume=False, n_live_points=nlive,
+            outputfiles_basename="multinest_" + str(np.random.randint(1000)))
         solve_kwargs.update(multinest_kwargs)
+        basename = solve_kwargs["outputfiles_basename"]
         result = pymultinest.solve(LogLikelihood=multinest_ln_like, Prior=transform_prior,
-                                   n_dims=num_dim, outputfiles_basename=basename,
-                                   **solve_kwargs)
+                                   n_dims=num_dim, **solve_kwargs)
         a = pymultinest.Analyzer(outputfiles_basename=basename, n_params=num_dim)
         data = a.get_data()
         result["samples"] = data[:,2:]

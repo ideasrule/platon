@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import numpy as np
@@ -32,6 +33,18 @@ _DEVICE_CACHE_MAX_ENTRIES = 8
 
 _EVAL_POOL = None
 _EVAL_WORKERS = 8
+
+
+def _reset_eval_pool():
+    """Forked children inherit a ThreadPoolExecutor whose worker threads do
+    not exist in the child, so any use would deadlock; drop it and let the
+    child lazily create its own (relevant for fork-based retrieval pools)."""
+    global _EVAL_POOL
+    _EVAL_POOL = None
+
+
+if hasattr(os, "register_at_fork"):
+    os.register_at_fork(after_in_child=_reset_eval_pool)
 
 
 def _mie_lognormal_integral(log_lam, log_r, knots, values, weights):
@@ -591,7 +604,7 @@ class AtmosphereSolver:
                                   max_zscore=5, num_integral_points=100):
         """Effective extinction cross section vs wavelength for a log-normal
         particle size distribution.  Computed on the host in float64;
-        returned (and memoized) as a float32 device array."""
+        returned (and memoized) as float32, the forward model's precision."""
         cache_key = (ri, part_size, sigma, max_zscore, num_integral_points)
         if cache_key in self._mie_eff_xsec_cache:
             return self._mie_eff_xsec_cache[cache_key]
@@ -663,10 +676,12 @@ class AtmosphereSolver:
         return self._cache_mie_eff_xsec(cache_key, result)
 
     def _cache_mie_eff_xsec(self, cache_key, result):
-        """Memoize an effective cross section as a float32 device array, so
-        cache hits skip both the conversion and the host-to-device transfer
-        (float32 is the precision the forward model uses anyway)."""
-        result = jnp.asarray(result, dtype=jnp.float32)
+        """Memoize an effective cross section as float32 (the forward model's
+        working precision), so cache hits skip the conversion.  Kept as a
+        numpy array -- not a JAX device array -- so this host-side path never
+        touches the JAX backend (which would break fork-based retrieval
+        pools) and stays mutable for external callers."""
+        result = np.asarray(result, dtype=np.float32)
         if len(self._mie_eff_xsec_cache) > 64:
             self._mie_eff_xsec_cache.pop(next(iter(self._mie_eff_xsec_cache)))
         self._mie_eff_xsec_cache[cache_key] = result

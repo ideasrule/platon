@@ -229,33 +229,48 @@ class TransitDepthCalculator:
                 prep_kwargs = prep_kwargs_clear
 
         cfg, inputs, host = prepare_forward_inputs(self.atm, **prep_kwargs)
-        clear = None
-        if 0 < cloud_fraction < 1:
-            clear = prepare_forward_inputs(self.atm, **prep_kwargs_clear)
 
         if full_output:
             out = fm.transit_core(cfg, self.atm.device_data(), inputs)
-            clear_out = None if clear is None else \
-                fm.transit_core(clear[0], self.atm.device_data(), clear[1])
+            clear_out = None
+            if 0 < cloud_fraction < 1:
+                clear = prepare_forward_inputs(self.atm, **prep_kwargs_clear)
+                clear_out = fm.transit_core(clear[0], self.atm.device_data(),
+                                            clear[1])
             binned = np.array(out.binned_depths, dtype=np.float64)
             unbound = bool(out.atm.unbound)
             if clear_out is not None:
                 binned = cloud_fraction * binned + (1 - cloud_fraction) * \
                     np.array(clear_out.binned_depths, dtype=np.float64)
                 unbound = unbound or bool(clear_out.atm.unbound)
-        else:
+        elif 0 < cloud_fraction < 1 and min_cross_sec == 1e-99:
+            # Fused core: shares abundances, hydrostatics, the opacity
+            # accumulation, and the tau matmul between the cloudy and clear
+            # terminators (the cloudy tau is a rank-1 update)
+            cloudy, clear_binned, unbound = fm.split_transit_dual_result(
+                np.asarray(fm.transit_depths_dual_core(
+                    cfg, self.atm.device_data(), inputs)))
+            binned = cloud_fraction * np.array(cloudy, dtype=np.float64) + \
+                (1 - cloud_fraction) * np.array(clear_binned,
+                                                dtype=np.float64)
+        elif 0 < cloud_fraction < 1:
+            # Non-default min_cross_sec: its floor applies per terminator,
+            # which the fused core cannot reproduce; run both separately
+            clear = prepare_forward_inputs(self.atm, **prep_kwargs_clear)
             res = fm.transit_depths_core(cfg, self.atm.device_data(), inputs)
-            clear_res = None if clear is None else \
-                fm.transit_depths_core(clear[0], self.atm.device_data(),
-                                       clear[1])
+            clear_res = fm.transit_depths_core(
+                clear[0], self.atm.device_data(), clear[1])
             binned, unbound = fm.split_transit_result(np.asarray(res))
+            clear_binned, clear_unbound = fm.split_transit_result(
+                np.asarray(clear_res))
+            binned = cloud_fraction * np.array(binned, dtype=np.float64) + \
+                (1 - cloud_fraction) * np.array(clear_binned,
+                                                dtype=np.float64)
+            unbound = unbound or clear_unbound
+        else:
+            binned, unbound = fm.split_transit_result(np.asarray(
+                fm.transit_depths_core(cfg, self.atm.device_data(), inputs)))
             binned = np.array(binned, dtype=np.float64)
-            if clear_res is not None:
-                clear_binned, clear_unbound = fm.split_transit_result(
-                    np.asarray(clear_res))
-                binned = cloud_fraction * binned + (1 - cloud_fraction) * \
-                    np.array(clear_binned, dtype=np.float64)
-                unbound = unbound or clear_unbound
 
         if unbound:
             raise AtmosphereError("Atmosphere unbound: height > hill radius")

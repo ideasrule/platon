@@ -62,14 +62,11 @@ class Profile:
         P2 = np.exp(ln_P2)
         T2 = T3 - np.log(P3 / P2)**2 / alpha2**2
 
-        self.temperatures = np.zeros(len(self.pressures))
-        for i, P in enumerate(self.pressures):
-            if P < P1:
-                self.temperatures[i] = T0 + np.log(P / P0)**2 / alpha1**2
-            elif P < P3:
-                self.temperatures[i] = T2 + np.log(P / P2)**2 / alpha2**2
-            else:
-                self.temperatures[i] = T3
+        P = self.pressures
+        with np.errstate(divide="ignore", invalid="ignore"):
+            self.temperatures = np.where(
+                P < P1, T0 + np.log(P / P0)**2 / alpha1**2,
+                np.where(P < P3, T2 + np.log(P / P2)**2 / alpha2**2, T3))
         return P2, T2
 
     def set_from_opacity(self, T_irr, info_dict, visible_cutoff=0.8e-6,

@@ -4,7 +4,7 @@ import corner
 
 from platon.fit_info import FitInfo
 from platon.transit_depth_calculator import TransitDepthCalculator
-from platon.retriever import Retriever
+from platon.combined_retriever import CombinedRetriever
 
 Rs = 7e8
 g = 9.8
@@ -33,14 +33,14 @@ depth_calculator.change_wavelength_bins(wavelength_bins)
 wavelengths, transit_depths = depth_calculator.compute_depths(Rp, temperature, logZ=logZ, CO_ratio=CO, cloudtop_pressure=1e3)
 #wavelengths, depths2 = depth_calculator.compute_depths(71414515.1348402, P_prof
 
-retriever = Retriever()
+retriever = CombinedRetriever()
 
 fit_info = retriever.get_default_fit_info(Rs, g, 0.99*Rp, 0.9*temperature, logZ=2, CO_ratio=1, add_fit_params=True)
 
 errors = np.random.normal(scale=50e-6, size=len(transit_depths))
 transit_depths += errors
 
-result = retriever.run_dynesty(wavelength_bins, transit_depths, errors, fit_info)
+result = retriever.run_dynesty(wavelength_bins, transit_depths, errors, None, None, None, fit_info)
 np.save("samples.npy", result.samples)
 np.save("weights.npy", result.weights)
 np.save("logl.npy", result.logl)

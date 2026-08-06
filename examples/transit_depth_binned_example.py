@@ -5,9 +5,9 @@ import matplotlib.pyplot as plt
 import scipy.interpolate
 
 from platon.fit_info import FitInfo
-from platon.retriever import Retriever
 from platon.constants import R_sun, R_jup, M_jup
 from platon.transit_depth_calculator import TransitDepthCalculator
+from platon.TP_profile import Profile
 
 def stis_bins():
     wave_bins = [[300.1,347], [348,402], [403,457], [458,512], [512,567], [532,629], [629,726], [727,824], [825,922], [922,1019]]
@@ -33,9 +33,12 @@ R_guess = 1.4 * R_jup
 T_guess = 1200
 
 
+p = Profile()
+p.set_isothermal(T_guess)
+
 depth_calculator = TransitDepthCalculator()
 depth_calculator.change_wavelength_bins(bins)
-wavelengths, depths = depth_calculator.compute_depths(1.19*R_sun, 0.73*M_jup, R_guess, T_guess, T_star=6091)
+wavelengths, depths, _ = depth_calculator.compute_depths(p, 1.19*R_sun, 0.73*M_jup, R_guess, T_star=6091)
 
 # Uncomment the code below to print
 

@@ -167,11 +167,21 @@ class CombinedRetriever:
         
         try:
             if measured_transit_depths is not None:
-                if T is None:
+                transit_profile_type = params_dict.get(
+                    "transit_profile_type", "isothermal")
+                if transit_profile_type == "isothermal" and \
+                   params_dict.get("T_transit") is None and T is None:
                     raise ValueError("Must fit for T if using transit depths")
 
+                transit_profile = Profile()
+                transit_profile.set_from_params_dict(
+                    transit_profile_type, params_dict, suffix="_transit")
+
+                if np.any(np.isnan(transit_profile.temperatures)):
+                    raise AtmosphereError("Invalid T/P profile")
+
                 transit_wavelengths, calculated_transit_depths, transit_info_dict = transit_calc.compute_depths(
-                    Rs, Mp, Rp, T, logZ, CO_ratio, CH4_mult, gases, vmrs,
+                    transit_profile, Rs, Mp, Rp, logZ, CO_ratio, CH4_mult, gases, vmrs,
                     custom_abundances=None,
                     scattering_factor=scatt_factor, scattering_slope=scatt_slope,
                     cloudtop_pressure=cloudtop_P, T_star=T_star,
@@ -185,12 +195,17 @@ class CombinedRetriever:
                 ln_likelihood = np.append(ln_likelihood, -0.5 * (residuals**2 / scaled_errors**2 + np.log(2 * np.pi * scaled_errors**2)))
                 
             if measured_eclipse_depths is not None:
+                if params_dict["profile_type"] == "isothermal" and T is None:
+                    raise ValueError(
+                        "Must fit for T when profile_type is isothermal")
+
                 t_p_profile = Profile()
-                t_p_profile.set_from_params_dict(params_dict["profile_type"], params_dict)
+                t_p_profile.set_from_params_dict(
+                    params_dict["profile_type"], params_dict)
 
                 if np.any(np.isnan(t_p_profile.temperatures)):
                     raise AtmosphereError("Invalid T/P profile")
-                
+
                 eclipse_wavelengths, calculated_eclipse_depths, eclipse_info_dict = eclipse_calc.compute_depths(
                     t_p_profile, Rs, Mp, Rp, T_star, logZ, CO_ratio, CH4_mult, gases, vmrs,
                     custom_abundances=None,
@@ -643,7 +658,9 @@ class CombinedRetriever:
                              log_P_quench=-99,
                              offset_transit=0, offset_eclipse=0, offset_start=0, offset_end=sys.maxsize,
                              fit_vmr=False, fit_clr=False,
-                             profile_type = 'isothermal', **profile_kwargs):
+                             profile_type = 'isothermal',
+                             transit_profile_type = 'isothermal',
+                             **profile_kwargs):
         '''Get a :class:`.FitInfo` object filled with best guess values.  A few
         parameters are required, but others can be set to default values if you
         do not want to specify them.  All parameters are in SI.  For 
@@ -664,15 +681,22 @@ class CombinedRetriever:
         offset_eclipse : float
             Same as above, but for eclipse depths.
         profile_type : string
-            "isothermal", "parametric" (Madhusudhan & Seager 2009) or 
-            "radiative_solution" (Line et al 2013) T/P profile 
-            parameterizations.  This profile applies to the dayside only,
-            and hence is only relevant for eclipse depths.
+            "isothermal", "parametric" (Madhusudhan & Seager 2009) or
+            "radiative_solution" (Line et al 2013) T/P profile
+            parameterizations.  This profile applies to the dayside, and is
+            used for eclipse depths.
+        transit_profile_type : string
+            Same options as profile_type.  This profile applies to the
+            terminator, and is used for transit depths.  Its parameters are
+            the profile_kwargs suffixed with "_transit" (e.g. T0_transit,
+            T3_transit); any parameter without a "_transit" version falls
+            back to the unsuffixed (dayside) value.  For "isothermal", the
+            temperature is T_transit, falling back to T.
         profile_kwargs : kwargs
             T/P profile arguments.  For "isothermal": T_day.  For "parametric":
             T0, P1, alpha1, alpha2, P3, T3.  For "radiative_solution":
             T_star, Rs, a, Mp, Rp, beta, log_k_th, log_gamma, log_gamma2,
-            alpha, and T_int (optional).  We recommend that T_star, Rs, a, and 
+            alpha, and T_int (optional).  We recommend that T_star, Rs, a, and
             Mp be fixed, and that T_int be omitted (which sets it to 100 K).
             
 

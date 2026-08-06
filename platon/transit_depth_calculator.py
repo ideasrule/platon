@@ -4,7 +4,7 @@ from . import _forward_model as fm
 from ._forward_prep import prepare_forward_inputs, atm_info_dict
 from .errors import AtmosphereError
 from ._atmosphere_solver import AtmosphereSolver
-from .params import NUM_LAYERS
+from .TP_profile import Profile
 
 
 class TransitDepthCalculator:
@@ -28,9 +28,6 @@ class TransitDepthCalculator:
         '''
         self.atm = AtmosphereSolver(include_condensation, ref_pressure,
                                     method, include_opacities, downsample)
-        self._default_P_profile = np.logspace(
-            np.log10(self.atm.P_grid[0]), np.log10(self.atm.P_grid[-1]),
-            NUM_LAYERS)
 
     def change_wavelength_bins(self, bins):
         """Specify wavelength bins, instead of using the full wavelength grid
@@ -50,15 +47,14 @@ class TransitDepthCalculator:
     def _validate_params(self, T, logZ, CO_ratio, cloudtop_pressure):
         self.atm._validate_params(T, logZ, CO_ratio, cloudtop_pressure)
 
-    def compute_depths(self, star_radius, planet_mass, planet_radius,
-                       temperature, logZ=0, CO_ratio=0.53, CH4_mult=1,
+    def compute_depths(self, t_p_profile, star_radius, planet_mass,
+                       planet_radius, logZ=0, CO_ratio=0.53, CH4_mult=1,
                        gases=None, vmrs=None,
                        add_gas_absorption=True, add_H_minus_absorption=False,
                        add_scattering=True, scattering_factor=1,
                        scattering_slope=4, scattering_ref_wavelength=1e-6,
                        add_collisional_absorption=True,
                        cloudtop_pressure=np.inf, custom_abundances=None,
-                       custom_T_profile=None, custom_P_profile=None,
                        T_star=None, T_spot=None, spot_cov_frac=None,
                        ri=None, frac_scale_height=1, number_density=0,
                        part_size=1e-6, part_size_std=0.5, P_quench=1e-99,
@@ -66,19 +62,21 @@ class TransitDepthCalculator:
                        min_cross_sec=1e-99, stellar_blackbody=False,
                        zero_opacities=[]):
         '''
-        Computes transit depths at a range of wavelengths, assuming an
-        isothermal atmosphere.  To choose bins, call change_wavelength_bins().
+        Computes transit depths at a range of wavelengths.  To choose bins,
+        call change_wavelength_bins().
 
         Parameters
         ----------
+        t_p_profile : Profile
+            A Profile object from TP_profile, describing the (potentially
+            non-isothermal) T/P profile of the atmosphere.  For an
+            isothermal atmosphere, use Profile.set_isothermal.
         star_radius : float
             Radius of the star
         planet_mass : float
             Mass of the planet, in kg
         planet_radius : float
             Radius of the planet at 100,000 Pa. Must be in metres.
-        temperature : float
-            Temperature of the isothermal atmosphere, in Kelvin
         logZ : float
             Base-10 logarithm of the metallicity, in solar units
         CO_ratio : float, optional
@@ -113,8 +111,8 @@ class TransitDepthCalculator:
             If specified, overrides `logZ` and `CO_ratio`.  The recommended
             format is a dictionary mapping species names to abundance
             profiles: 1D arrays with one element per atmospheric layer
-            (ordered by increasing pressure, matching custom_P_profile or
-            the default pressure grid), so that custom_abundances['Na'][i]
+            (ordered by increasing pressure, matching t_p_profile.pressures),
+            so that custom_abundances['Na'][i]
             is the fractional number abundance of Na at the i-th layer.
             Alternatively, can specify a filename, in which case the
             abundances are read from a file in the format of the EOS/ files
@@ -125,13 +123,6 @@ class TransitDepthCalculator:
             abundance of Na at a temperature of self.T_grid[3] and pressure
             of self.P_grid[4].  Grid-format abundances are interpolated
             onto the atmospheric layers.
-        custom_T_profile : array-like, optional
-            If specified and custom_P_profile is also specified, divides the
-            atmosphere into user-specified P/T points, instead of assuming an
-            isothermal atmosphere with T = `temperature`.
-        custom_P_profile : array-like, optional
-            Must be specified along with `custom_T_profile` to use a custom
-            P/T profile.  Pressures must be in Pa.
         T_star : float, optional
             Effective temperature of the star.  If you specify this and
             use wavelength binning, the wavelength binning becomes
@@ -187,20 +178,12 @@ class TransitDepthCalculator:
             stellar_spectrum, radii, P_profile, T_profile, mu_profile,
             atm_abundances, unbinned_depths, unbinned_wavelengths
        '''
-        if custom_P_profile is not None:
-            if custom_T_profile is None or len(
-                    custom_P_profile) != len(custom_T_profile):
-                raise ValueError("Must specify both custom_T_profile and "
-                                 "custom_P_profile, and the two must have the"
-                                 " same length")
-            if temperature is not None:
-                raise ValueError(
-                    "Cannot specify both temperature and custom T profile")
-            P_profile = np.asarray(custom_P_profile, dtype=np.float64)
-            T_profile = np.asarray(custom_T_profile, dtype=np.float64)
-        else:
-            P_profile = self._default_P_profile
-            T_profile = np.full(len(P_profile), float(temperature))
+        if not isinstance(t_p_profile, Profile):
+            raise TypeError("t_p_profile must be a Profile object from "
+                            "platon.TP_profile; for an isothermal "
+                            "atmosphere, use Profile.set_isothermal")
+        T_profile = np.asarray(t_p_profile.temperatures, dtype=np.float64)
+        P_profile = np.asarray(t_p_profile.pressures, dtype=np.float64)
 
         cfg, inputs, host = prepare_forward_inputs(
             self.atm, star_radius=star_radius, planet_mass=planet_mass,

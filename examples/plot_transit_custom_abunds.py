@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import linecache
 from platon.transit_depth_calculator import TransitDepthCalculator
+from platon.TP_profile import Profile
 from platon.constants import R_sun, R_jup, M_jup
 
 Pa_to_cgs = 10
@@ -29,8 +30,13 @@ for s in included_species:
 #plt.legend()
 #plt.show()
 
+#Use the exact P/T points from the file as the atmospheric layers
+p = Profile()
+p.pressures = P_profile
+p.temperatures = T_profile
+
 calculator = TransitDepthCalculator()
-wavelengths, depths, _ = calculator.compute_depths(0.75 * R_sun, 1.13 * M_jup, 1.13 * R_jup, logZ=None, CO_ratio=None, temperature=None, custom_abundances=atm_abundances, custom_T_profile=T_profile, custom_P_profile=P_profile)
+wavelengths, depths, _ = calculator.compute_depths(p, 0.75 * R_sun, 1.13 * M_jup, 1.13 * R_jup, logZ=None, CO_ratio=None, custom_abundances=atm_abundances)
 
 plt.semilogx(1e6 * wavelengths, depths)
 #plt.ylim(0.0228, 0.0256)

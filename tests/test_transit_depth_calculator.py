@@ -10,9 +10,17 @@ from scipy.ndimage import uniform_filter
 import platon
 from platon.abundance_getter import AbundanceGetter
 from platon.transit_depth_calculator import TransitDepthCalculator
+from platon.TP_profile import Profile
 from platon import  __path__
 from platon.errors import AtmosphereError
 from platon.constants import M_jup, R_sun, R_jup, G, AMU, k_B
+
+
+def isothermal_profile(T):
+    profile = Profile()
+    profile.set_isothermal(T)
+    return profile
+
 
 class TestTransitDepthCalculator(unittest.TestCase):
     def get_frac_dev(self, logZ, CO_ratio, custom_abundances):
@@ -22,7 +30,7 @@ class TestTransitDepthCalculator(unittest.TestCase):
         T = 1200
         depth_calculator = TransitDepthCalculator()
         wavelengths, transit_depths, _ = depth_calculator.compute_depths(
-            Rs, Mp, Rp, T, logZ=logZ, CO_ratio=CO_ratio,
+            isothermal_profile(T), Rs, Mp, Rp, logZ=logZ, CO_ratio=CO_ratio,
             custom_abundances=custom_abundances, cloudtop_pressure=1e4)
 
         # This ExoTransmit run is done without SH, since it's not present in
@@ -68,7 +76,8 @@ class TestTransitDepthCalculator(unittest.TestCase):
         depth_calculator = TransitDepthCalculator()
         with self.assertRaises(AtmosphereError):
             wavelengths, transit_depths, _ = depth_calculator.compute_depths(
-                Rs, Mp, Rp, T, logZ=0.2, CO_ratio=1.1, T_star=6100)
+                isothermal_profile(T), Rs, Mp, Rp, logZ=0.2, CO_ratio=1.1,
+                T_star=6100)
 
     def test_bin_wavelengths(self):
         Rp = 7.14e7
@@ -81,14 +90,38 @@ class TestTransitDepthCalculator(unittest.TestCase):
         depth_calculator.change_wavelength_bins(bins)
 
         wavelengths, transit_depths, _ = depth_calculator.compute_depths(
-            Rs, Mp, Rp, T, logZ=0.2, CO_ratio=1.1, T_star=6100)
+            isothermal_profile(T), Rs, Mp, Rp, logZ=0.2, CO_ratio=1.1,
+            T_star=6100)
         self.assertEqual(len(wavelengths), len(bins))
         self.assertEqual(len(transit_depths), len(bins))
 
         wavelengths, transit_depths, _ = depth_calculator.compute_depths(
-            Rs, Mp, Rp, T, logZ=0.2, CO_ratio=1.1, T_star=12000)
+            isothermal_profile(T), Rs, Mp, Rp, logZ=0.2, CO_ratio=1.1,
+            T_star=12000)
         self.assertEqual(len(wavelengths), len(bins))
         self.assertEqual(len(transit_depths), len(bins))
+
+    def test_t_p_profile(self):
+        Rp = 7.14e7
+        Mp = 7.49e26
+        Rs = 7e8
+        T = 1200
+        depth_calculator = TransitDepthCalculator()
+
+        # A scalar temperature is not allowed; a Profile is required
+        with self.assertRaises(TypeError):
+            depth_calculator.compute_depths(T, Rs, Mp, Rp)
+
+        _, iso_depths, _ = depth_calculator.compute_depths(
+            isothermal_profile(T), Rs, Mp, Rp)
+
+        # A non-isothermal profile must give a different spectrum
+        profile = Profile()
+        profile.set_parametric(1300, 1e-3, 0.3, 0.5, 1e4, 2000)
+        _, profile_depths, _ = depth_calculator.compute_depths(
+            profile, Rs, Mp, Rp)
+        self.assertFalse(np.allclose(profile_depths, iso_depths))
+        self.assertTrue(np.all(np.isfinite(profile_depths)))
 
     def test_power_law_haze(self):
         Rs = R_sun     
@@ -101,7 +134,8 @@ class TestTransitDepthCalculator(unittest.TestCase):
         abundances["H2"] += 1
         depth_calculator = TransitDepthCalculator()
         wavelengths, transit_depths, info_dict = depth_calculator.compute_depths(
-            Rs, Mp, Rp, T, logZ=None, CO_ratio=None, cloudtop_pressure=np.inf,
+            isothermal_profile(T), Rs, Mp, Rp,
+            logZ=None, CO_ratio=None, cloudtop_pressure=np.inf,
             custom_abundances = abundances,
             add_gas_absorption=False, add_collisional_absorption=False, full_output=True)
                 
@@ -132,27 +166,27 @@ class TestTransitDepthCalculator(unittest.TestCase):
         calculator = TransitDepthCalculator()
         
         with self.assertRaises(AtmosphereError):
-            calculator.compute_depths(Rs, Mp, Rp, 99, logZ=logZ, CO_ratio=CO_ratio)
+            calculator.compute_depths(isothermal_profile(99), Rs, Mp, Rp, logZ=logZ, CO_ratio=CO_ratio)
         with self.assertRaises(AtmosphereError):
-            calculator.compute_depths(Rs, Mp, Rp, 3001, logZ=logZ, CO_ratio=CO_ratio)
+            calculator.compute_depths(isothermal_profile(3001), Rs, Mp, Rp, logZ=logZ, CO_ratio=CO_ratio)
         with self.assertRaises(ValueError):
-            calculator.compute_depths(Rs, Mp, Rp, T, logZ=-2.1, CO_ratio=CO_ratio)
+            calculator.compute_depths(isothermal_profile(T), Rs, Mp, Rp, logZ=-2.1, CO_ratio=CO_ratio)
         with self.assertRaises(ValueError):
-            calculator.compute_depths(Rs, Mp, Rp, T, logZ=3.1, CO_ratio=CO_ratio)
+            calculator.compute_depths(isothermal_profile(T), Rs, Mp, Rp, logZ=3.1, CO_ratio=CO_ratio)
         with self.assertRaises(ValueError):
-            calculator.compute_depths(Rs, Mp, Rp, T, logZ=logZ, CO_ratio=1e-4)
-            
-        with self.assertRaises(ValueError):
-            calculator.compute_depths(Rs, Mp, Rp, T, logZ=logZ, CO_ratio=11)
+            calculator.compute_depths(isothermal_profile(T), Rs, Mp, Rp, logZ=logZ, CO_ratio=1e-4)
 
         with self.assertRaises(ValueError):
-            calculator.compute_depths(Rs, Mp, Rp, T, logZ=logZ, CO_ratio=CO_ratio, cloudtop_pressure=1e-4)
-        
+            calculator.compute_depths(isothermal_profile(T), Rs, Mp, Rp, logZ=logZ, CO_ratio=11)
+
         with self.assertRaises(ValueError):
-            calculator.compute_depths(Rs, Mp, Rp, T, logZ=logZ, CO_ratio=CO_ratio, cloudtop_pressure=1.1e8)
+            calculator.compute_depths(isothermal_profile(T), Rs, Mp, Rp, logZ=logZ, CO_ratio=CO_ratio, cloudtop_pressure=1e-4)
+
+        with self.assertRaises(ValueError):
+            calculator.compute_depths(isothermal_profile(T), Rs, Mp, Rp, logZ=logZ, CO_ratio=CO_ratio, cloudtop_pressure=1.1e8)
 
         # Infinity should be fine
-        calculator.compute_depths(Rs, Mp, Rp, T, logZ=logZ, CO_ratio=CO_ratio, cloudtop_pressure=np.inf)
+        calculator.compute_depths(isothermal_profile(T), Rs, Mp, Rp, logZ=logZ, CO_ratio=CO_ratio, cloudtop_pressure=np.inf)
        
             
         

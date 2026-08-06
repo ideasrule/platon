@@ -21,7 +21,16 @@ class Profile:
     def get_pressures(self):
         return np.array(self.pressures)
 
-    def set_from_params_dict(self, profile_type, params_dict):
+    def set_from_params_dict(self, profile_type, params_dict, suffix=""):
+        """Sets the profile from parameters named in params_dict.  If suffix
+        is given (e.g. "_transit"), parameters with the suffixed name (e.g.
+        T0_transit) override the unsuffixed ones (e.g. T0), allowing separate
+        profiles to coexist in one params_dict."""
+        if suffix:
+            params_dict = dict(params_dict)
+            for name, value in list(params_dict.items()):
+                if name.endswith(suffix) and value is not None:
+                    params_dict[name[:-len(suffix)]] = value
         if profile_type == "isothermal":
             self.set_isothermal(params_dict["T"])
         elif profile_type == "parametric":

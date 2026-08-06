@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from platon.transit_depth_calculator import TransitDepthCalculator
+from platon.TP_profile import Profile
 from platon.constants import M_jup, R_sun, R_jup, M_earth, R_earth
 from platon.visualizer import Visualizer
 
@@ -16,10 +17,13 @@ logZ = 1.09
 CO_ratio = 1.57
 log_cloudtop_P = 4.875
 
+p = Profile()
+p.set_isothermal(T)
+
 #create a TransitDepthCalculator object and compute wavelength dependent transit depths
 depth_calculator = TransitDepthCalculator()
 wavelengths, transit_depths, info = depth_calculator.compute_depths(
-    Rs, Mp, Rp, T, T_star=5196, logZ=logZ, CO_ratio=CO_ratio, cloudtop_pressure=10.0**log_cloudtop_P, full_output=True)
+    p, Rs, Mp, Rp, T_star=5196, logZ=logZ, CO_ratio=CO_ratio, cloudtop_pressure=10.0**log_cloudtop_P, full_output=True)
 
 color_bins = 1e-6 * np.array([
     [4, 5],

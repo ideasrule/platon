@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from platon.transit_depth_calculator import TransitDepthCalculator
+from platon.TP_profile import Profile
 from platon.constants import M_jup, R_sun, R_jup
 
 # All quantities in SI
@@ -10,10 +11,13 @@ Mp = 0.73 * M_jup     #Mass of planet
 Rp = 1.40 * R_jup      #Radius of planet
 T = 1200              #Temperature of isothermal part of the atmosphere
 
+p = Profile()
+p.set_isothermal(T)
+
 #create a TransitDepthCalculator object and compute wavelength dependent transit depths
 depth_calculator = TransitDepthCalculator()
 wavelengths, transit_depths, _ = depth_calculator.compute_depths(
-    Rs, Mp, Rp, T, logZ=0, CO_ratio=0.5, cloudtop_pressure=1e4)
+    p, Rs, Mp, Rp, logZ=0, CO_ratio=0.5, cloudtop_pressure=1e4)
 
 
 # Uncomment the code below to print

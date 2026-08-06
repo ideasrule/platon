@@ -33,6 +33,20 @@ class TestTPProfile(unittest.TestCase):
         self.assertTrue(abs(P1 - P2*np.exp(-alpha2*(T1-T2)**0.5)) < 1e-3*P1)
 
         
+    def test_suffixed_params(self):
+        params = {"T": 1000, "T_transit": 1500}
+        profile = Profile()
+        profile.set_from_params_dict("isothermal", params, suffix="_transit")
+        self.assertTrue(np.all(profile.temperatures == 1500))
+
+        profile.set_from_params_dict("isothermal", params)
+        self.assertTrue(np.all(profile.temperatures == 1000))
+
+        # Unsuffixed values are the fallback when no suffixed version exists
+        profile.set_from_params_dict("isothermal", {"T": 1000},
+                                     suffix="_transit")
+        self.assertTrue(np.all(profile.temperatures == 1000))
+
     def test_set_opacity(self):
         # Can't easily test whether this is "right", but at least make sure it
         # runs

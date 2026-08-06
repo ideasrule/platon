@@ -90,6 +90,35 @@ class TestRetriever(unittest.TestCase):
         self.assertEqual(result.samples.shape[1], len(self.fit_info.fit_param_names))
 
 
+    def test_transit_parametric_profile(self):
+        self.initialize(False)
+        retriever = CombinedRetriever()
+
+        # alpha1/alpha2 are deliberately unsuffixed to test the fallback
+        # from *_transit parameters to the shared (dayside) values
+        fit_info = CombinedRetriever.get_default_fit_info(
+            Rs = 1.19 * R_sun, Mp = 0.73 * M_jup, Rp = 1.4 * R_jup,
+            logZ = 1, CO_ratio = 0.53,
+            log_cloudtop_P = 3,
+            log_scatt_factor = 0,
+            scatt_slope = 4, error_multiple = 1,
+            T0_transit=1200, log_P1_transit=2.4, alpha1=2, alpha2=2,
+            log_P3_transit=6, T3_transit=1400,
+            transit_profile_type="parametric")
+
+        fit_info.add_uniform_fit_param('Rp', 9e7, 12e7)
+        fit_info.add_uniform_fit_param('logZ', -1, 3)
+        fit_info.add_uniform_fit_param('T0_transit', 1000, 1500)
+        fit_info.add_uniform_fit_param('T3_transit', 1000, 3000)
+
+        result = retriever.run_dynesty(
+            self.wavelength_bins, self.depths, self.errors,
+            None, None, None, fit_info, maxcall=200,
+            include_condensation=False, num_final_samples=20)
+        self.assertTrue(isinstance(result, RetrievalResult))
+        self.assertEqual(result.samples.shape[1],
+                         len(fit_info.fit_param_names))
+
     def test_bounds_check(self):
         self.initialize(False)
         retriever = CombinedRetriever()

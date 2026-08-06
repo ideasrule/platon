@@ -123,6 +123,55 @@ class TestTransitDepthCalculator(unittest.TestCase):
         self.assertFalse(np.allclose(profile_depths, iso_depths))
         self.assertTrue(np.all(np.isfinite(profile_depths)))
 
+    def test_cloud_fraction(self):
+        Rp = 7.14e7
+        Mp = 7.49e26
+        Rs = 7e8
+        profile = isothermal_profile(1200)
+        calculator = TransitDepthCalculator()
+
+        _, cloudy, _ = calculator.compute_depths(
+            profile, Rs, Mp, Rp, cloudtop_pressure=1e3, scattering_factor=10)
+        _, clear, _ = calculator.compute_depths(profile, Rs, Mp, Rp)
+        _, blended, _ = calculator.compute_depths(
+            profile, Rs, Mp, Rp, cloudtop_pressure=1e3, scattering_factor=10,
+            cloud_fraction=0.4)
+        self.assertTrue(np.allclose(blended, 0.4 * cloudy + 0.6 * clear))
+        # The blend must be a genuine mixture, not either extreme
+        self.assertFalse(np.allclose(blended, cloudy))
+        self.assertFalse(np.allclose(blended, clear))
+
+        # cloud_fraction=1 is the pure cloudy spectrum, 0 the pure clear one
+        _, ones, _ = calculator.compute_depths(
+            profile, Rs, Mp, Rp, cloudtop_pressure=1e3, scattering_factor=10,
+            cloud_fraction=1)
+        self.assertTrue(np.allclose(ones, cloudy))
+        _, zeros, _ = calculator.compute_depths(
+            profile, Rs, Mp, Rp, cloudtop_pressure=1e3, scattering_factor=10,
+            cloud_fraction=0)
+        self.assertTrue(np.allclose(zeros, clear))
+
+        # The clear component of a Mie-scattering atmosphere has no Mie
+        _, mie_cloudy, _ = calculator.compute_depths(
+            profile, Rs, Mp, Rp, cloudtop_pressure=1e3, ri=1.33 - 0.1j,
+            number_density=1e9)
+        _, mie_blended, _ = calculator.compute_depths(
+            profile, Rs, Mp, Rp, cloudtop_pressure=1e3, ri=1.33 - 0.1j,
+            number_density=1e9, cloud_fraction=0.5)
+        self.assertTrue(np.allclose(
+            mie_blended, 0.5 * mie_cloudy + 0.5 * clear))
+
+        # full_output depths must also be blended
+        _, full_blended, info = calculator.compute_depths(
+            profile, Rs, Mp, Rp, cloudtop_pressure=1e3, scattering_factor=10,
+            cloud_fraction=0.4, full_output=True)
+        self.assertTrue(np.allclose(full_blended, blended))
+
+        with self.assertRaises(ValueError):
+            calculator.compute_depths(profile, Rs, Mp, Rp, cloud_fraction=1.1)
+        with self.assertRaises(ValueError):
+            calculator.compute_depths(profile, Rs, Mp, Rp, cloud_fraction=-0.1)
+
     def test_power_law_haze(self):
         Rs = R_sun     
         Mp = M_jup     

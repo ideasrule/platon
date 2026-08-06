@@ -104,12 +104,14 @@ class TestRetriever(unittest.TestCase):
             scatt_slope = 4, error_multiple = 1,
             T0_transit=1200, log_P1_transit=2.4, alpha1=2, alpha2=2,
             log_P3_transit=6, T3_transit=1400,
-            transit_profile_type="parametric")
+            transit_profile_type="parametric",
+            cloud_fraction=0.8)
 
         fit_info.add_uniform_fit_param('Rp', 9e7, 12e7)
         fit_info.add_uniform_fit_param('logZ', -1, 3)
         fit_info.add_uniform_fit_param('T0_transit', 1000, 1500)
         fit_info.add_uniform_fit_param('T3_transit', 1000, 3000)
+        fit_info.add_uniform_fit_param('cloud_fraction', 0, 1)
 
         result = retriever.run_dynesty(
             self.wavelength_bins, self.depths, self.errors,

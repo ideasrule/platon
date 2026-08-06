@@ -54,7 +54,8 @@ class TransitDepthCalculator:
                        add_scattering=True, scattering_factor=1,
                        scattering_slope=4, scattering_ref_wavelength=1e-6,
                        add_collisional_absorption=True,
-                       cloudtop_pressure=np.inf, custom_abundances=None,
+                       cloudtop_pressure=np.inf, cloud_fraction=1,
+                       custom_abundances=None,
                        T_star=None, T_spot=None, spot_cov_frac=None,
                        ri=None, frac_scale_height=1, number_density=0,
                        part_size=1e-6, part_size_std=0.5, P_quench=1e-99,
@@ -107,6 +108,14 @@ class TransitDepthCalculator:
         cloudtop_pressure : float, optional
             Pressure level (in Pa) below which light cannot penetrate.
             Use np.inf for a cloudless atmosphere.
+        cloud_fraction : float, optional
+            Fraction of the terminator covered by clouds, between 0 and 1.
+            If less than 1, the transit depths are computed as
+            cloud_fraction * cloudy_depths + (1 - cloud_fraction) *
+            clear_depths, where the clear spectrum has no cloud deck,
+            parametric haze, or Mie scattering (but keeps Rayleigh
+            scattering).  With full_output, all depths are blended, while
+            the other info_dict quantities describe the cloudy atmosphere.
         custom_abundances : str or dict of np.ndarray, optional
             If specified, overrides `logZ` and `CO_ratio`.  The recommended
             format is a dictionary mapping species names to abundance
@@ -182,11 +191,13 @@ class TransitDepthCalculator:
             raise TypeError("t_p_profile must be a Profile object from "
                             "platon.TP_profile; for an isothermal "
                             "atmosphere, use Profile.set_isothermal")
+        if cloud_fraction < 0 or cloud_fraction > 1:
+            raise ValueError("cloud_fraction must be between 0 and 1")
         T_profile = np.asarray(t_p_profile.temperatures, dtype=np.float64)
         P_profile = np.asarray(t_p_profile.pressures, dtype=np.float64)
 
-        cfg, inputs, host = prepare_forward_inputs(
-            self.atm, star_radius=star_radius, planet_mass=planet_mass,
+        prep_kwargs = dict(
+            star_radius=star_radius, planet_mass=planet_mass,
             planet_radius=planet_radius, P_profile=P_profile,
             T_profile=T_profile, logZ=logZ, CO_ratio=CO_ratio,
             CH4_mult=CH4_mult, gases=gases, vmrs=vmrs,
@@ -207,18 +218,49 @@ class TransitDepthCalculator:
             zero_opacities=zero_opacities,
             stellar_blackbody=stellar_blackbody,
             bot_pressure=cloudtop_pressure)
+        if cloud_fraction < 1:
+            # Clear terminator: no cloud deck, parametric haze, or Mie
+            # scattering; Rayleigh scattering remains
+            prep_kwargs_clear = dict(
+                prep_kwargs, cloudtop_pressure=np.inf, bot_pressure=np.inf,
+                scattering_factor=1, scattering_slope=4, ri=None,
+                number_density=0)
+            if cloud_fraction == 0:
+                prep_kwargs = prep_kwargs_clear
+
+        cfg, inputs, host = prepare_forward_inputs(self.atm, **prep_kwargs)
+        clear = None
+        if 0 < cloud_fraction < 1:
+            clear = prepare_forward_inputs(self.atm, **prep_kwargs_clear)
 
         if full_output:
             out = fm.transit_core(cfg, self.atm.device_data(), inputs)
-            binned, unbound = out.binned_depths, bool(out.atm.unbound)
+            clear_out = None if clear is None else \
+                fm.transit_core(clear[0], self.atm.device_data(), clear[1])
+            binned = np.array(out.binned_depths, dtype=np.float64)
+            unbound = bool(out.atm.unbound)
+            if clear_out is not None:
+                binned = cloud_fraction * binned + (1 - cloud_fraction) * \
+                    np.array(clear_out.binned_depths, dtype=np.float64)
+                unbound = unbound or bool(clear_out.atm.unbound)
         else:
-            binned, unbound = fm.split_transit_result(np.asarray(
-                fm.transit_depths_core(cfg, self.atm.device_data(), inputs)))
+            res = fm.transit_depths_core(cfg, self.atm.device_data(), inputs)
+            clear_res = None if clear is None else \
+                fm.transit_depths_core(clear[0], self.atm.device_data(),
+                                       clear[1])
+            binned, unbound = fm.split_transit_result(np.asarray(res))
+            binned = np.array(binned, dtype=np.float64)
+            if clear_res is not None:
+                clear_binned, clear_unbound = fm.split_transit_result(
+                    np.asarray(clear_res))
+                binned = cloud_fraction * binned + (1 - cloud_fraction) * \
+                    np.array(clear_binned, dtype=np.float64)
+                unbound = unbound or clear_unbound
 
         if unbound:
             raise AtmosphereError("Atmosphere unbound: height > hill radius")
 
-        binned_depths = np.array(binned, dtype=np.float64)
+        binned_depths = binned
         if self.atm.wavelength_bins is None:
             binned_wavelengths = np.array(self.atm.lambda_grid)
         else:
@@ -233,6 +275,10 @@ class TransitDepthCalculator:
         stellar = np.array(out.stellar_spectrum, dtype=np.float64)
         corr = np.array(out.correction_factors, dtype=np.float64)
         depths_uncorr = np.array(out.depths, dtype=np.float64)
+        if clear_out is not None:
+            depths_uncorr = cloud_fraction * depths_uncorr + \
+                (1 - cloud_fraction) * np.array(clear_out.depths,
+                                                dtype=np.float64)
         atm_info["tau_los"] = np.array(out.tau_los)[:, :n - 1]
         atm_info["contrib"] = np.array(out.absorption_fraction)[:, :n - 1]
         atm_info["unbinned_wavelengths"] = np.array(self.atm.lambda_grid)

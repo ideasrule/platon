@@ -135,6 +135,10 @@ class CombinedRetriever:
         part_size = 10.**params_dict["log_part_size"]
         P_quench = 10.** params_dict["log_P_quench"]
         CH4_mult = 10.**params_dict["log_CH4_mult"]
+        cloud_fraction = params_dict.get("cloud_fraction", 1)
+
+        if cloud_fraction < 0 or cloud_fraction > 1:
+            return -np.inf
 
         if params_dict["fit_vmr"]:
             assert(logZ is None and CO_ratio is None)
@@ -184,7 +188,8 @@ class CombinedRetriever:
                     transit_profile, Rs, Mp, Rp, logZ, CO_ratio, CH4_mult, gases, vmrs,
                     custom_abundances=None,
                     scattering_factor=scatt_factor, scattering_slope=scatt_slope,
-                    cloudtop_pressure=cloudtop_P, T_star=T_star,
+                    cloudtop_pressure=cloudtop_P,
+                    cloud_fraction=cloud_fraction, T_star=T_star,
                     T_spot=T_spot, spot_cov_frac=spot_cov_frac,
                     frac_scale_height=frac_scale_height, number_density=number_density,
                     part_size=part_size, ri=ri, P_quench=P_quench, full_output=ret_best_fit, zero_opacities=zero_opacities)
@@ -649,7 +654,8 @@ class CombinedRetriever:
     @staticmethod
     def get_default_fit_info(Rs, Mp, Rp, T=None, logZ=0, CO_ratio=0.53, log_CH4_mult=0,
                              free_retrieval=False,
-                             log_cloudtop_P=np.inf, log_scatt_factor=0,
+                             log_cloudtop_P=np.inf, cloud_fraction=1,
+                             log_scatt_factor=0,
                              scatt_slope=4, error_multiple=1, T_star=None,
                              T_spot=None, spot_cov_frac=None,
                              frac_scale_height=1,
@@ -669,6 +675,10 @@ class CombinedRetriever:
 
         Parameters
         ----------
+        cloud_fraction : float
+            Fraction of the terminator covered by clouds, between 0 and 1.
+            Only affects transit depths; see
+            :func:`~platon.transit_depth_calculator.TransitDepthCalculator.compute_depths`
         n : float
             Real component of the refractive index of haze particles. Set to
             None to disable Mie scattering

@@ -14,6 +14,8 @@ class Profile:
             np.log10(MIN_P),
             np.log10(MAX_P),
             NUM_LAYERS)
+        self.profile_type = None
+        self.profile_params = {}
 
     def get_temperatures(self):
         return np.array(self.temperatures)
@@ -40,17 +42,26 @@ class Profile:
                 10**params_dict["log_P3"], params_dict["T3"])
         elif profile_type == "radiative_solution":
             self.set_from_radiative_solution(**params_dict)
+        elif profile_type == "guillot":
+            self.set_guillot(
+                params_dict["T_irr"], params_dict["log_gamma"],
+                params_dict["log_k_th"], params_dict.get("T_int", 100),
+                params_dict["Mp"], params_dict["Rp"])
         else:
-            assert(False)
+            raise ValueError("Unknown profile type: {}".format(profile_type))
 
     def set_from_arrays(self, P_profile, T_profile):
         P_profile = np.asarray(P_profile)
         T_profile = np.asarray(T_profile)
         self.temperatures = np.interp(np.log10(self.pressures),
                                       np.log10(P_profile), T_profile)
+        self.profile_type = "arrays"
+        self.profile_params = {}
 
     def set_isothermal(self, T_day):
         self.temperatures = np.ones(len(self.pressures)) * T_day
+        self.profile_type = "isothermal"
+        self.profile_params = {"T": T_day}
 
     def set_parametric(self, T0, P1, alpha1, alpha2, P3, T3):
         '''Parametric model from https://arxiv.org/pdf/0910.1347.pdf'''
@@ -67,6 +78,9 @@ class Profile:
             self.temperatures = np.where(
                 P < P1, T0 + np.log(P / P0)**2 / alpha1**2,
                 np.where(P < P3, T2 + np.log(P / P2)**2 / alpha2**2, T3))
+        self.profile_type = "parametric"
+        self.profile_params = dict(
+            T0=T0, P1=P1, alpha1=alpha1, alpha2=alpha2, P3=P3, T3=T3)
         return P2, T2
 
     def set_from_opacity(self, T_irr, info_dict, visible_cutoff=0.8e-6,
@@ -112,6 +126,28 @@ class Profile:
                                   2.0 * gamma / 3 * (1 - taus**2 / 2) * e2)
         T = T4 ** 0.25
         self.temperatures = np.append(T[0], T)
+        self.profile_type = "opacity"
+        self.profile_params = dict(T_irr=T_irr, T_int=T_int)
+
+    def set_guillot(self, T_irr, log_gamma, log_k_th, T_int, Mp, Rp):
+        """Set the one-visible-channel profile from Guillot (2010).
+
+        ``log_k_th`` is log10 of the thermal opacity in cm^2/g. All other
+        physical inputs are in SI.
+        """
+        gamma = 10**log_gamma
+        kappa_th = 0.1 * 10**log_k_th
+        tau = self.pressures * kappa_th / (G * Mp / Rp**2)
+        incoming = 2 / 3 + 2 / (3 * gamma) * (
+            1 + (gamma * tau / 2 - 1) * np.exp(-gamma * tau))
+        incoming += 2 * gamma / 3 * (1 - tau**2 / 2) * expn(2, gamma * tau)
+        T4 = 3 / 4 * T_int**4 * (tau + 2 / 3) + \
+            3 / 4 * T_irr**4 * incoming
+        self.temperatures = T4**0.25
+        self.profile_type = "guillot"
+        self.profile_params = dict(
+            T_irr=T_irr, log_gamma=log_gamma, log_k_th=log_k_th,
+            T_int=T_int, Mp=Mp, Rp=Rp)
 
     def set_from_radiative_solution(self, T_star, Rs, a, Mp, Rp, beta,
                                     log_k_th, log_gamma, log_gamma2=None,
@@ -139,3 +175,8 @@ class Profile:
             e2 = incoming_stream_contribution(gamma2)
             T4 += alpha * e2
         self.temperatures = T4 ** 0.25
+        self.profile_type = "radiative_solution"
+        self.profile_params = dict(
+            T_star=T_star, Rs=Rs, a=a, Mp=Mp, Rp=Rp, beta=beta,
+            log_k_th=log_k_th, log_gamma=log_gamma,
+            log_gamma2=log_gamma2, alpha=alpha, T_int=T_int)

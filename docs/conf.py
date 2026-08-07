@@ -15,9 +15,9 @@
 import os
 import sys
 
-from platon import __version__
+sys.path.insert(0, os.path.abspath('..'))
 
-sys.path.insert(0, os.path.abspath('.'))
+from platon import __version__
 
 
 # -- Project information -----------------------------------------------------

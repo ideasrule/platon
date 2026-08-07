@@ -23,6 +23,9 @@ in our second PLATON paper.**
    intro
    install
    quickstart
+   patchy_clouds
+   two_sector_terminators
+   samplers
    mie_scattering
    eclipse_depths
    surface_emission

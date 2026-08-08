@@ -27,7 +27,7 @@ class Plotter():
         and 1 sigma bounds for the profile and/or plot samples of the temperature profile.
         """
         assert(isinstance(retrieval_result, RetrievalResult))
-        if retrieval_result.retrieval_type == "dynesty":
+        if retrieval_result.retrieval_type in ("dynesty", "nautilus"):
             equal_samples = dynesty.utils.resample_equal(retrieval_result.samples, retrieval_result.weights)
             np.random.shuffle(equal_samples)
         elif retrieval_result.retrieval_type == "pymultinest":
@@ -38,6 +38,65 @@ class Plotter():
             assert(False)
 
         indices = np.random.choice(len(equal_samples), num_samples)
+        terminator_param = retrieval_result.fit_info.all_params.get(
+            "transit_terminator")
+        terminator = None if terminator_param is None else \
+            terminator_param.best_guess
+        if terminator is not None:
+            profile_pressures = _np.asarray(
+                terminator.cold.profile.pressures)
+            cold_temperatures = []
+            hot_temperatures = []
+            for index in indices:
+                params_dict = retrieval_result.fit_info._interpret_param_array(
+                    equal_samples[index])
+                model = terminator.from_params(
+                    params_dict, params_dict["Mp"], params_dict["Rp"])
+                cold_temperatures.append(
+                    _np.asarray(model.cold.profile.temperatures))
+                hot_temperatures.append(
+                    _np.asarray(model.hot.profile.temperatures))
+
+            cold_temperatures = np.asarray(cold_temperatures)
+            hot_temperatures = np.asarray(hot_temperatures)
+            pressure_bars = profile_pressures / BAR_TO_PASCALS
+            plt.figure()
+            if plot_samples:
+                plt.plot(cold_temperatures.T, pressure_bars, color="C0",
+                         alpha=0.12, zorder=1)
+                plt.plot(hot_temperatures.T, pressure_bars, color="C3",
+                         alpha=0.12, zorder=1)
+            if plot_1sigma_bounds:
+                plt.fill_betweenx(
+                    pressure_bars,
+                    np.percentile(cold_temperatures, 16, axis=0),
+                    np.percentile(cold_temperatures, 84, axis=0),
+                    color="C0", alpha=0.25, label="cold 1$\\sigma$")
+                plt.fill_betweenx(
+                    pressure_bars,
+                    np.percentile(hot_temperatures, 16, axis=0),
+                    np.percentile(hot_temperatures, 84, axis=0),
+                    color="C3", alpha=0.25, label="hot 1$\\sigma$")
+
+            params_dict = retrieval_result.fit_info._interpret_param_array(
+                retrieval_result.best_fit_params)
+            best = terminator.from_params(
+                params_dict, params_dict["Mp"], params_dict["Rp"])
+            plt.plot(best.cold.profile.temperatures, pressure_bars,
+                     color="C0", label="cold best fit")
+            plt.plot(best.hot.profile.temperatures, pressure_bars,
+                     color="C3", label="hot best fit")
+            plt.yscale("log")
+            plt.ylim(pressure_bars.min(), pressure_bars.max())
+            plt.gca().invert_yaxis()
+            plt.xlabel("Temperature (K)")
+            plt.ylabel("Pressure/bars")
+            plt.legend()
+            plt.tight_layout()
+            if prefix is not None:
+                plt.savefig(prefix + "_retrieved_temp_profiles.png")
+            return
+
         profile_type = retrieval_result.fit_info.all_params['profile_type'].best_guess
         t_p_profile = Profile()
         profile_pressures = _np.asarray(t_p_profile.pressures)
@@ -77,7 +136,7 @@ class Plotter():
         posteriors of the fitted parameters.
         """
         assert(isinstance(retrieval_result, RetrievalResult))
-        if retrieval_result.retrieval_type == "dynesty":
+        if retrieval_result.retrieval_type in ("dynesty", "nautilus"):
             fig = corner.corner(retrieval_result.samples, weights=retrieval_result.weights,
                                 range=[0.99] * retrieval_result.samples.shape[1],
                                 show_titles=True,

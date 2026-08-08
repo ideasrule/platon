@@ -18,6 +18,13 @@ PLATON supports both dynesty and pymultinest for nested sampling.  dynesty is in
   
   conda install -c conda-forge mpi4py pymultinest
 
+Nautilus is also available as an optional sampler.  It is not installed with
+PLATON's base dependencies.  To add it::
+
+  pip install ".[nautilus]"
+
+If PLATON is already installed, use ``pip install nautilus-sampler``.
+
 After installing PLATON, run one of the examples so that the data files are automatically downloaded::
   cd examples/
   python transit_depth_example.py

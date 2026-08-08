@@ -60,6 +60,14 @@ platon.fit\_info module
     :undoc-members:
     :show-inheritance:
 
+platon.terminator module
+------------------------
+
+.. automodule:: platon.terminator
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 platon.transit\_depth\_calculator module
 ----------------------------------------
 

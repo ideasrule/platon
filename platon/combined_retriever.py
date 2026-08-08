@@ -21,6 +21,7 @@ from ._params import _UniformParam
 from .errors import AtmosphereError
 from ._output_writer import write_param_estimates_file
 from .TP_profile import Profile
+from .terminator import TwoSectorTerminator
 from .retrieval_result import RetrievalResult
 from .custom_dynesty_result import CustomDynestyResult
 
@@ -42,10 +43,12 @@ class CombinedRetriever:
             if name == "Rp":
                 value /= R_jup
                 unit = "R_jup"
-            if name == "T":
+            if name == "T" or name.endswith(".T") or \
+               name.endswith(".T_irr"):
                 unit = "K"
 
-            if name == "T":
+            if name == "T" or name.endswith(".T") or \
+               name.endswith(".T_irr"):
                 format_str = "{:4.0f}"                
             elif abs(value) < 1e4: format_str = "{:.2f}"
             else: format_str = "{:.2e}"
@@ -65,6 +68,17 @@ class CombinedRetriever:
         # there is no good way to validate Gaussian parameters, which have
         # infinite range.
         fit_info = copy.deepcopy(fit_info)
+        terminator_param = fit_info.all_params.get("transit_terminator")
+        terminator = None if terminator_param is None else \
+            terminator_param.best_guess
+
+        if terminator is not None:
+            cloud_fraction = fit_info.all_params["cloud_fraction"].best_guess
+            if cloud_fraction != 1 or \
+               "cloud_fraction" in fit_info.fit_param_names:
+                raise ValueError(
+                    "cloud_fraction must be fixed at 1 for a "
+                    "TwoSectorTerminator")
         
         if fit_info.all_params["log_k"].best_guess is None:
             # Not using Mie scattering
@@ -89,6 +103,9 @@ class CombinedRetriever:
                 raise ValueError(
                     "low_lim for {} is higher than high_lim".format(name))
 
+            if terminator is not None:
+                continue
+
             for lim in [this_param.low_lim, this_param.high_lim]:
                 this_param.best_guess = lim
                 calculator._validate_params(
@@ -96,6 +113,35 @@ class CombinedRetriever:
                     fit_info._get("logZ"),
                     fit_info._get("CO_ratio"),
                     10**fit_info._get("log_cloudtop_P"))
+
+        if terminator is not None:
+            best = [fit_info.all_params[name].best_guess
+                    for name in fit_info.fit_param_names]
+            params = fit_info._interpret_param_array(best)
+            rebuilt = terminator.from_params(params, params["Mp"], params["Rp"])
+            for sector in (rebuilt.cold, rebuilt.hot):
+                calculator._validate_params(
+                    sector.profile.temperatures, params["logZ"],
+                    params["CO_ratio"], sector.cloudtop_pressure)
+            for name in fit_info.fit_param_names:
+                param = fit_info.all_params[name]
+                if not isinstance(param, _UniformParam):
+                    continue
+                if name not in (
+                        "logZ", "CO_ratio", "cold.log_cloudtop_P",
+                        "hot.log_cloudtop_P"):
+                    continue
+                for limit in (param.low_lim, param.high_lim):
+                    for label, sector in (
+                            ("cold", rebuilt.cold), ("hot", rebuilt.hot)):
+                        logZ = limit if name == "logZ" else params["logZ"]
+                        ratio = limit if name == "CO_ratio" else \
+                            params["CO_ratio"]
+                        cloudtop = 10**limit if \
+                            name == f"{label}.log_cloudtop_P" else \
+                            sector.cloudtop_pressure
+                        calculator._validate_params(
+                            sector.profile.temperatures, logZ, ratio, cloudtop)
 
     @staticmethod
     def convert_clr_to_vmr(clrs):
@@ -136,9 +182,17 @@ class CombinedRetriever:
         P_quench = 10.** params_dict["log_P_quench"]
         CH4_mult = 10.**params_dict["log_CH4_mult"]
         cloud_fraction = params_dict.get("cloud_fraction", 1)
+        transit_terminator = params_dict.get("transit_terminator")
 
         if cloud_fraction < 0 or cloud_fraction > 1:
             return -np.inf
+        if transit_terminator is not None:
+            if cloud_fraction != 1:
+                return -np.inf
+            order_name = transit_terminator.order_parameter
+            if params_dict[f"cold.{order_name}"] > \
+               params_dict[f"hot.{order_name}"]:
+                return -np.inf
 
         if params_dict["fit_vmr"]:
             assert(logZ is None and CO_ratio is None)
@@ -171,17 +225,26 @@ class CombinedRetriever:
         
         try:
             if measured_transit_depths is not None:
-                transit_profile_type = params_dict.get(
-                    "transit_profile_type", "isothermal")
-                if transit_profile_type == "isothermal" and \
-                   params_dict.get("T_transit") is None and T is None:
-                    raise ValueError("Must fit for T if using transit depths")
+                if transit_terminator is None:
+                    transit_profile_type = params_dict.get(
+                        "transit_profile_type", "isothermal")
+                    if transit_profile_type == "isothermal" and \
+                       params_dict.get("T_transit") is None and T is None:
+                        raise ValueError(
+                            "Must fit for T if using transit depths")
+                    transit_profile = Profile()
+                    transit_profile.set_from_params_dict(
+                        transit_profile_type, params_dict, suffix="_transit")
+                    transit_profiles = (transit_profile,)
+                else:
+                    transit_profile = transit_terminator.from_params(
+                        params_dict, Mp, Rp)
+                    transit_profiles = (
+                        transit_profile.cold.profile,
+                        transit_profile.hot.profile)
 
-                transit_profile = Profile()
-                transit_profile.set_from_params_dict(
-                    transit_profile_type, params_dict, suffix="_transit")
-
-                if np.any(np.isnan(transit_profile.temperatures)):
+                if any(np.any(np.isnan(p.temperatures))
+                       for p in transit_profiles):
                     raise AtmosphereError("Invalid T/P profile")
 
                 transit_wavelengths, calculated_transit_depths, transit_info_dict = transit_calc.compute_depths(
@@ -466,10 +529,7 @@ class CombinedRetriever:
             eclipse_calc.change_wavelength_bins(eclipse_bins)
 
         def transform_prior(cube):
-            new_cube = np.zeros(len(cube))
-            for i in range(len(cube)):
-                new_cube[i] = fit_info._from_unit_interval(i, cube[i])
-            return new_cube
+            return fit_info._from_unit_interval_array(cube)
 
         def dynesty_ln_like(cube):
             lnlike_per_point = self._ln_like(cube, transit_calc, eclipse_calc, fit_info, transit_depths, transit_errors,
@@ -569,10 +629,7 @@ class CombinedRetriever:
             eclipse_calc.change_wavelength_bins(eclipse_bins)
 
         def transform_prior(cube):
-            new_cube = np.zeros(len(cube))
-            for i in range(len(cube)):
-                new_cube[i] = fit_info._from_unit_interval(i, cube[i])
-            return new_cube
+            return fit_info._from_unit_interval_array(cube)
 
         def multinest_ln_like(cube):
             lnlike_per_point = self._ln_like(cube, transit_calc, eclipse_calc, fit_info, transit_depths, transit_errors,
@@ -649,6 +706,130 @@ class CombinedRetriever:
         #Calculate LOO-CV scores
         retrieval_result.loo_total, retrieval_result.loos, retrieval_result.loo_ks = psisloo(np.array(retrieval_result.pointwise_lnlikes))
         return retrieval_result
+
+    def run_nautilus(self, transit_bins, transit_depths, transit_errors,
+                     eclipse_bins, eclipse_depths, eclipse_errors,
+                     fit_info, include_condensation=True, rad_method="xsec",
+                     n_live=2000, n_eff=10000, n_networks=16,
+                     discard_exploration=True, verbose=True,
+                     num_final_samples=100, zero_opacities=(),
+                     **nautilus_kwargs):
+        """Run optional Nautilus nested sampling.
+
+        Install support with ``pip install "platon[nautilus]"`` or
+        ``pip install nautilus-sampler``. Extra keyword arguments are passed
+        directly to :class:`nautilus.Sampler`.
+        """
+        try:
+            from nautilus import Sampler
+        except ImportError as error:
+            raise ImportError(
+                'run_nautilus requires the optional "nautilus-sampler" '
+                'package. Install it with pip install "platon[nautilus]" '
+                'or pip install nautilus-sampler.') from error
+
+        self.params_to_lnlike = {}
+        transit_calc = None
+        eclipse_calc = None
+        if transit_bins is not None:
+            transit_calc = TransitDepthCalculator(
+                include_condensation=include_condensation, method=rad_method)
+            transit_calc.change_wavelength_bins(transit_bins)
+            self._validate_params(fit_info, transit_calc)
+        if eclipse_bins is not None:
+            eclipse_calc = EclipseDepthCalculator(
+                include_condensation=include_condensation, method=rad_method)
+            eclipse_calc.change_wavelength_bins(eclipse_bins)
+
+        def transform_prior(cube):
+            return fit_info._from_unit_interval_array(cube)
+
+        def nautilus_ln_like(params):
+            values = self._ln_like(
+                params, transit_calc, eclipse_calc, fit_info,
+                transit_depths, transit_errors, eclipse_depths, eclipse_errors,
+                zero_opacities=zero_opacities, lnlike_per_point=True)
+            return values.sum() if not np.isscalar(values) else -np.inf
+
+        sampler = Sampler(
+            transform_prior, nautilus_ln_like,
+            n_dim=fit_info._get_num_fit_params(),
+            n_live=n_live, n_networks=n_networks, **nautilus_kwargs)
+        success = sampler.run(
+            n_eff=n_eff, discard_exploration=discard_exploration,
+            verbose=verbose)
+
+        samples, log_weights, logl = sampler.posterior()
+        samples = np.asarray(samples)
+        log_weights = np.asarray(log_weights)
+        logl = np.asarray(logl)
+        weights = np.exp(log_weights - np.max(log_weights))
+        weights /= np.sum(weights)
+        logp = logl + np.array(
+            [fit_info._ln_prior(params) for params in samples])
+        best_params_arr = samples[np.argmax(logp)]
+
+        equal_samples = dynesty.utils.resample_equal(samples, weights)
+        np.random.shuffle(equal_samples)
+        divisors, new_labels = self._get_divisors_labels(
+            np.median(equal_samples, axis=0), fit_info.fit_param_names)
+        write_param_estimates_file(
+            equal_samples / divisors, best_params_arr / divisors,
+            np.max(logp), new_labels)
+
+        best = self._ln_like(
+            best_params_arr, transit_calc, eclipse_calc, fit_info,
+            transit_depths, transit_errors, eclipse_depths, eclipse_errors,
+            zero_opacities=zero_opacities, ret_best_fit=True)
+        result = {
+            "samples": samples,
+            "weights": weights,
+            "logw": log_weights,
+            "logl": logl,
+            "logp": logp,
+            "logz": np.atleast_1d(sampler.log_z),
+            "n_eff": sampler.n_eff,
+            "success": success,
+        }
+        retrieval_result = RetrievalResult(
+            result, "nautilus", best_params_arr,
+            transit_bins, transit_depths, transit_errors,
+            eclipse_bins, eclipse_depths, eclipse_errors,
+            best[0], best[1], best[2], best[3],
+            fit_info, divisors, new_labels)
+
+        retrieval_result.random_transit_depths = []
+        retrieval_result.random_eclipse_depths = []
+        retrieval_result.random_TP_profiles = []
+        retrieval_result.pointwise_lnlikes = []
+        for params in equal_samples[:num_final_samples]:
+            pointwise = self.params_to_lnlike.get(tuple(params))
+            if pointwise is None:
+                pointwise = self._ln_like(
+                    params, transit_calc, eclipse_calc, fit_info,
+                    transit_depths, transit_errors,
+                    eclipse_depths, eclipse_errors,
+                    zero_opacities=zero_opacities, lnlike_per_point=True)
+            _, transit_info, _, eclipse_info = self._ln_like(
+                params, transit_calc, eclipse_calc, fit_info,
+                transit_depths, transit_errors,
+                eclipse_depths, eclipse_errors,
+                zero_opacities=zero_opacities, ret_best_fit=True)
+            if transit_depths is not None:
+                retrieval_result.random_transit_depths.append(
+                    transit_info["unbinned_depths"] *
+                    transit_info["unbinned_correction_factors"])
+            if eclipse_depths is not None:
+                retrieval_result.random_eclipse_depths.append(
+                    eclipse_info["unbinned_eclipse_depths"])
+                retrieval_result.random_TP_profiles.append(np.array([
+                    eclipse_info["P_profile"], eclipse_info["T_profile"]]))
+            retrieval_result.pointwise_lnlikes.append(pointwise)
+
+        retrieval_result.loo_total, retrieval_result.loos, \
+            retrieval_result.loo_ks = psisloo(
+                np.array(retrieval_result.pointwise_lnlikes))
+        return retrieval_result
         
 
     @staticmethod
@@ -666,6 +847,7 @@ class CombinedRetriever:
                              fit_vmr=False, fit_clr=False,
                              profile_type = 'isothermal',
                              transit_profile_type = 'isothermal',
+                             transit_terminator=None,
                              **profile_kwargs):
         '''Get a :class:`.FitInfo` object filled with best guess values.  A few
         parameters are required, but others can be set to default values if you
@@ -702,6 +884,9 @@ class CombinedRetriever:
             T3_transit); any parameter without a "_transit" version falls
             back to the unsuffixed (dayside) value.  For "isothermal", the
             temperature is T_transit, falling back to T.
+        transit_terminator : TwoSectorTerminator, optional
+            A cold and hot terminator template for a 1.5-D transit retrieval.
+            Its named sector values are added to the returned FitInfo.
         profile_kwargs : kwargs
             T/P profile arguments.  For "isothermal": T_day.  For "parametric":
             T0, P1, alpha1, alpha2, P3, T3.  For "radiative_solution":
@@ -718,6 +903,11 @@ class CombinedRetriever:
         all_variables = locals().copy()
         del all_variables["profile_kwargs"]
         all_variables.update(profile_kwargs)
+        if transit_terminator is not None:
+            if not isinstance(transit_terminator, TwoSectorTerminator):
+                raise TypeError(
+                    "transit_terminator must be a TwoSectorTerminator")
+            all_variables.update(transit_terminator.retrieval_defaults())
         
         fit_info = FitInfo(all_variables)
         return fit_info

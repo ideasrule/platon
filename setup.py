@@ -24,8 +24,11 @@ setuptools.setup(
     install_requires = [
         "numpy>=2.0",
         "scipy",
-        "jax",
+        "jax>=0.5.0",
         "emcee", "dynesty", "corner",
         "future", "nose", "setuptools", "configparser",
-        "matplotlib"]
+        "matplotlib"],
+    extras_require = {
+        "nautilus": ["nautilus-sampler"],
+    }
 )

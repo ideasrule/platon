@@ -5,6 +5,7 @@ from ._params import _UniformParam, _GaussianParam, _Param
 class FitInfo:
     def __init__(self, guesses_dict):
         self.fit_param_names = []
+        self.ordered_pairs = []
         self.all_params = dict()
 
         for key in guesses_dict:
@@ -30,6 +31,27 @@ class FitInfo:
         self.fit_param_names.append(name)
         self.all_params[name] = _UniformParam(best_guess, low_lim, high_lim,
                                               low_guess, high_guess)
+
+    def add_ordered_uniform_fit_params(
+            self, cold_name, hot_name, low_lim, high_lim,
+            low_guess=None, high_guess=None):
+        """Fit an exchangeable pair while keeping the cold value first.
+
+        Both values have the same uniform prior. Nested samplers draw both
+        values and sort them, so no prior volume is discarded.
+        """
+        if cold_name in self.fit_param_names or hot_name in self.fit_param_names:
+            raise ValueError("Already fitting for an ordered parameter")
+        if self.all_params[cold_name].best_guess > \
+           self.all_params[hot_name].best_guess:
+            raise ValueError("cold best guess must not exceed hot best guess")
+        self.add_uniform_fit_param(
+            cold_name, low_lim, high_lim, low_guess, high_guess)
+        self.add_uniform_fit_param(
+            hot_name, low_lim, high_lim, low_guess, high_guess)
+        if not hasattr(self, "ordered_pairs"):
+            self.ordered_pairs = []
+        self.ordered_pairs.append((cold_name, hot_name))
 
     def add_gaussian_fit_param(self, name, std, low_guess=None, high_guess=None):
         '''Fit for the parameter `name` using a Gaussian prior with standard
@@ -90,6 +112,10 @@ class FitInfo:
             if not self.all_params[key].within_limits(array[i]):
                 return False
 
+        values = dict(zip(self.fit_param_names, array))
+        for cold_name, hot_name in getattr(self, "ordered_pairs", []):
+            if values[cold_name] > values[hot_name]:
+                return False
         return True
 
     def _generate_rand_param_arrays(self, num_arrays):
@@ -103,6 +129,11 @@ class FitInfo:
                     row.append(self.all_params[name].best_guess)
                 else:
                     row.append(self.all_params[name].get_random_value())
+            for cold_name, hot_name in getattr(self, "ordered_pairs", []):
+                cold_i = self.fit_param_names.index(cold_name)
+                hot_i = self.fit_param_names.index(hot_name)
+                row[cold_i], row[hot_i] = sorted(
+                    (row[cold_i], row[hot_i]))
             result.append(row)
 
         return np.array(result)
@@ -117,7 +148,19 @@ class FitInfo:
         name = self.fit_param_names[index]
         return self.all_params[name].from_unit_interval(u)
 
+    def _from_unit_interval_array(self, cube):
+        result = np.array([
+            self._from_unit_interval(i, u) for i, u in enumerate(cube)])
+        for cold_name, hot_name in getattr(self, "ordered_pairs", []):
+            cold_i = self.fit_param_names.index(cold_name)
+            hot_i = self.fit_param_names.index(hot_name)
+            result[cold_i], result[hot_i] = sorted(
+                (result[cold_i], result[hot_i]))
+        return result
+
     def _ln_prior(self, array):
+        if not self._within_limits(array):
+            return -np.inf
         result = 0
         for i, name in enumerate(self.fit_param_names):
             result += self.all_params[name].ln_prior(array[i])

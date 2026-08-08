@@ -5,6 +5,7 @@ from ._forward_prep import prepare_forward_inputs, atm_info_dict
 from .errors import AtmosphereError
 from ._atmosphere_solver import AtmosphereSolver
 from .TP_profile import Profile
+from .terminator import TwoSectorTerminator
 
 
 class TransitDepthCalculator:
@@ -68,10 +69,10 @@ class TransitDepthCalculator:
 
         Parameters
         ----------
-        t_p_profile : Profile
-            A Profile object from TP_profile, describing the (potentially
-            non-isothermal) T/P profile of the atmosphere.  For an
-            isothermal atmosphere, use Profile.set_isothermal.
+        t_p_profile : Profile or TwoSectorTerminator
+            A Profile object describing the T/P profile, or a cold and hot
+            TwoSectorTerminator. For an isothermal Profile, use
+            Profile.set_isothermal.
         star_radius : float
             Radius of the star
         planet_mass : float
@@ -187,10 +188,67 @@ class TransitDepthCalculator:
             stellar_spectrum, radii, P_profile, T_profile, mu_profile,
             atm_abundances, unbinned_depths, unbinned_wavelengths
        '''
+        if isinstance(t_p_profile, TwoSectorTerminator):
+            if cloud_fraction != 1:
+                raise ValueError(
+                    "cloud_fraction must be 1 for a TwoSectorTerminator; "
+                    "use cold_fraction for its area weighting")
+            common = dict(
+                logZ=logZ, CO_ratio=CO_ratio, CH4_mult=CH4_mult,
+                gases=gases, vmrs=vmrs,
+                add_gas_absorption=add_gas_absorption,
+                add_H_minus_absorption=add_H_minus_absorption,
+                add_scattering=add_scattering,
+                scattering_ref_wavelength=scattering_ref_wavelength,
+                add_collisional_absorption=add_collisional_absorption,
+                cloud_fraction=1, custom_abundances=custom_abundances,
+                T_star=T_star, T_spot=T_spot,
+                spot_cov_frac=spot_cov_frac, ri=ri,
+                frac_scale_height=frac_scale_height,
+                number_density=number_density, part_size=part_size,
+                part_size_std=part_size_std, P_quench=P_quench,
+                full_output=full_output, min_abundance=min_abundance,
+                min_cross_sec=min_cross_sec,
+                stellar_blackbody=stellar_blackbody,
+                zero_opacities=zero_opacities)
+
+            def run_sector(sector):
+                return self.compute_depths(
+                    sector.profile, star_radius, planet_mass, planet_radius,
+                    scattering_factor=sector.scattering_factor,
+                    scattering_slope=sector.scattering_slope,
+                    cloudtop_pressure=sector.cloudtop_pressure,
+                    **common)
+
+            fraction = t_p_profile.cold_fraction
+            if not full_output and fraction in (0, 1):
+                return run_sector(
+                    t_p_profile.cold if fraction == 1 else t_p_profile.hot)
+
+            cold_wavelengths, cold_depths, cold_info = run_sector(
+                t_p_profile.cold)
+            _, hot_depths, hot_info = run_sector(t_p_profile.hot)
+            depths = fraction * cold_depths + (1 - fraction) * hot_depths
+            if not full_output:
+                return cold_wavelengths, depths, None
+
+            info = {
+                name: cold_info[name]
+                for name in (
+                    "unbinned_wavelengths", "unbinned_stellar_spectrum",
+                    "unbinned_correction_factors", "binned_stellar_spectrum")
+                if name in cold_info
+            }
+            info["unbinned_depths"] = \
+                fraction * cold_info["unbinned_depths"] + \
+                (1 - fraction) * hot_info["unbinned_depths"]
+            info["cold_fraction"] = fraction
+            info["sectors"] = {"cold": cold_info, "hot": hot_info}
+            return cold_wavelengths, depths, info
+
         if not isinstance(t_p_profile, Profile):
             raise TypeError("t_p_profile must be a Profile object from "
-                            "platon.TP_profile; for an isothermal "
-                            "atmosphere, use Profile.set_isothermal")
+                            "platon.TP_profile or a TwoSectorTerminator")
         if cloud_fraction < 0 or cloud_fraction > 1:
             raise ValueError("cloud_fraction must be between 0 and 1")
         T_profile = np.asarray(t_p_profile.temperatures, dtype=np.float64)

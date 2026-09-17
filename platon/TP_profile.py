@@ -130,13 +130,9 @@ class Profile:
         self.profile_params = dict(T_irr=T_irr, T_int=T_int)
 
     def set_guillot(self, T_irr, log_gamma, log_k_th, T_int, Mp, Rp):
-        """Set the one-visible-channel profile from Guillot (2010).
-
-        ``log_k_th`` is log10 of the thermal opacity in cm^2/g. All other
-        physical inputs are in SI.
-        """
+        """Set the one-visible-channel profile from Guillot (2010)."""
         gamma = 10**log_gamma
-        kappa_th = 0.1 * 10**log_k_th
+        kappa_th = 10**log_k_th
         tau = self.pressures * kappa_th / (G * Mp / Rp**2)
         incoming = 2 / 3 + 2 / (3 * gamma) * (
             1 + (gamma * tau / 2 - 1) * np.exp(-gamma * tau))

@@ -21,34 +21,52 @@ class Plotter():
         pass
 
 
-    def plot_retrieval_TP_profiles(self, retrieval_result, plot_samples=False, plot_1sigma_bounds=True, num_samples=100, prefix=None):
+    def plot_retrieval_TP_profiles(self, retrieval_result, plot_samples=False,
+                                   plot_1sigma_bounds=True, num_samples=100,
+                                   prefix=None, which=None):
         """
         Input a RetrievalResult object to make a plot of the best fit temperature profile 
         and 1 sigma bounds for the profile and/or plot samples of the temperature profile.
+
+        Parameters
+        ----------
+        which : str, optional
+            "transit" to plot the terminator profile used for transit depths,
+            "eclipse" to plot the dayside profile used for eclipse depths.
+            Defaults to "eclipse" if eclipse data were fit, "transit"
+            otherwise.
+
+        The posterior samples stored in retrieval_result
+        (random_transit_TP_profiles / random_eclipse_TP_profiles) are used
+        when available; otherwise the profiles are recomputed from the
+        posterior samples of the fit parameters.
         """
         assert(isinstance(retrieval_result, RetrievalResult))
-        if retrieval_result.retrieval_type in ("dynesty", "nautilus"):
-            equal_samples = dynesty.utils.resample_equal(retrieval_result.samples, retrieval_result.weights)
-            np.random.shuffle(equal_samples)
-        elif retrieval_result.retrieval_type == "pymultinest":
-            equal_samples = retrieval_result.equal_samples
-        elif retrieval_result.retrieval_type == "emcee":
-            equal_samples = np.copy(retrieval_result.flatchain)
-        else:
-            assert(False)
+        if which is None:
+            which = "eclipse" if retrieval_result.eclipse_depths is not None \
+                else "transit"
+        if which not in ("transit", "eclipse"):
+            raise ValueError("which must be 'transit' or 'eclipse'")
 
-        indices = np.random.choice(len(equal_samples), num_samples)
-        terminator_param = retrieval_result.fit_info.all_params.get(
-            "transit_terminator")
-        terminator = None if terminator_param is None else \
-            terminator_param.best_guess
+        fit_info = retrieval_result.fit_info
+        best_params_dict = fit_info._interpret_param_array(
+            retrieval_result.best_fit_params)
+
+        terminator = None
+        if which == "transit":
+            terminator_param = fit_info.all_params.get("transit_terminator")
+            terminator = None if terminator_param is None else \
+                terminator_param.best_guess
+
         if terminator is not None:
+            equal_samples = self._get_equal_samples(retrieval_result)
+            indices = np.random.choice(len(equal_samples), num_samples)
             profile_pressures = _np.asarray(
                 terminator.cold.profile.pressures)
             cold_temperatures = []
             hot_temperatures = []
             for index in indices:
-                params_dict = retrieval_result.fit_info._interpret_param_array(
+                params_dict = fit_info._interpret_param_array(
                     equal_samples[index])
                 model = terminator.from_params(
                     params_dict, params_dict["Mp"], params_dict["Rp"])
@@ -63,9 +81,9 @@ class Plotter():
             plt.figure()
             if plot_samples:
                 plt.plot(cold_temperatures.T, pressure_bars, color="C0",
-                         alpha=0.12, zorder=1)
+                         alpha=0.12, zorder=1)[0].set_label("cold samples")
                 plt.plot(hot_temperatures.T, pressure_bars, color="C3",
-                         alpha=0.12, zorder=1)
+                         alpha=0.12, zorder=1)[0].set_label("hot samples")
             if plot_1sigma_bounds:
                 plt.fill_betweenx(
                     pressure_bars,
@@ -78,10 +96,9 @@ class Plotter():
                     np.percentile(hot_temperatures, 84, axis=0),
                     color="C3", alpha=0.25, label="hot 1$\\sigma$")
 
-            params_dict = retrieval_result.fit_info._interpret_param_array(
-                retrieval_result.best_fit_params)
             best = terminator.from_params(
-                params_dict, params_dict["Mp"], params_dict["Rp"])
+                best_params_dict, best_params_dict["Mp"],
+                best_params_dict["Rp"])
             plt.plot(best.cold.profile.temperatures, pressure_bars,
                      color="C0", label="cold best fit")
             plt.plot(best.hot.profile.temperatures, pressure_bars,
@@ -97,37 +114,89 @@ class Plotter():
                 plt.savefig(prefix + "_retrieved_temp_profiles.png")
             return
 
-        profile_type = retrieval_result.fit_info.all_params['profile_type'].best_guess
-        t_p_profile = Profile()
-        profile_pressures = _np.asarray(t_p_profile.pressures)
+        # 1-D profile: prefer the samples stored during the retrieval
+        if which == "transit":
+            stored = getattr(retrieval_result, "random_transit_TP_profiles",
+                             None)
+            best_dict = retrieval_result.best_fit_transit_dict
+            profile_type = fit_info.all_params.get("transit_profile_type")
+            profile_type = "isothermal" if profile_type is None \
+                else profile_type.best_guess
+            suffix = "_transit"
+        else:
+            stored = getattr(retrieval_result, "random_eclipse_TP_profiles",
+                             None)
+            best_dict = retrieval_result.best_fit_eclipse_dict
+            profile_type = fit_info.all_params["profile_type"].best_guess
+            suffix = ""
 
-        temperature_arr = []
-        for index in indices:
-            params = equal_samples[index]
-            params_dict = retrieval_result.fit_info._interpret_param_array(params)
-            t_p_profile.set_from_params_dict(profile_type, params_dict)
-            temperature_arr.append(_np.asarray(t_p_profile.temperatures))
+        if stored is not None and len(stored) > 0:
+            stored = np.asarray(stored)[:num_samples]
+            profile_pressures = stored[0, 0]
+            temperature_arr = stored[:, 1]
+        else:
+            equal_samples = self._get_equal_samples(retrieval_result)
+            indices = np.random.choice(len(equal_samples), num_samples)
+            t_p_profile = Profile()
+            profile_pressures = _np.asarray(t_p_profile.pressures)
+            temperature_arr = []
+            for index in indices:
+                params_dict = fit_info._interpret_param_array(
+                    equal_samples[index])
+                t_p_profile.set_from_params_dict(
+                    profile_type, params_dict, suffix=suffix)
+                temperature_arr.append(_np.asarray(t_p_profile.temperatures))
+            temperature_arr = np.asarray(temperature_arr)
 
+        if best_dict is not None and "full_TP_profile" in best_dict:
+            best_pressures, best_temperatures = best_dict["full_TP_profile"]
+        else:
+            t_p_profile = Profile()
+            t_p_profile.set_from_params_dict(
+                profile_type, best_params_dict, suffix=suffix)
+            best_pressures = _np.asarray(t_p_profile.pressures)
+            best_temperatures = _np.asarray(t_p_profile.temperatures)
+
+        pressure_bars = profile_pressures / BAR_TO_PASCALS
         plt.figure()
         if plot_samples:
-            plt.plot(np.array(temperature_arr).T, profile_pressures / BAR_TO_PASCALS, color='b', alpha=0.25, zorder=2, label='samples') 
+            lines = plt.plot(temperature_arr.T, pressure_bars, color='b',
+                             alpha=0.25, zorder=2)
+            lines[0].set_label('samples')
         if plot_1sigma_bounds:
-            plt.fill_betweenx(profile_pressures / BAR_TO_PASCALS, np.percentile(temperature_arr, 16, axis=0),
-                            np.percentile(temperature_arr, 84, axis=0), color='0.1', alpha=0.25, zorder=1, label='1$\\sigma$ bounds')  
+            plt.fill_betweenx(
+                pressure_bars,
+                np.percentile(temperature_arr, 16, axis=0),
+                np.percentile(temperature_arr, 84, axis=0),
+                color='0.1', alpha=0.25, zorder=1, label='1$\\sigma$ bounds')
 
-        params_dict = retrieval_result.fit_info._interpret_param_array(retrieval_result.best_fit_params)
-        t_p_profile.set_from_params_dict(profile_type, params_dict)
-        plt.plot(_np.asarray(t_p_profile.temperatures), profile_pressures / BAR_TO_PASCALS, zorder=3, color='r', label='best fit')
+        plt.plot(best_temperatures, best_pressures / BAR_TO_PASCALS,
+                 zorder=3, color='r', label='best fit')
 
-        plt.yscale('log')   
-        plt.ylim(min(profile_pressures / BAR_TO_PASCALS), max(profile_pressures / BAR_TO_PASCALS))
-        plt.gca().invert_yaxis()               
+        plt.yscale('log')
+        plt.ylim(pressure_bars.min(), pressure_bars.max())
+        plt.gca().invert_yaxis()
         plt.xlabel("Temperature (K)")
         plt.ylabel("Pressure/bars")
         plt.legend()
         plt.tight_layout()
         if prefix is not None:
             plt.savefig(prefix + "_retrieved_temp_profiles.png")
+
+    @staticmethod
+    def _get_equal_samples(retrieval_result):
+        if retrieval_result.retrieval_type in ("dynesty", "nautilus"):
+            equal_samples = dynesty.utils.resample_equal(
+                retrieval_result.samples, retrieval_result.weights)
+            np.random.shuffle(equal_samples)
+        elif retrieval_result.retrieval_type == "pymultinest":
+            equal_samples = retrieval_result.equal_samples
+        elif retrieval_result.retrieval_type == "emcee":
+            equal_samples = np.copy(retrieval_result.flatchain)
+        else:
+            raise ValueError("Unknown retrieval type: {}".format(
+                retrieval_result.retrieval_type))
+        return equal_samples
 
 
     def plot_retrieval_corner(self, retrieval_result, filename=None, **args):

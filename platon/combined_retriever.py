@@ -294,6 +294,14 @@ class CombinedRetriever:
         self.last_lnprob = fit_info._ln_prior(params) + ln_likelihood.sum()
         
         if ret_best_fit:
+            # Attach the full (untruncated) T/P profiles so that downstream
+            # code (RetrievalResult.random_TP_profiles, Plotter) has them
+            if transit_info_dict is not None:
+                transit_info_dict["full_TP_profile"] = \
+                    self._profile_to_array(transit_profile)
+            if eclipse_info_dict is not None:
+                eclipse_info_dict["full_TP_profile"] = \
+                    self._profile_to_array(t_p_profile)
             return calculated_transit_depths, transit_info_dict, calculated_eclipse_depths, eclipse_info_dict
 
         if lnlike_per_point:
@@ -302,6 +310,62 @@ class CombinedRetriever:
 
         return ln_likelihood.sum()
 
+
+    @staticmethod
+    def _profile_to_array(profile):
+        """Converts a Profile to a (2, N) array [P, T], or a TwoSectorTerminator
+        to a (3, N) array [P, T_cold, T_hot].  Pressures are in Pa,
+        temperatures in K."""
+        if isinstance(profile, TwoSectorTerminator):
+            cold = profile.cold.profile
+            hot = profile.hot.profile
+            return np.array([
+                np.asarray(cold.pressures, dtype=np.float64),
+                np.asarray(cold.temperatures, dtype=np.float64),
+                np.asarray(hot.temperatures, dtype=np.float64)])
+        return np.array([
+            np.asarray(profile.pressures, dtype=np.float64),
+            np.asarray(profile.temperatures, dtype=np.float64)])
+
+    @staticmethod
+    def _init_random_samples(retrieval_result):
+        """Creates the empty lists that _record_random_sample fills."""
+        retrieval_result.random_transit_depths = []
+        retrieval_result.random_eclipse_depths = []
+        retrieval_result.random_transit_TP_profiles = []
+        retrieval_result.random_eclipse_TP_profiles = []
+        # random_TP_profiles holds the dayside (eclipse) profiles when
+        # eclipse data are fit, and the terminator (transit) profiles
+        # otherwise.  It is kept for backwards compatibility.
+        retrieval_result.random_TP_profiles = []
+        retrieval_result.pointwise_lnlikes = []
+
+    @staticmethod
+    def _record_random_sample(retrieval_result, transit_info, eclipse_info,
+                              pointwise_lnlike):
+        """Appends the spectra and T/P profiles of one posterior sample to
+        the random_* lists of retrieval_result.
+
+        Transit T/P profiles are (2, N) arrays [P, T], or (3, N) arrays
+        [P, T_cold, T_hot] for 1.5-D terminator retrievals."""
+        if transit_info is not None:
+            retrieval_result.random_transit_depths.append(
+                transit_info["unbinned_depths"] *
+                transit_info["unbinned_correction_factors"])
+            retrieval_result.random_transit_TP_profiles.append(
+                transit_info["full_TP_profile"])
+        if eclipse_info is not None:
+            retrieval_result.random_eclipse_depths.append(
+                eclipse_info["unbinned_eclipse_depths"])
+            retrieval_result.random_eclipse_TP_profiles.append(
+                eclipse_info["full_TP_profile"])
+        if eclipse_info is not None:
+            retrieval_result.random_TP_profiles.append(
+                eclipse_info["full_TP_profile"])
+        elif transit_info is not None:
+            retrieval_result.random_TP_profiles.append(
+                transit_info["full_TP_profile"])
+        retrieval_result.pointwise_lnlikes.append(pointwise_lnlike)
 
     def _ln_prob(self, params, transit_calc, eclipse_calc, fit_info, measured_transit_depths,
                  measured_transit_errors, measured_eclipse_depths,
@@ -423,10 +487,7 @@ class CombinedRetriever:
             fit_info, divisors, new_labels)
         equal_samples = np.copy(sampler.flatchain)
         np.random.shuffle(equal_samples)
-        retrieval_result.random_transit_depths = []
-        retrieval_result.random_eclipse_depths = []
-        retrieval_result.random_TP_profiles = []        
-        retrieval_result.pointwise_lnlikes = []
+        self._init_random_samples(retrieval_result)
         for params in equal_samples[:num_final_samples]:
             ret = self._ln_like(
                 params, transit_calc, eclipse_calc, fit_info,
@@ -434,13 +495,9 @@ class CombinedRetriever:
                 eclipse_depths, eclipse_errors, ret_best_fit=True)
             if ret == -np.inf: continue
             _, transit_info, _, eclipse_info = ret
-                
-            if transit_depths is not None:
-                retrieval_result.random_transit_depths.append(transit_info["unbinned_depths"] * transit_info["unbinned_correction_factors"])
-            if eclipse_depths is not None:
-                retrieval_result.random_eclipse_depths.append(eclipse_info["unbinned_eclipse_depths"])
-                retrieval_result.random_TP_profiles.append(np.array([eclipse_info["P_profile"], eclipse_info["T_profile"]]))
-            retrieval_result.pointwise_lnlikes.append(self.params_to_lnlike[tuple(params)])
+            self._record_random_sample(
+                retrieval_result, transit_info, eclipse_info,
+                self.params_to_lnlike[tuple(params)])
         retrieval_result.loo_total, retrieval_result.loos, retrieval_result.loo_ks = psisloo(np.array(retrieval_result.pointwise_lnlikes))
         return retrieval_result
 
@@ -580,21 +637,15 @@ class CombinedRetriever:
             best_fit_eclipse_depths, best_fit_eclipse_info,
             fit_info, divisors, new_labels)
 
-        retrieval_result.random_transit_depths = []
-        retrieval_result.random_eclipse_depths = []
-        retrieval_result.random_TP_profiles = []
-        retrieval_result.pointwise_lnlikes = []
+        self._init_random_samples(retrieval_result)
         for params in equal_samples[:num_final_samples]:
             _, transit_info, _, eclipse_info = self._ln_like(
                 params, transit_calc, eclipse_calc, fit_info,
                 transit_depths, transit_errors,
                 eclipse_depths, eclipse_errors, ret_best_fit=True)
-            if transit_depths is not None:
-                retrieval_result.random_transit_depths.append(transit_info["unbinned_depths"] * transit_info["unbinned_correction_factors"])
-            if eclipse_depths is not None:
-                retrieval_result.random_eclipse_depths.append(eclipse_info["unbinned_eclipse_depths"])
-                retrieval_result.random_TP_profiles.append(np.array([eclipse_info["P_profile"], eclipse_info["T_profile"]]))
-            retrieval_result.pointwise_lnlikes.append(self.params_to_lnlike[tuple(params)])
+            self._record_random_sample(
+                retrieval_result, transit_info, eclipse_info,
+                self.params_to_lnlike[tuple(params)])
 
         #Calculate LOO-CV scores
         retrieval_result.loo_total, retrieval_result.loos, retrieval_result.loo_ks = psisloo(np.array(retrieval_result.pointwise_lnlikes))
@@ -687,21 +738,15 @@ class CombinedRetriever:
             best_fit_eclipse_depths, best_fit_eclipse_info,
             fit_info, divisors, new_labels)
 
-        retrieval_result.random_transit_depths = []
-        retrieval_result.random_eclipse_depths = []
-        retrieval_result.random_TP_profiles = []
-        retrieval_result.pointwise_lnlikes = []
+        self._init_random_samples(retrieval_result)
         for params in equal_samples[:num_final_samples]:
             _, transit_info, _, eclipse_info = self._ln_like(
                 params, transit_calc, eclipse_calc, fit_info,
                 transit_depths, transit_errors,
                 eclipse_depths, eclipse_errors, ret_best_fit=True)
-            if transit_depths is not None:                                                
-                retrieval_result.random_transit_depths.append(transit_info["unbinned_depths"] * transit_info["unbinned_correction_factors"])
-            if eclipse_depths is not None:
-                retrieval_result.random_eclipse_depths.append(eclipse_info["unbinned_eclipse_depths"])
-                retrieval_result.random_TP_profiles.append(np.array([eclipse_info["P_profile"], eclipse_info["T_profile"]]))
-            retrieval_result.pointwise_lnlikes.append(self.params_to_lnlike[tuple(params)])
+            self._record_random_sample(
+                retrieval_result, transit_info, eclipse_info,
+                self.params_to_lnlike[tuple(params)])
 
         #Calculate LOO-CV scores
         retrieval_result.loo_total, retrieval_result.loos, retrieval_result.loo_ks = psisloo(np.array(retrieval_result.pointwise_lnlikes))
@@ -798,10 +843,7 @@ class CombinedRetriever:
             best[0], best[1], best[2], best[3],
             fit_info, divisors, new_labels)
 
-        retrieval_result.random_transit_depths = []
-        retrieval_result.random_eclipse_depths = []
-        retrieval_result.random_TP_profiles = []
-        retrieval_result.pointwise_lnlikes = []
+        self._init_random_samples(retrieval_result)
         for params in equal_samples[:num_final_samples]:
             pointwise = self.params_to_lnlike.get(tuple(params))
             if pointwise is None:
@@ -815,16 +857,8 @@ class CombinedRetriever:
                 transit_depths, transit_errors,
                 eclipse_depths, eclipse_errors,
                 zero_opacities=zero_opacities, ret_best_fit=True)
-            if transit_depths is not None:
-                retrieval_result.random_transit_depths.append(
-                    transit_info["unbinned_depths"] *
-                    transit_info["unbinned_correction_factors"])
-            if eclipse_depths is not None:
-                retrieval_result.random_eclipse_depths.append(
-                    eclipse_info["unbinned_eclipse_depths"])
-                retrieval_result.random_TP_profiles.append(np.array([
-                    eclipse_info["P_profile"], eclipse_info["T_profile"]]))
-            retrieval_result.pointwise_lnlikes.append(pointwise)
+            self._record_random_sample(
+                retrieval_result, transit_info, eclipse_info, pointwise)
 
         retrieval_result.loo_total, retrieval_result.loos, \
             retrieval_result.loo_ks = psisloo(

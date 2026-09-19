@@ -23,5 +23,5 @@ for z, logZ in enumerate(all_logZ):
 
 abundances = np.array(abundances)
 print(abundances.shape)
-#np.save("with_condensation.npy", abundances)
-np.save("gas_only.npy", abundances)
+np.save("with_condensation.npy", abundances)
+#np.save("gas_only.npy", abundances)

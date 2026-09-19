@@ -1,6 +1,6 @@
 name = "platon"
-__version__ = "6.3.1"
-__md5sum__ = "4deb845a63909ed8d0a74de2af5f0a48"
+__version__ = "7.0"
+__md5sum__ = "8a209c5acecef4805d64d2714587df2f"
 __data_url__ = "https://astro.uchicago.edu/~mz/data_{}.zip".format(__md5sum__)
 
 # Capture small GPU kernel sequences into CUDA graphs (XLA's default

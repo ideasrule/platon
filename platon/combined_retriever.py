@@ -659,8 +659,7 @@ class CombinedRetriever:
                       include_condensation=True, rad_method="xsec",
                       maxiter=None, maxcall=None, nlive=250,
                       num_final_samples=100, zero_opacities=[],
-                      multinest_kwargs={},
-                      **dynesty_kwargs):
+                      multinest_kwargs={}):
         """multinest_kwargs are forwarded to pymultinest.solve/run (e.g.
         sampling_efficiency, const_efficiency_mode, evidence_tolerance,
         multimodal, outputfiles_basename)."""

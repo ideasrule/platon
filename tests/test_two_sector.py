@@ -18,14 +18,13 @@ class TestTwoSectorTypes(unittest.TestCase):
     def test_guillot_equation_and_units(self):
         T_irr = 1400
         log_gamma = -1
-        log_k_th = -2
+        log_k_th = -3  # m^2/kg
         T_int = 150
         profile = Profile.guillot(
             T_irr, log_gamma, log_k_th, T_int, M_jup, R_jup)
 
         gamma = 10**log_gamma
-        tau = profile.pressures * (0.1 * 10**log_k_th) / \
-            (G * M_jup / R_jup**2)
+        tau = profile.pressures * 10**log_k_th / (G * M_jup / R_jup**2)
         incoming = 2 / 3 + 2 / (3 * gamma) * (
             1 + (gamma * tau / 2 - 1) * np.exp(-gamma * tau))
         incoming += 2 * gamma / 3 * (1 - tau**2 / 2) * \

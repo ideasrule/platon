@@ -162,7 +162,8 @@ class Profile:
 
     @classmethod
     def guillot(cls, T_irr, log_gamma, log_k_th, T_int, Mp, Rp):
-        """The one-visible-channel profile from Guillot (2010)."""
+        """The one-visible-channel profile from Guillot (2010).  log_k_th is
+        log10 of the thermal opacity in m^2/kg; all other inputs are SI."""
         gamma = 10**log_gamma
         kappa_th = 10**log_k_th
         tau = _default_pressures() * kappa_th / (G * Mp / Rp**2)
@@ -179,7 +180,9 @@ class Profile:
     def radiative_solution(cls, T_star, Rs, a, Mp, Rp, beta,
                            log_k_th, log_gamma, log_gamma2=None,
                            alpha=0, T_int=100, **ignored_kwargs):
-        '''From Line et al. 2013: http://adsabs.harvard.edu/abs/2013ApJ...775..137L, Equation 13 - 16'''
+        '''From Line et al. 2013: http://adsabs.harvard.edu/abs/2013ApJ...775..137L, Equation 13 - 16.
+        log_k_th is log10 of the thermal opacity in m^2/kg; all other inputs
+        are SI.'''
 
         k_th = 10.0**log_k_th
         gamma = 10.0**log_gamma

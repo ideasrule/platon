@@ -66,15 +66,15 @@ Using Guillot profiles
 ======================
 
 The same interface can use a Guillot profile instead of an isothermal one.
-The thermal opacity ``log_k_th`` is in log10(cm2/g).  It and ``T_int`` are
+The thermal opacity ``log_k_th`` is in log10(m2/kg).  It and ``T_int`` are
 shared by the two sectors, while ``T_irr`` and ``log_gamma`` may differ::
 
   cold_profile = Profile.guillot(
-      T_irr=1200, log_gamma=-1.2, log_k_th=-2,
+      T_irr=1200, log_gamma=-1.2, log_k_th=-3,
       T_int=150, Mp=Mp, Rp=Rp)
 
   hot_profile = Profile.guillot(
-      T_irr=1700, log_gamma=-0.6, log_k_th=-2,
+      T_irr=1700, log_gamma=-0.6, log_k_th=-3,
       T_int=150, Mp=Mp, Rp=Rp)
 
   terminator = TwoSectorTerminator(
@@ -165,7 +165,7 @@ uniform fit parameters::
       "cold.T_irr", "hot.T_irr", 600, 2600)
   fit_info.add_uniform_fit_param("cold.log_gamma", -3, 1)
   fit_info.add_uniform_fit_param("hot.log_gamma", -3, 1)
-  fit_info.add_uniform_fit_param("log_k_th", -4, 1)
+  fit_info.add_uniform_fit_param("log_k_th", -5, 0)
 
 The standard spectrum and corner plots work with a 1.5-D result.  The
 temperature-profile plot draws the cold and hot posterior regions separately::

@@ -245,7 +245,7 @@ class Plotter():
         plt.plot(METRES_TO_UM * retrieval_result.best_fit_transit_dict["unbinned_wavelengths"],
                     retrieval_result.best_fit_transit_dict["unbinned_depths"] * 
                     retrieval_result.best_fit_transit_dict['unbinned_correction_factors'],
-                    color='r', label="Calculated (unbinned)", zorder=3)
+                    color='r', label="Calculated (unbinned, unshifted)", zorder=3)
         plt.errorbar(METRES_TO_UM * retrieval_result.transit_wavelengths,
                         retrieval_result.transit_depths,
                         yerr = retrieval_result.transit_errors,

@@ -38,4 +38,6 @@ calculator = EclipseDepthCalculator()
 wavelengths, depths, _ = calculator.compute_depths(p, 0.75 * R_sun, 1.13 * M_jup, 1.13 * R_jup, 5052, logZ=None, CO_ratio=None, custom_abundances=atm_abundances)
 
 plt.semilogx(1e6 * wavelengths, depths)
+plt.xlabel("Wavelength ($\mu$m)")
+plt.ylabel("Eclipse depth")
 plt.show()

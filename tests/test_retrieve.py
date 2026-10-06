@@ -28,7 +28,7 @@ class TestRetriever(unittest.TestCase):
             logZ = 1, CO_ratio = 0.53,
             log_cloudtop_P = 3,
             log_scatt_factor = 0,
-            scatt_slope = 4, error_multiple = 1)
+            scatt_slope = 4, error_excess = 0)
 
         self.fit_info.add_gaussian_fit_param('Rs', 0.02*R_sun)
         self.fit_info.add_gaussian_fit_param('Mp', 0.04*M_jup)
@@ -41,7 +41,7 @@ class TestRetriever(unittest.TestCase):
             self.fit_info.add_uniform_fit_param('log_cloudtop_P', -0.9, 4, 0, 3)
             self.fit_info.add_uniform_fit_param('log_scatt_factor', 0, 3, 0, 1)
             self.fit_info.add_uniform_fit_param('scatt_slope', 0, 10, 1, 5)
-            self.fit_info.add_uniform_fit_param('error_multiple', 0, np.inf, 0.1, 10)
+            self.fit_info.add_uniform_fit_param('error_excess', 0, np.inf, 0, 1e-4)
         else:
             self.fit_info.add_uniform_fit_param('Rp', 9e7, 12e7)
             self.fit_info.add_uniform_fit_param('T', 800, 1800)
@@ -50,7 +50,7 @@ class TestRetriever(unittest.TestCase):
             self.fit_info.add_uniform_fit_param('log_cloudtop_P', -0.99, 4)
             self.fit_info.add_uniform_fit_param('log_scatt_factor', 0, 1)
             self.fit_info.add_uniform_fit_param('scatt_slope', 1, 5)
-            self.fit_info.add_uniform_fit_param('error_multiple', 0.1, 10)
+            self.fit_info.add_uniform_fit_param('error_excess', 0, 1e-4)
 
 
     def test_emcee(self):
@@ -102,7 +102,7 @@ class TestRetriever(unittest.TestCase):
             logZ = 1, CO_ratio = 0.53,
             log_cloudtop_P = 3,
             log_scatt_factor = 0,
-            scatt_slope = 4, error_multiple = 1,
+            scatt_slope = 4, error_excess = 0,
             T0_transit=1200, log_P1_transit=2.4, alpha1=2, alpha2=2,
             log_P3_transit=6, T3_transit=1400,
             transit_profile_type="parametric",
@@ -207,6 +207,17 @@ class TestRetriever(unittest.TestCase):
                 CombinedRetriever.get_default_fit_info(
                     Rs=R_sun, Mp=M_jup, Rp=R_jup, T=1200,
                     transit_offsets=offsets)
+
+        # error_excess adds in quadrature to the measured errors
+        fit_info = get_fit_info(error_excess=50e-6)
+        retriever.params_to_lnlike = {}
+        lnlikes = retriever._ln_like(
+            [1200], calc, None, fit_info, depths, errors, None, None,
+            lnlike_per_point=True)
+        total_errors = np.sqrt(errors**2 + (50e-6)**2)
+        expected_lnlikes = -0.5 * ((base - depths)**2 / total_errors**2 +
+                                   np.log(2 * np.pi * total_errors**2))
+        self.assertTrue(np.allclose(lnlikes, expected_lnlikes))
 
         # Adjacent ranges are fine, as is reusing a name for eclipse data
         CombinedRetriever.get_default_fit_info(

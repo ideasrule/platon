@@ -61,7 +61,7 @@ retriever = CombinedRetriever()
 fit_info = retriever.get_default_fit_info(
     Rs=Rs, Mp=Mp, Rp=Rp,
     logZ=0, CO_ratio=0.53, log_cloudtop_P=4, cloud_fraction=0.7,
-    log_scatt_factor=0, scatt_slope=4, error_multiple=1, T_star=T_star,
+    log_scatt_factor=0, scatt_slope=4, error_excess=0, T_star=T_star,
     transit_profile_type="parametric",
     T0_transit=T0, log_P1_transit=log_P1, alpha1_transit=alpha1,
     alpha2_transit=alpha2, log_P3_transit=log_P3, T3_transit=T3)
@@ -74,7 +74,7 @@ fit_info.add_uniform_fit_param('logZ', -1, 3)
 fit_info.add_uniform_fit_param('CO_ratio', 0.2, 1.5)
 fit_info.add_uniform_fit_param('log_cloudtop_P', -0.99, 5)
 fit_info.add_uniform_fit_param('cloud_fraction', 0, 1)
-fit_info.add_uniform_fit_param('error_multiple', 0.5, 5)
+fit_info.add_uniform_fit_param('error_excess', 0, 1e-4)
 
 # The terminator T/P profile
 fit_info.add_uniform_fit_param('T0_transit', 400, 1600)

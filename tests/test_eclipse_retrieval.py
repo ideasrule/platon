@@ -52,7 +52,7 @@ class TestEclipseRetrieval(unittest.TestCase):
         fit_info = retriever.get_default_fit_info(
             Rs=Rs, Mp=1.13 * M_jup, Rp=R_guess,
             logZ=0, CO_ratio=0.53, log_cloudtop_P=np.inf,
-            log_scatt_factor=0, scatt_slope=4, error_multiple=1, T_star=5052,
+            log_scatt_factor=0, scatt_slope=4, error_excess=0, T_star=5052,
             T = 1295,
             T0=1295, log_P1=2.4, alpha1=2, alpha2=2, log_P3=6, T3=1295,
             profile_type="parametric" #"isothermal" for isothermal fitting
@@ -66,7 +66,7 @@ class TestEclipseRetrieval(unittest.TestCase):
 
         fit_info.add_uniform_fit_param('Rp', 0.9*R_guess, 1.1*R_guess)
         fit_info.add_uniform_fit_param("logZ", -1, 3)
-        fit_info.add_uniform_fit_param("error_multiple", 0.5, 5)
+        fit_info.add_uniform_fit_param("error_excess", 0, 1e-4)
 
         fit_info.add_uniform_fit_param("T0", 1000, 3000)
         fit_info.add_uniform_fit_param("log_P1", 1, 4)

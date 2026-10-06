@@ -71,7 +71,7 @@ To retrieve atmospheric parameters, look at retrieve_dynesty.py, retrieve_multin
   fit_info.add_uniform_fit_param("logZ", -1, 3)
   fit_info.add_uniform_fit_param("CO_ratio", 0.2, 2)
   fit_info.add_uniform_fit_param("log_cloudtop_P", -0.99, 5)
-  fit_info.add_uniform_fit_param("error_multiple", 0.5, 5)
+  fit_info.add_uniform_fit_param("error_excess", 0, 1e-4)
   
   # Run nested sampling. You can replace run_dynesty with run_pymultinest,
   # which is sometimes much faster and more robust
@@ -91,7 +91,9 @@ of 10^5 Pa), the temperature of the isothermal atmosphere, and the
 metallicity.  Other parameters you can retrieve for include the stellar radius,
 the planetary mass, C/O ratio,
 the cloudtop pressure, the scattering factor, the scattering slope,
-and the error multiple--which multiplies all errors by a constant.  We recommend
+and the error excess--an extra error, in units of transit depth, that is added
+in quadrature to all errors to account for underestimated errors or scatter the
+model cannot explain.  We recommend
 either fixing the stellar radius and planetary mass to the measured values, or
 setting Gaussian priors on them to account for measurement errors.
 

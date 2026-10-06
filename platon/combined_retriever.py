@@ -52,7 +52,8 @@ class CombinedRetriever:
             elif abs(value) < 1e4: format_str = "{:.2f}"
             else: format_str = "{:.2e}"
 
-            if name in self._offset_names(fit_info):
+            if name == "error_excess" or \
+               name in self._offset_names(fit_info):
                 unit = "ppm"
                 value *= 1e6
             
@@ -189,7 +190,7 @@ class CombinedRetriever:
         scatt_factor = 10.0**params_dict["log_scatt_factor"]
         scatt_slope = params_dict["scatt_slope"]
         cloudtop_P = 10.0**params_dict["log_cloudtop_P"]
-        error_multiple = params_dict["error_multiple"]
+        error_excess = params_dict["error_excess"]
         Rs = params_dict["Rs"]
         Mp = params_dict["Mp"]
         T_star = params_dict["T_star"]
@@ -278,7 +279,7 @@ class CombinedRetriever:
 
                 self._apply_offsets(calculated_transit_depths, params_dict, "transit")
                 residuals = calculated_transit_depths - measured_transit_depths
-                scaled_errors = error_multiple * measured_transit_errors
+                scaled_errors = np.sqrt(measured_transit_errors**2 + error_excess**2)
                 ln_likelihood = np.append(ln_likelihood, -0.5 * (residuals**2 / scaled_errors**2 + np.log(2 * np.pi * scaled_errors**2)))
                 
             if measured_eclipse_depths is not None:
@@ -303,7 +304,7 @@ class CombinedRetriever:
                     part_size = part_size, ri=ri, P_quench=P_quench, full_output=ret_best_fit, zero_opacities=zero_opacities)
                 self._apply_offsets(calculated_eclipse_depths, params_dict, "eclipse")
                 residuals = calculated_eclipse_depths - measured_eclipse_depths
-                scaled_errors = error_multiple * measured_eclipse_errors
+                scaled_errors = np.sqrt(measured_eclipse_errors**2 + error_excess**2)
                 ln_likelihood = np.append(ln_likelihood, -0.5 * (residuals**2 / scaled_errors**2 + np.log(2 * np.pi * scaled_errors**2)))
 
         except AtmosphereError as e:
@@ -889,7 +890,7 @@ class CombinedRetriever:
                              free_retrieval=False,
                              log_cloudtop_P=np.inf, cloud_fraction=1,
                              log_scatt_factor=0,
-                             scatt_slope=4, error_multiple=1, T_star=None,
+                             scatt_slope=4, error_excess=0, T_star=None,
                              T_spot=None, spot_cov_frac=None,
                              frac_scale_height=1,
                              log_number_density=-np.inf, log_part_size=-6,
@@ -919,6 +920,12 @@ class CombinedRetriever:
         log_k : float
             log10 of the imaginary component of the refractive index of haze
             particles.  Set to -np.inf for k=0
+        error_excess : float
+            Extra error, in units of transit/eclipse depth, added in
+            quadrature to every measured error: the likelihood uses
+            sqrt(error**2 + error_excess**2).  Fit for it (e.g. with a
+            uniform prior from 0 to 1e-4) to account for underestimated
+            errors or scatter the model cannot explain.
         transit_offsets : dict, optional
             Per-instrument offsets for transit data, as a dict mapping each
             offset parameter name to the (start, end) indices of the data it

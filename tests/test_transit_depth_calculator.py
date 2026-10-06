@@ -17,9 +17,7 @@ from platon.constants import M_jup, R_sun, R_jup, G, AMU, k_B
 
 
 def isothermal_profile(T):
-    profile = Profile()
-    profile.set_isothermal(T)
-    return profile
+    return Profile.isothermal(T)
 
 
 class TestTransitDepthCalculator(unittest.TestCase):
@@ -116,8 +114,7 @@ class TestTransitDepthCalculator(unittest.TestCase):
             isothermal_profile(T), Rs, Mp, Rp)
 
         # A non-isothermal profile must give a different spectrum
-        profile = Profile()
-        profile.set_parametric(1300, 1e-3, 0.3, 0.5, 1e4, 2000)
+        profile = Profile.parametric(1300, 1e-3, 0.3, 0.5, 1e4, 2000)
         _, profile_depths, _ = depth_calculator.compute_depths(
             profile, Rs, Mp, Rp)
         self.assertFalse(np.allclose(profile_depths, iso_depths))

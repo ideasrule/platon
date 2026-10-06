@@ -94,11 +94,10 @@ class TwoSectorTerminator:
         """Build a terminator from a retrieval parameter dictionary."""
         sectors = []
         for label in ("cold", "hot"):
-            profile = Profile()
             if self.profile_type == "isothermal":
-                profile.set_isothermal(params[f"{label}.T"])
+                profile = Profile.isothermal(params[f"{label}.T"])
             else:
-                profile.set_guillot(
+                profile = Profile.guillot(
                     params[f"{label}.T_irr"],
                     params[f"{label}.log_gamma"],
                     params["log_k_th"],

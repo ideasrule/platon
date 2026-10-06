@@ -11,9 +11,7 @@ from platon.transit_depth_calculator import TransitDepthCalculator
 
 
 def isothermal(T):
-    profile = Profile()
-    profile.set_isothermal(T)
-    return profile
+    return Profile.isothermal(T)
 
 
 class TestTwoSectorTypes(unittest.TestCase):
@@ -22,8 +20,7 @@ class TestTwoSectorTypes(unittest.TestCase):
         log_gamma = -1
         log_k_th = -2
         T_int = 150
-        profile = Profile()
-        profile.set_guillot(
+        profile = Profile.guillot(
             T_irr, log_gamma, log_k_th, T_int, M_jup, R_jup)
 
         gamma = 10**log_gamma
@@ -151,10 +148,8 @@ class TestTwoSectorForwardModel(unittest.TestCase):
             np.testing.assert_allclose(actual, expected)
 
     def test_guillot_sectors_and_cloud_fraction_error(self):
-        cold_profile = Profile()
-        hot_profile = Profile()
-        cold_profile.set_guillot(1200, -1, -2, 150, self.Mp, self.Rp)
-        hot_profile.set_guillot(1600, -0.5, -2, 150, self.Mp, self.Rp)
+        cold_profile = Profile.guillot(1200, -1, -2, 150, self.Mp, self.Rp)
+        hot_profile = Profile.guillot(1600, -0.5, -2, 150, self.Mp, self.Rp)
         model = TwoSectorTerminator(
             TerminatorSector(cold_profile),
             TerminatorSector(hot_profile), 0.5)
@@ -167,10 +162,8 @@ class TestTwoSectorForwardModel(unittest.TestCase):
                 model, self.Rs, self.Mp, self.Rp, cloud_fraction=0.5)
 
     def test_guillot_sectors_share_quench_pressure(self):
-        cold_profile = Profile()
-        hot_profile = Profile()
-        cold_profile.set_guillot(1100, -1.2, -2, 150, self.Mp, self.Rp)
-        hot_profile.set_guillot(1700, -0.4, -2, 150, self.Mp, self.Rp)
+        cold_profile = Profile.guillot(1100, -1.2, -2, 150, self.Mp, self.Rp)
+        hot_profile = Profile.guillot(1700, -0.4, -2, 150, self.Mp, self.Rp)
         cold = TerminatorSector(cold_profile)
         hot = TerminatorSector(hot_profile)
         model = TwoSectorTerminator(cold, hot, 0.4)

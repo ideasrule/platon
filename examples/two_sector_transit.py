@@ -11,16 +11,14 @@ Rs = 1.16 * R_sun
 Mp = 0.73 * M_jup
 Rp = 1.40 * R_jup
 
-cold_profile = Profile()
-cold_profile.set_isothermal(900)
+cold_profile = Profile.isothermal(900)
 cold = TerminatorSector(
     cold_profile,
     cloudtop_pressure=1e3,
     scattering_factor=100,
     scattering_slope=6)
 
-hot_profile = Profile()
-hot_profile.set_isothermal(1400)
+hot_profile = Profile.isothermal(1400)
 hot = TerminatorSector(
     hot_profile,
     cloudtop_pressure=1e6,

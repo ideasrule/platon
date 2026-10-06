@@ -28,8 +28,7 @@ example covers 70% of the terminator with a gray cloud deck at 0.1 bar::
   from platon.TP_profile import Profile
   from platon.transit_depth_calculator import TransitDepthCalculator
 
-  profile = Profile()
-  profile.set_isothermal(1200)
+  profile = Profile.isothermal(1200)
 
   calculator = TransitDepthCalculator()
   wavelengths, depths, info = calculator.compute_depths(

@@ -28,9 +28,7 @@ for s in included_species:
 #plt.show()
 
 #Use the exact P/T points from the file as the atmospheric layers
-p = Profile()
-p.pressures = P_profile
-p.temperatures = T_profile
+p = Profile(P_profile, T_profile)
 
 calculator = TransitDepthCalculator()
 wavelengths, depths, _ = calculator.compute_depths(p, 0.75 * R_sun, 1.13 * M_jup, 1.13 * R_jup, logZ=None, CO_ratio=None, custom_abundances=atm_abundances)

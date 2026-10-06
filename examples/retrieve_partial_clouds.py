@@ -39,9 +39,8 @@ Rp = 1.4 * R_jup
 T_star = 6091
 T0, log_P1, alpha1, alpha2, log_P3, T3 = 850, 2.4, 2, 2, 6, 1400
 
-true_profile = Profile()
-true_profile.set_parametric(T0, 10.0**log_P1, alpha1, alpha2,
-                            10.0**log_P3, T3)
+true_profile = Profile.parametric(T0, 10.0**log_P1, alpha1, alpha2,
+                                  10.0**log_P3, T3)
 
 calc = TransitDepthCalculator()
 calc.change_wavelength_bins(bins)

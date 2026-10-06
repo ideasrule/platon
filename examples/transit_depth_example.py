@@ -11,8 +11,7 @@ Mp = 0.73 * M_jup     #Mass of planet
 Rp = 1.40 * R_jup      #Radius of planet
 T = 1200              #Temperature of isothermal part of the atmosphere
 
-p = Profile()
-p.set_isothermal(T)
+p = Profile.isothermal(T)
 
 #create a TransitDepthCalculator object and compute wavelength dependent transit depths
 depth_calculator = TransitDepthCalculator()

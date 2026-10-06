@@ -34,16 +34,14 @@ haze::
   Mp = 0.73 * M_jup
   Rp = 1.40 * R_jup
 
-  cold_profile = Profile()
-  cold_profile.set_isothermal(900)
+  cold_profile = Profile.isothermal(900)
   cold = TerminatorSector(
       cold_profile,
       cloudtop_pressure=1e3,
       scattering_factor=100,
       scattering_slope=6)
 
-  hot_profile = Profile()
-  hot_profile.set_isothermal(1400)
+  hot_profile = Profile.isothermal(1400)
   hot = TerminatorSector(
       hot_profile,
       cloudtop_pressure=1e6,
@@ -71,13 +69,11 @@ The same interface can use a Guillot profile instead of an isothermal one.
 The thermal opacity ``log_k_th`` is in log10(cm2/g).  It and ``T_int`` are
 shared by the two sectors, while ``T_irr`` and ``log_gamma`` may differ::
 
-  cold_profile = Profile()
-  cold_profile.set_guillot(
+  cold_profile = Profile.guillot(
       T_irr=1200, log_gamma=-1.2, log_k_th=-2,
       T_int=150, Mp=Mp, Rp=Rp)
 
-  hot_profile = Profile()
-  hot_profile.set_guillot(
+  hot_profile = Profile.guillot(
       T_irr=1700, log_gamma=-0.6, log_k_th=-2,
       T_int=150, Mp=Mp, Rp=Rp)
 

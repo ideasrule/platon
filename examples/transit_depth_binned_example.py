@@ -33,8 +33,7 @@ R_guess = 1.4 * R_jup
 T_guess = 1200
 
 
-p = Profile()
-p.set_isothermal(T_guess)
+p = Profile.isothermal(T_guess)
 
 depth_calculator = TransitDepthCalculator()
 depth_calculator.change_wavelength_bins(bins)

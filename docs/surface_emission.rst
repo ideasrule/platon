@@ -33,6 +33,6 @@ In surface_example.py, set Psurf to a negligible value, set the atmospheric temp
     abundances[key] *= 0
   abundances["N2"] += 1
   ...
-  p.set_isothermal(surface_temp)
+  p = Profile.isothermal(surface_temp)
 
 This is way overkill because the first and third steps alone should be enough to simulate an airless body, but better safe than sorry. 

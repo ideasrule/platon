@@ -8,18 +8,20 @@ To use the eclipse depth calculator, first create a temperature-pressure
 profile::
 
   from platon.TP_profile import Profile
-  p = Profile()
-  p.set_from_radiative_solution(T_star, Rs, a, Mp, Rp, beta, log_k_th, log_gamma, log_gamma2, alpha, T_int)
+  p = Profile.radiative_solution(T_star, Rs, a, Mp, Rp, beta, log_k_th, log_gamma, log_gamma2, alpha, T_int)
 
 This creates a parametric T-P profile according to `Line et al 2013 <https://arxiv.org/pdf/1304.5561.pdf>`_, which is an extension of the Guillot et al 2010 parameterization.  We recommend the use of this profile.
 
 Alternatively::
   
   from platon.TP_profile import Profile
-  p = Profile()
-  p.set_parametric(1200, 500, 0.5, 0.6, 1e6, 1900)
+  p = Profile.parametric(1200, 500, 0.5, 0.6, 1e6, 1900)
 
 This creates a parametric T-P profile according to `Madhusudhan & Seager 2009 <https://arxiv.org/pdf/0910.1347.pdf>`_.  The parameters are: T\ :sub:`0`\, P\ :sub:`1`\, α\ :sub:`1`\, α\ :sub:`2`\, P\ :sub:`3`\, T\ :sub:`3`\.  P\ :sub:`0` \ is set to 10\ :sup:`-4` \ Pa, while P\ :sub:`2` \ and T\ :sub:`2` \ are derived from the six specified parameters.
+
+Other options are ``Profile.isothermal(T)``, ``Profile.guillot(...)`` (Guillot 2010), and ``Profile.from_arrays(P_profile, T_profile)``, which interpolates an arbitrary profile onto PLATON's default pressure grid.  To use your own pressure grid as-is, create the profile directly::
+
+  p = Profile(pressures, temperatures)
 
 Then, call the eclipse depth calculator::
 

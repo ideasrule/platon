@@ -72,7 +72,7 @@ class TransitDepthCalculator:
         t_p_profile : Profile or TwoSectorTerminator
             A Profile object describing the T/P profile, or a cold and hot
             TwoSectorTerminator. For an isothermal Profile, use
-            Profile.set_isothermal.
+            Profile.isothermal.
         star_radius : float
             Radius of the star
         planet_mass : float

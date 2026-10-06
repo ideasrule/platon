@@ -30,9 +30,7 @@ for s in included_species:
 #plt.legend()
 #plt.show()
 
-p = Profile()
-p.pressures = np.asarray(P_profile)
-p.temperatures = np.asarray(T_profile)
+p = Profile(P_profile, T_profile)
 
 calculator = EclipseDepthCalculator()
 wavelengths, depths, _ = calculator.compute_depths(p, 0.75 * R_sun, 1.13 * M_jup, 1.13 * R_jup, 5052, logZ=None, CO_ratio=None, custom_abundances=atm_abundances)

@@ -8,7 +8,7 @@ from platon.constants import R_sun, AU, R_earth, M_earth
 
 #Are you trying to generate emission spectra of an airless planet?
 #Set Psurf=2e-4 (a very low value), set the atmospheric temperature to
-#surface_temp with p.set_isothermal(surface_temp), and set the atmospheric
+#surface_temp with p = Profile.isothermal(surface_temp), and set the atmospheric
 #composition to something with no features (e.g. abundances["N2"] += 1,
 #after getting rid of the CO2 and CO).
 
@@ -37,8 +37,7 @@ bins = np.array([[5, 5.33], [5.33, 5.66], [5.66, 6], [6, 6.33], [6.33, 6.66], [6
 calc.change_wavelength_bins(bins)
 
 #define TP profile
-p = Profile()
-p.set_isothermal(1000)
+p = Profile.isothermal(1000)
 
 wavelengths, depths, info_dict = calc.compute_depths(
     p, Rs, Mp, Rp, T_star, 

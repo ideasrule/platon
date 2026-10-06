@@ -137,22 +137,20 @@ class Plotter():
         else:
             equal_samples = self._get_equal_samples(retrieval_result)
             indices = np.random.choice(len(equal_samples), num_samples)
-            t_p_profile = Profile()
-            profile_pressures = _np.asarray(t_p_profile.pressures)
             temperature_arr = []
             for index in indices:
                 params_dict = fit_info._interpret_param_array(
                     equal_samples[index])
-                t_p_profile.set_from_params_dict(
+                t_p_profile = Profile.from_params_dict(
                     profile_type, params_dict, suffix=suffix)
                 temperature_arr.append(_np.asarray(t_p_profile.temperatures))
+            profile_pressures = _np.asarray(t_p_profile.pressures)
             temperature_arr = np.asarray(temperature_arr)
 
         if best_dict is not None and "full_TP_profile" in best_dict:
             best_pressures, best_temperatures = best_dict["full_TP_profile"]
         else:
-            t_p_profile = Profile()
-            t_p_profile.set_from_params_dict(
+            t_p_profile = Profile.from_params_dict(
                 profile_type, best_params_dict, suffix=suffix)
             best_pressures = _np.asarray(t_p_profile.pressures)
             best_temperatures = _np.asarray(t_p_profile.temperatures)

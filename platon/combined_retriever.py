@@ -252,8 +252,7 @@ class CombinedRetriever:
                        params_dict.get("T_transit") is None and T is None:
                         raise ValueError(
                             "Must fit for T if using transit depths")
-                    transit_profile = Profile()
-                    transit_profile.set_from_params_dict(
+                    transit_profile = Profile.from_params_dict(
                         transit_profile_type, params_dict, suffix="_transit")
                     transit_profiles = (transit_profile,)
                 else:
@@ -287,8 +286,7 @@ class CombinedRetriever:
                     raise ValueError(
                         "Must fit for T when profile_type is isothermal")
 
-                t_p_profile = Profile()
-                t_p_profile.set_from_params_dict(
+                t_p_profile = Profile.from_params_dict(
                     params_dict["profile_type"], params_dict)
 
                 if np.any(np.isnan(t_p_profile.temperatures)):

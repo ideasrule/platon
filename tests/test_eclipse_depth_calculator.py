@@ -16,8 +16,7 @@ class TestEclipseDepthCalculator(unittest.TestCase):
     def test_isothermal(self):
         Ts = 5700
         Tp = 1500
-        p = Profile()
-        p.set_isothermal(Tp)
+        p = Profile.isothermal(Tp)
         calc = EclipseDepthCalculator()
         wavelengths, depths, info_dict = calc.compute_depths(p, R_sun, M_jup, R_jup, Ts, full_output=True)
                 

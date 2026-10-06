@@ -56,7 +56,7 @@ fit_info = retriever.get_default_fit_info(
     a = 0.03142 * AU,
     log_k_th = -2.52, log_gamma=-0.8, log_gamma2=-0.8, alpha=0.5, beta=1,
     profile_type="radiative_solution", #"isothermal" for isothermal fitting
-    offset_start=0, offset_end=len(wfc3_bins)
+    eclipse_offsets={"offset_wfc3": (0, len(wfc3_bins))}
     )
 
 #Add fitting parameters - this specifies which parameters you want to fit
@@ -74,7 +74,7 @@ fit_info.add_uniform_fit_param("alpha", 0, 0.5)
 fit_info.add_uniform_fit_param("beta", 0, 2)
 
 #Nuisance parameters
-fit_info.add_gaussian_fit_param("offset_eclipse", 39e-6)
+fit_info.add_gaussian_fit_param("offset_wfc3", 39e-6)
 
 #Use Nested Sampling to do the fitting
 result = retriever.run_dynesty(None, None, None,

@@ -9,7 +9,6 @@ from dynesty import plotting as dyplot
 import dynesty.utils
 import copy
 import pickle
-import sys
 
 from .psis import psisloo
 from .transit_depth_calculator import TransitDepthCalculator
@@ -53,7 +52,7 @@ class CombinedRetriever:
             elif abs(value) < 1e4: format_str = "{:.2f}"
             else: format_str = "{:.2e}"
 
-            if name in ["offset_transit", "offset_eclipse"]:
+            if name in self._offset_names(fit_info):
                 unit = "ppm"
                 value *= 1e6
             
@@ -142,6 +141,26 @@ class CombinedRetriever:
                             sector.cloudtop_pressure
                         calculator._validate_params(
                             sector.profile.temperatures, logZ, ratio, cloudtop)
+
+    @staticmethod
+    def _offset_names(fit_info):
+        """Names of the per-instrument offset parameters in fit_info."""
+        names = set()
+        for key in ("transit_offsets", "eclipse_offsets"):
+            param = fit_info.all_params.get(key)
+            if param is not None and param.best_guess is not None:
+                names.update(param.best_guess.keys())
+        return names
+
+    @staticmethod
+    def _apply_offsets(depths, params_dict, kind):
+        """Adds each named offset in params_dict[kind + "_offsets"] (kind is
+        "transit" or "eclipse") to its index range of the calculated depths,
+        in place."""
+        offsets = params_dict.get(kind + "_offsets")
+        if offsets is not None:
+            for name, (start, end) in offsets.items():
+                depths[start:end] += params_dict[name]
 
     @staticmethod
     def convert_clr_to_vmr(clrs):
@@ -257,7 +276,7 @@ class CombinedRetriever:
                     frac_scale_height=frac_scale_height, number_density=number_density,
                     part_size=part_size, ri=ri, P_quench=P_quench, full_output=ret_best_fit, zero_opacities=zero_opacities)
 
-                calculated_transit_depths[params_dict["offset_start"] : params_dict["offset_end"]] += params_dict["offset_transit"]
+                self._apply_offsets(calculated_transit_depths, params_dict, "transit")
                 residuals = calculated_transit_depths - measured_transit_depths
                 scaled_errors = error_multiple * measured_transit_errors
                 ln_likelihood = np.append(ln_likelihood, -0.5 * (residuals**2 / scaled_errors**2 + np.log(2 * np.pi * scaled_errors**2)))
@@ -282,7 +301,7 @@ class CombinedRetriever:
                     T_spot=T_spot, spot_cov_frac=spot_cov_frac,
                     frac_scale_height=frac_scale_height, number_density=number_density,
                     part_size = part_size, ri=ri, P_quench=P_quench, full_output=ret_best_fit, zero_opacities=zero_opacities)
-                calculated_eclipse_depths[params_dict["offset_start"] : params_dict["offset_end"]] += params_dict["offset_eclipse"]
+                self._apply_offsets(calculated_eclipse_depths, params_dict, "eclipse")
                 residuals = calculated_eclipse_depths - measured_eclipse_depths
                 scaled_errors = error_multiple * measured_eclipse_errors
                 ln_likelihood = np.append(ln_likelihood, -0.5 * (residuals**2 / scaled_errors**2 + np.log(2 * np.pi * scaled_errors**2)))
@@ -876,7 +895,7 @@ class CombinedRetriever:
                              log_number_density=-np.inf, log_part_size=-6,
                              n=None, log_k=-np.inf,
                              log_P_quench=-99,
-                             offset_transit=0, offset_eclipse=0, offset_start=0, offset_end=sys.maxsize,
+                             transit_offsets=None, eclipse_offsets=None,
                              fit_vmr=False, fit_clr=False,
                              profile_type = 'isothermal',
                              transit_profile_type = 'isothermal',
@@ -900,11 +919,20 @@ class CombinedRetriever:
         log_k : float
             log10 of the imaginary component of the refractive index of haze
             particles.  Set to -np.inf for k=0
-        offset_transit : float
-            Offset of transit data, identified by indexes offset_start and offset_end (e.g. obs[offset_start:offset_end]).
-            A positive offset means the observed transit depths are decreased before comparing to the model.
-        offset_eclipse : float
-            Same as above, but for eclipse depths.
+        transit_offsets : dict, optional
+            Per-instrument offsets for transit data, as a dict mapping each
+            offset parameter name to the (start, end) indices of the data it
+            applies to, e.g. {"offset_niriss": (0, 1010),
+            "offset_nrs1": (1010, 2397)}.  Each name becomes a parameter
+            with a default value of 0, which can be fit for like any other
+            (e.g. fit_info.add_uniform_fit_param("offset_niriss", -2e-4, 2e-4)).
+            A positive offset means the observed depths are decreased
+            before comparing to the model.  Each range must satisfy
+            0 <= start < end, and ranges may not overlap.  Leave one
+            instrument without an offset to serve as the reference.
+        eclipse_offsets : dict, optional
+            Same as above, but for eclipse depths.  A name may appear in
+            both transit_offsets and eclipse_offsets to share one offset.
         profile_type : string
             "isothermal", "parametric" (Madhusudhan & Seager 2009) or
             "radiative_solution" (Line et al 2013) T/P profile
@@ -941,6 +969,32 @@ class CombinedRetriever:
                 raise TypeError(
                     "transit_terminator must be a TwoSectorTerminator")
             all_variables.update(transit_terminator.retrieval_defaults())
+
+        offset_names = set()
+        for kind, offsets in (("transit", transit_offsets),
+                              ("eclipse", eclipse_offsets)):
+            if offsets is None:
+                continue
+            for name, index_range in offsets.items():
+                if name in all_variables and name not in offset_names:
+                    raise ValueError(
+                        "Offset name {} conflicts with an existing "
+                        "parameter".format(name))
+                if len(index_range) != 2 or \
+                   not 0 <= index_range[0] < index_range[1]:
+                    raise ValueError(
+                        "Range for offset {} must be (start, end) with "
+                        "0 <= start < end".format(name))
+                all_variables[name] = 0
+                offset_names.add(name)
+
+            sorted_ranges = sorted(offsets.items(), key=lambda kv: kv[1][0])
+            for (name1, range1), (name2, range2) in zip(
+                    sorted_ranges, sorted_ranges[1:]):
+                if range1[1] > range2[0]:
+                    raise ValueError(
+                        "{} offsets {} {} and {} {} overlap".format(
+                            kind, name1, tuple(range1), name2, tuple(range2)))
         
         fit_info = FitInfo(all_variables)
         return fit_info

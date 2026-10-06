@@ -7,6 +7,7 @@ matplotlib.use("Agg")
 import dynesty
 
 from platon.combined_retriever import CombinedRetriever
+from platon.transit_depth_calculator import TransitDepthCalculator
 from platon.fit_info import FitInfo
 from platon.constants import R_sun, R_jup, M_jup
 from platon.errors import AtmosphereError
@@ -152,8 +153,67 @@ class TestRetriever(unittest.TestCase):
         run_both("CO_ratio", 1e-2, 0.53, 2.2)
 
         run_both("log_cloudtop_P", -4.1, 0, 5)
-        run_both("log_cloudtop_P", -4, 2, 5.1) 
-        
+        run_both("log_cloudtop_P", -4, 2, 5.1)
+
+    def test_multiple_offsets(self):
+        min_wavelength, max_wavelength, depths, errors = np.loadtxt(
+            "tests/testing_data/hd209458b_transit_depths", unpack=True)
+        bins = np.array([min_wavelength, max_wavelength]).T
+        n = len(depths)
+        a, b, c = n // 4, n // 2, 3 * n // 4
+
+        def get_fit_info(**kwargs):
+            fit_info = CombinedRetriever.get_default_fit_info(
+                Rs=1.19 * R_sun, Mp=0.73 * M_jup, Rp=1.4 * R_jup, T=1200,
+                **kwargs)
+            fit_info.add_uniform_fit_param("T", 800, 1800)
+            return fit_info
+
+        retriever = CombinedRetriever()
+        calc = TransitDepthCalculator()
+        calc.change_wavelength_bins(bins)
+
+        base = retriever._ln_like(
+            [1200], calc, None, get_fit_info(), depths, errors, None, None,
+            ret_best_fit=True)[0].copy()
+
+        offsets = {"offset_a": (0, a), "offset_b": (a, b),
+                   "offset_c": (c, n)}
+        fit_info = get_fit_info(transit_offsets=offsets)
+        fit_info.add_uniform_fit_param("offset_a", -1e-3, 1e-3)
+        fit_info.add_uniform_fit_param("offset_b", -1e-3, 1e-3)
+        # offset_c stays fixed at its value from all_params
+        fit_info.all_params["offset_c"].best_guess = 3e-5
+        shifted = retriever._ln_like(
+            [1200, 1e-4, -2e-4], calc, None, fit_info, depths, errors,
+            None, None, ret_best_fit=True)[0]
+
+        expected = np.zeros(n)
+        expected[0:a] += 1e-4
+        expected[a:b] -= 2e-4
+        expected[c:n] += 3e-5
+        self.assertTrue(np.allclose(shifted - base, expected, rtol=0,
+                                    atol=1e-12))
+
+        bad_offsets = [
+            {"T": (0, 5)},                         # name clash
+            {"offset_a": (0, 5), "offset_b": (4, 8)},  # overlap
+            {"offset_a": (3, 9), "offset_b": (5, 6)},  # containment
+            {"offset_a": (5, 5)},                  # empty range
+            {"offset_a": (-5, 3)},                 # negative index
+        ]
+        for offsets in bad_offsets:
+            with self.assertRaises(ValueError):
+                CombinedRetriever.get_default_fit_info(
+                    Rs=R_sun, Mp=M_jup, Rp=R_jup, T=1200,
+                    transit_offsets=offsets)
+
+        # Adjacent ranges are fine, as is reusing a name for eclipse data
+        CombinedRetriever.get_default_fit_info(
+            Rs=R_sun, Mp=M_jup, Rp=R_jup, T=1200,
+            transit_offsets={"offset_a": (0, 5), "offset_b": (5, 8)},
+            eclipse_offsets={"offset_a": (0, 3)})
+
 
 if __name__ == '__main__':
     unittest.main()

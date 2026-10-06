@@ -176,8 +176,11 @@ class TestTwoSectorForwardModel(unittest.TestCase):
             model, self.Rs, self.Mp, self.Rp,
             P_quench=P_quench, full_output=True)
 
+        # The forward model runs in float32 on the GPU, and the two-sector
+        # call compiles its own kernels, which can round differently from
+        # those of the single-sector calls (observed: ~1 float32 ulp)
         np.testing.assert_allclose(
-            depths, 0.4 * cold_depths + 0.6 * hot_depths)
+            depths, 0.4 * cold_depths + 0.6 * hot_depths, rtol=1e-6)
         for sector_info in info["sectors"].values():
             above = sector_info["P_profile"] <= P_quench
             for abundance in sector_info["atm_abundances"].values():

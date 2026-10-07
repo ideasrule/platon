@@ -323,24 +323,24 @@ class Plotter():
             plt.savefig(prefix + fname + "_optical_depth.png")
 
 
-    def plot_eclipse_contrib_func(self, eclipse_depth_dict, log_scale=False, prefix=None):
+    def plot_contrib_func(self, info_dict, log_scale=False, prefix=None):
         """
-        Input an eclipse depth dictionary created by the EclipseDepthCalculator
+        Input an info_dict created by the TransitDepthCalculator or EclipseDepthCalculator
         to plot emission contribution function as a function of wavelength and pressure.
         The log_scale parameter allows the user to toggle between plotting of the contribution 
         function in log or linear scale. 
         """
-        assert('contrib' in eclipse_depth_dict.keys())
+        assert('contrib' in info_dict)
 
         if log_scale:
-            contrib_func = np.log10(eclipse_depth_dict['contrib'].T)
+            contrib_func = np.log10(info_dict['contrib'].T)
             contrib_func[np.logical_or(np.isinf(contrib_func), contrib_func < -9.)] = np.nan
         else:
-            contrib_func = eclipse_depth_dict['contrib'].T
+            contrib_func = info_dict['contrib'].T
 
         plt.figure(figsize=(6,4))
-        plt.contourf(eclipse_depth_dict['unbinned_wavelengths'] * METRES_TO_UM, 
-                         np.log10(0.5 * (eclipse_depth_dict['P_profile'][1:] + eclipse_depth_dict['P_profile'][:-1]) / BAR_TO_PASCALS), contrib_func, cmap='magma_r', vmin=np.nanmin(contrib_func), vmax=np.nanmax(contrib_func))
+        plt.contourf(info_dict['unbinned_wavelengths'] * METRES_TO_UM, 
+                         np.log10(0.5 * (info_dict['P_profile'][1:] + info_dict['P_profile'][:-1]) / BAR_TO_PASCALS), contrib_func, cmap='magma_r', vmin=np.nanmin(contrib_func), vmax=np.nanmax(contrib_func))
 
         cbar = plt.colorbar(location='right')
         if log_scale:cbar.set_label('log (Contribution function)')
@@ -350,7 +350,7 @@ class Plotter():
         plt.ylabel('log (Pressure/bars)')
         plt.tight_layout()
         if prefix is not None:
-            plt.savefig(prefix + "_eclipse_contrib_func.png")
+            plt.savefig(prefix + "_contrib_func.png")
         
 
     def plot_atm_abundances(self, atm_info, min_abund=1e-9, prefix=None):

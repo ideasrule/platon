@@ -51,3 +51,4 @@ with open("retrieval_result_k2_18b.pkl", "wb") as f:
 plotter = Plotter()
 plotter.plot_retrieval_transit_spectrum(result, prefix="best_fit")
 plotter.plot_retrieval_corner(result, filename="corner.png")
+plotter.plot_contrib_func(result.best_fit_transit_dict, prefix="contrib")

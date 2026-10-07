@@ -42,12 +42,10 @@ class CombinedRetriever:
             if name == "Rp":
                 value /= R_jup
                 unit = "R_jup"
-            if name == "T" or name.endswith(".T") or \
-               name.endswith(".T_irr"):
+            if name == "T" or name.endswith(".T"):
                 unit = "K"
 
-            if name == "T" or name.endswith(".T") or \
-               name.endswith(".T_irr"):
+            if name == "T" or name.endswith(".T"):
                 format_str = "{:4.0f}"                
             elif abs(value) < 1e4: format_str = "{:.2f}"
             else: format_str = "{:.2e}"
@@ -118,7 +116,7 @@ class CombinedRetriever:
             best = [fit_info.all_params[name].best_guess
                     for name in fit_info.fit_param_names]
             params = fit_info._interpret_param_array(best)
-            rebuilt = terminator.from_params(params, params["Mp"], params["Rp"])
+            rebuilt = terminator.from_params(params)
             for sector in (rebuilt.cold, rebuilt.hot):
                 calculator._validate_params(
                     sector.profile.temperatures, params["logZ"],
@@ -257,7 +255,7 @@ class CombinedRetriever:
                     transit_profiles = (transit_profile,)
                 else:
                     transit_profile = transit_terminator.from_params(
-                        params_dict, Mp, Rp)
+                        params_dict)
                     transit_profiles = (
                         transit_profile.cold.profile,
                         transit_profile.hot.profile)
@@ -939,9 +937,9 @@ class CombinedRetriever:
             Same as above, but for eclipse depths.  A name may appear in
             both transit_offsets and eclipse_offsets to share one offset.
         profile_type : string
-            "isothermal", "parametric" (Madhusudhan & Seager 2009) or
-            "radiative_solution" (Line et al 2013) T/P profile
-            parameterizations.  This profile applies to the dayside, and is
+            "isothermal", "parametric" (Madhusudhan & Seager 2009),
+            "radiative_solution" (Line et al 2013), or "guillot" (Guillot
+            2010) T/P profile parameterizations.  This profile applies to the dayside, and is
             used for eclipse depths.
         transit_profile_type : string
             Same options as profile_type.  This profile applies to the
@@ -952,13 +950,18 @@ class CombinedRetriever:
             temperature is T_transit, falling back to T.
         transit_terminator : TwoSectorTerminator, optional
             A cold and hot terminator template for a 1.5-D transit retrieval.
-            Its named sector values are added to the returned FitInfo.
+            Its named sector values are added to the returned FitInfo.  For
+            Guillot sectors, the shared T_star, Rs, a, Mp, Rp, log_k_th, and
+            T_int are taken from the template; any of these also passed here
+            must agree with it.
         profile_kwargs : kwargs
             T/P profile arguments.  For "isothermal": T_day.  For "parametric":
             T0, P1, alpha1, alpha2, P3, T3.  For "radiative_solution":
             T_star, Rs, a, Mp, Rp, beta, log_k_th, log_gamma, log_gamma2,
             alpha, and T_int (optional).  We recommend that T_star, Rs, a, and
             Mp be fixed, and that T_int be omitted (which sets it to 100 K).
+            For "guillot": the same as "radiative_solution", without
+            log_gamma2 and alpha.
             
 
         Returns
@@ -973,7 +976,15 @@ class CombinedRetriever:
             if not isinstance(transit_terminator, TwoSectorTerminator):
                 raise TypeError(
                     "transit_terminator must be a TwoSectorTerminator")
-            all_variables.update(transit_terminator.retrieval_defaults())
+            for name, value in \
+                    transit_terminator.retrieval_defaults().items():
+                current = all_variables.get(name)
+                if name != "transit_terminator" and current is not None \
+                   and not np.isclose(current, value):
+                    raise ValueError(
+                        "{}={} conflicts with the transit_terminator's "
+                        "{}={}".format(name, current, name, value))
+                all_variables[name] = value
 
         offset_names = set()
         for kind, offsets in (("transit", transit_offsets),

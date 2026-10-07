@@ -18,7 +18,7 @@ class Profile:
 
         Profile.isothermal(1000)
         Profile.parametric(T0, P1, alpha1, alpha2, P3, T3)
-        Profile.guillot(T_irr, log_gamma, log_k_th, T_int, Mp, Rp)
+        Profile.guillot(T_star, Rs, a, Mp, Rp, beta, log_k_th, log_gamma)
         Profile.radiative_solution(T_star, Rs, a, Mp, Rp, beta, ...)
         Profile.from_opacity(T_irr, info_dict)
         Profile.from_arrays(P_profile, T_profile)
@@ -73,9 +73,10 @@ class Profile:
             return cls.radiative_solution(**params_dict)
         elif profile_type == "guillot":
             return cls.guillot(
-                params_dict["T_irr"], params_dict["log_gamma"],
-                params_dict["log_k_th"], params_dict.get("T_int", 100),
-                params_dict["Mp"], params_dict["Rp"])
+                params_dict["T_star"], params_dict["Rs"], params_dict["a"],
+                params_dict["Mp"], params_dict["Rp"], params_dict["beta"],
+                params_dict["log_k_th"], params_dict["log_gamma"],
+                params_dict.get("T_int", 100))
         else:
             raise ValueError("Unknown profile type: {}".format(profile_type))
 
@@ -161,28 +162,25 @@ class Profile:
                                   dict(T_irr=T_irr, T_int=T_int))
 
     @classmethod
-    def guillot(cls, T_irr, log_gamma, log_k_th, T_int, Mp, Rp):
-        """The one-visible-channel profile from Guillot (2010).  log_k_th is
-        log10 of the thermal opacity in m^2/kg; all other inputs are SI."""
-        gamma = 10**log_gamma
-        kappa_th = 10**log_k_th
-        tau = _default_pressures() * kappa_th / (G * Mp / Rp**2)
-        incoming = 2 / 3 + 2 / (3 * gamma) * (
-            1 + (gamma * tau / 2 - 1) * np.exp(-gamma * tau))
-        incoming += 2 * gamma / 3 * (1 - tau**2 / 2) * expn(2, gamma * tau)
-        T4 = 3 / 4 * T_int**4 * (tau + 2 / 3) + \
-            3 / 4 * T_irr**4 * incoming
-        return cls._parameterized(T4**0.25, "guillot", dict(
-            T_irr=T_irr, log_gamma=log_gamma, log_k_th=log_k_th,
-            T_int=T_int, Mp=Mp, Rp=Rp))
+    def guillot(cls, T_star, Rs, a, Mp, Rp, beta, log_k_th, log_gamma,
+                T_int=100):
+        """The one-visible-channel profile from Guillot (2010).  As in
+        radiative_solution, the irradiation temperature is
+        beta * T_star * sqrt(Rs / (2a)); this is radiative_solution with a
+        single visible channel.  log_k_th is log10 of the thermal opacity in
+        m^2/kg; all other inputs are SI."""
+        temperatures = cls.radiative_solution(
+            T_star, Rs, a, Mp, Rp, beta, log_k_th, log_gamma,
+            T_int=T_int).temperatures
+        return cls._parameterized(temperatures, "guillot", dict(
+            T_star=T_star, Rs=Rs, a=a, Mp=Mp, Rp=Rp, beta=beta,
+            log_k_th=log_k_th, log_gamma=log_gamma, T_int=T_int))
 
     @classmethod
     def radiative_solution(cls, T_star, Rs, a, Mp, Rp, beta,
                            log_k_th, log_gamma, log_gamma2=None,
                            alpha=0, T_int=100, **ignored_kwargs):
-        '''From Line et al. 2013: http://adsabs.harvard.edu/abs/2013ApJ...775..137L, Equation 13 - 16.
-        log_k_th is log10 of the thermal opacity in m^2/kg; all other inputs
-        are SI.'''
+        '''From Line et al. 2013: http://adsabs.harvard.edu/abs/2013ApJ...775..137L, Equation 13 - 16.'''
 
         k_th = 10.0**log_k_th
         gamma = 10.0**log_gamma

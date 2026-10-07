@@ -68,8 +68,7 @@ class Plotter():
             for index in indices:
                 params_dict = fit_info._interpret_param_array(
                     equal_samples[index])
-                model = terminator.from_params(
-                    params_dict, params_dict["Mp"], params_dict["Rp"])
+                model = terminator.from_params(params_dict)
                 cold_temperatures.append(
                     _np.asarray(model.cold.profile.temperatures))
                 hot_temperatures.append(
@@ -96,9 +95,7 @@ class Plotter():
                     np.percentile(hot_temperatures, 84, axis=0),
                     color="C3", alpha=0.25, label="hot 1$\\sigma$")
 
-            best = terminator.from_params(
-                best_params_dict, best_params_dict["Mp"],
-                best_params_dict["Rp"])
+            best = terminator.from_params(best_params_dict)
             plt.plot(best.cold.profile.temperatures, pressure_bars,
                      color="C0", label="cold best fit")
             plt.plot(best.hot.profile.temperatures, pressure_bars,

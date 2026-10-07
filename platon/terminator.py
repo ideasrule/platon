@@ -4,6 +4,9 @@ import numpy as np
 
 from .TP_profile import Profile
 
+# Guillot profile parameters that the cold and hot sectors must share
+GUILLOT_SHARED_PARAMS = ("T_star", "Rs", "a", "Mp", "Rp", "log_k_th", "T_int")
+
 
 @dataclass(frozen=True)
 class TerminatorSector:
@@ -45,17 +48,18 @@ class TwoSectorTerminator:
                 "cold and hot profiles must use the same isothermal or "
                 "Guillot parameterization")
 
-        order_name = "T" if kind == "isothermal" else "T_irr"
+        order_name = "T" if kind == "isothermal" else "beta"
         if self.cold.profile.profile_params[order_name] > \
            self.hot.profile.profile_params[order_name]:
             raise ValueError("cold profile must not be hotter than hot profile")
 
         if kind == "guillot":
-            for name in ("log_k_th", "T_int", "Mp", "Rp"):
+            for name in GUILLOT_SHARED_PARAMS:
                 if not np.isclose(self.cold.profile.profile_params[name],
                                   self.hot.profile.profile_params[name]):
                     raise ValueError(
-                        "Guillot sectors must share log_k_th, T_int, Mp, and Rp")
+                        "Guillot sectors must share {}".format(
+                            ", ".join(GUILLOT_SHARED_PARAMS)))
 
     @property
     def profile_type(self):
@@ -63,7 +67,7 @@ class TwoSectorTerminator:
 
     @property
     def order_parameter(self):
-        return "T" if self.profile_type == "isothermal" else "T_irr"
+        return "T" if self.profile_type == "isothermal" else "beta"
 
     def retrieval_defaults(self):
         """Return the named values used to reconstruct this terminator."""
@@ -80,30 +84,33 @@ class TwoSectorTerminator:
             if self.profile_type == "isothermal":
                 values[f"{label}.T"] = sector.profile.profile_params["T"]
             else:
-                values[f"{label}.T_irr"] = \
-                    sector.profile.profile_params["T_irr"]
+                values[f"{label}.beta"] = \
+                    sector.profile.profile_params["beta"]
                 values[f"{label}.log_gamma"] = \
                     sector.profile.profile_params["log_gamma"]
 
         if self.profile_type == "guillot":
-            values["log_k_th"] = self.cold.profile.profile_params["log_k_th"]
-            values["T_int"] = self.cold.profile.profile_params["T_int"]
+            for name in GUILLOT_SHARED_PARAMS:
+                values[name] = self.cold.profile.profile_params[name]
         return values
 
-    def from_params(self, params, planet_mass, planet_radius):
-        """Build a terminator from a retrieval parameter dictionary."""
+    def from_params(self, params):
+        """Build a terminator from a retrieval parameter dictionary.  Guillot
+        sectors take T_star, Rs, a, Mp, Rp, log_k_th, and T_int from params,
+        and beta and log_gamma from the sector-prefixed names (e.g.
+        cold.beta)."""
         sectors = []
         for label in ("cold", "hot"):
             if self.profile_type == "isothermal":
                 profile = Profile.isothermal(params[f"{label}.T"])
             else:
                 profile = Profile.guillot(
-                    params[f"{label}.T_irr"],
-                    params[f"{label}.log_gamma"],
+                    params["T_star"], params["Rs"], params["a"],
+                    params["Mp"], params["Rp"],
+                    params[f"{label}.beta"],
                     params["log_k_th"],
-                    params["T_int"],
-                    planet_mass,
-                    planet_radius)
+                    params[f"{label}.log_gamma"],
+                    params["T_int"])
             sectors.append(TerminatorSector(
                 profile,
                 10**params[f"{label}.log_cloudtop_P"],

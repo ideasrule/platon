@@ -25,7 +25,7 @@ First make a temperature profile and a :class:`.TerminatorSector` for each
 side.  The example below gives the cold sector a high cloud and a stronger
 haze::
 
-  from platon.constants import M_jup, R_jup, R_sun
+  from platon.constants import AU, M_jup, R_jup, R_sun
   from platon.terminator import TerminatorSector, TwoSectorTerminator
   from platon.TP_profile import Profile
   from platon.transit_depth_calculator import TransitDepthCalculator
@@ -66,23 +66,29 @@ Using Guillot profiles
 ======================
 
 The same interface can use a Guillot profile instead of an isothermal one.
-The thermal opacity ``log_k_th`` is in log10(m2/kg).  It and ``T_int`` are
-shared by the two sectors, while ``T_irr`` and ``log_gamma`` may differ::
+As in the Line et al. (2013) profile, the irradiation temperature is
+:math:`\beta T_\star \sqrt{R_\star/2a}`, where ``beta`` absorbs the albedo
+and heat redistribution.  The thermal opacity ``log_k_th`` is in
+log10(m2/kg).  The star, orbit, planet, ``log_k_th``, and ``T_int`` are
+shared by the two sectors, while ``beta`` and ``log_gamma`` may differ::
+
+  T_star = 6100
+  a = 0.047 * AU
 
   cold_profile = Profile.guillot(
-      T_irr=1200, log_gamma=-1.2, log_k_th=-3,
-      T_int=150, Mp=Mp, Rp=Rp)
+      T_star=T_star, Rs=Rs, a=a, Mp=Mp, Rp=Rp,
+      beta=0.82, log_k_th=-3, log_gamma=-1.2, T_int=150)
 
   hot_profile = Profile.guillot(
-      T_irr=1700, log_gamma=-0.6, log_k_th=-3,
-      T_int=150, Mp=Mp, Rp=Rp)
+      T_star=T_star, Rs=Rs, a=a, Mp=Mp, Rp=Rp,
+      beta=1.16, log_k_th=-3, log_gamma=-0.6, T_int=150)
 
   terminator = TwoSectorTerminator(
       TerminatorSector(cold_profile, cloudtop_pressure=1e3),
       TerminatorSector(hot_profile, cloudtop_pressure=1e6),
       cold_fraction=0.5)
 
-For a Guillot model, cold and hot refer to the ordering of ``T_irr``.  The
+For a Guillot model, cold and hot refer to the ordering of ``beta``.  The
 temperature profiles can cross at some pressures when their ``log_gamma``
 values differ.
 
@@ -158,11 +164,13 @@ The fraction prior is uniform in projected area.  The cloud and haze priors
 above are independent and have the same limits on both sectors.
 
 For a Guillot retrieval, replace the ordered temperature names with
-``cold.T_irr`` and ``hot.T_irr``.  The other profile parameters are ordinary
-uniform fit parameters::
+``cold.beta`` and ``hot.beta``.  The shared ``T_star``, ``Rs``, ``a``,
+``Mp``, and ``Rp`` are taken from the terminator; any of these also passed
+to ``get_default_fit_info`` must agree with it.  The other profile
+parameters are ordinary uniform fit parameters::
 
   fit_info.add_ordered_uniform_fit_params(
-      "cold.T_irr", "hot.T_irr", 600, 2600)
+      "cold.beta", "hot.beta", 0.4, 1.8)
   fit_info.add_uniform_fit_param("cold.log_gamma", -3, 1)
   fit_info.add_uniform_fit_param("hot.log_gamma", -3, 1)
   fit_info.add_uniform_fit_param("log_k_th", -5, 0)

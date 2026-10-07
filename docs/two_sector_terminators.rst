@@ -180,11 +180,10 @@ temperature-profile plot draws the cold and hot posterior regions separately::
 
   from platon.plotter import Plotter
 
-  plotter = Plotter()
-  plotter.plot_retrieval_transit_spectrum(result, prefix="two_sector")
-  plotter.plot_retrieval_corner(
+  Plotter.plot_retrieval_transit_spectrum(result, prefix="two_sector")
+  Plotter.plot_retrieval_corner(
       result, filename="two_sector_corner.png")
-  plotter.plot_retrieval_TP_profiles(result, prefix="two_sector")
+  Plotter.plot_retrieval_TP_profiles(result, prefix="two_sector")
 
 Interpreting the fraction
 =========================

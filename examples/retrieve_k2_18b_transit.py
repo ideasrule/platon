@@ -48,7 +48,6 @@ result = retriever.run_multinest(bins, depths, errors,
 with open("retrieval_result_k2_18b.pkl", "wb") as f:
     pickle.dump(result, f)
 
-plotter = Plotter()
-plotter.plot_retrieval_transit_spectrum(result, prefix="best_fit")
-plotter.plot_retrieval_corner(result, filename="corner.png")
-plotter.plot_contrib_func(result.best_fit_transit_dict, prefix="contrib")
+Plotter.plot_retrieval_transit_spectrum(result, prefix="best_fit")
+Plotter.plot_retrieval_corner(result, filename="corner.png")
+Plotter.plot_contrib_func(result.best_fit_transit_dict, prefix="contrib")

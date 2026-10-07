@@ -91,9 +91,8 @@ work for either result::
 
   from platon.plotter import Plotter
 
-  plotter = Plotter()
-  plotter.plot_retrieval_transit_spectrum(nautilus_result)
-  plotter.plot_retrieval_corner(nautilus_result)
+  Plotter.plot_retrieval_transit_spectrum(nautilus_result)
+  Plotter.plot_retrieval_corner(nautilus_result)
 
 Nautilus keeps its weighted posterior in ``result.samples`` and
 ``result.weights``.  PLATON only resamples it when equal-weight draws are

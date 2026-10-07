@@ -100,9 +100,8 @@ class TestNautilus(unittest.TestCase):
         self.assertEqual(result.final_logz, -12.5)
         self.assertTrue(result.success)
 
-        plotter = Plotter()
-        plotter.plot_retrieval_corner(result)
-        plotter.plot_retrieval_TP_profiles(result, num_samples=2)
+        Plotter.plot_retrieval_corner(result)
+        Plotter.plot_retrieval_TP_profiles(result, num_samples=2)
         plt.close("all")
 
 

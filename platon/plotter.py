@@ -16,12 +16,12 @@ default_style = ['default',
         }]
 plt.style.use(default_style)
 
-class Plotter():
-    def __init__(self):
-        pass
+class Plotter:
+    """Plotting functions for PLATON results.  All methods are class
+    methods, so call them directly, e.g. Plotter.plot_retrieval_corner(result)."""
 
-
-    def plot_retrieval_TP_profiles(self, retrieval_result, plot_samples=False,
+    @classmethod
+    def plot_retrieval_TP_profiles(cls, retrieval_result, plot_samples=False,
                                    plot_1sigma_bounds=True, num_samples=100,
                                    prefix=None, which=None):
         """
@@ -59,7 +59,7 @@ class Plotter():
                 terminator_param.best_guess
 
         if terminator is not None:
-            equal_samples = self._get_equal_samples(retrieval_result)
+            equal_samples = cls._get_equal_samples(retrieval_result)
             indices = np.random.choice(len(equal_samples), num_samples)
             profile_pressures = _np.asarray(
                 terminator.cold.profile.pressures)
@@ -132,7 +132,7 @@ class Plotter():
             profile_pressures = stored[0, 0]
             temperature_arr = stored[:, 1]
         else:
-            equal_samples = self._get_equal_samples(retrieval_result)
+            equal_samples = cls._get_equal_samples(retrieval_result)
             indices = np.random.choice(len(equal_samples), num_samples)
             temperature_arr = []
             for index in indices:
@@ -194,7 +194,8 @@ class Plotter():
         return equal_samples
 
 
-    def plot_retrieval_corner(self, retrieval_result, filename=None, **args):
+    @classmethod
+    def plot_retrieval_corner(cls, retrieval_result, filename=None, **args):
         """
         Input a RetrievalResult object to make a corner plot for the 
         posteriors of the fitted parameters.
@@ -221,7 +222,8 @@ class Plotter():
             fig.savefig(filename)
 
 
-    def plot_retrieval_transit_spectrum(self, retrieval_result, prefix=None):
+    @classmethod
+    def plot_retrieval_transit_spectrum(cls, retrieval_result, prefix=None):
         """
         Input a RetrievalResult object to make a plot of the data,
         best fit transit model both at native resolution and data's resolution, 
@@ -258,7 +260,8 @@ class Plotter():
             plt.savefig(prefix + "_transit.png")
 
 
-    def plot_retrieval_eclipse_spectrum(self, retrieval_result, prefix=None):
+    @classmethod
+    def plot_retrieval_eclipse_spectrum(cls, retrieval_result, prefix=None):
         """
         Input a RetrievalResult object to make a plot of the data,
         best fit eclipse model both at native resolution and data's resolution, 
@@ -294,7 +297,8 @@ class Plotter():
             plt.savefig(prefix + "_eclipse.png")
 
 
-    def plot_optical_depth(self, depth_dict, prefix=None):
+    @classmethod
+    def plot_optical_depth(cls, depth_dict, prefix=None):
         """
         Input a depth dictionary created by the TransitDepthCalculator or EclipseDepthCalculator
         to plot optical depth as a function of wavelength and pressure.
@@ -323,7 +327,8 @@ class Plotter():
             plt.savefig(prefix + fname + "_optical_depth.png")
 
 
-    def plot_contrib_func(self, info_dict, log_scale=False, prefix=None):
+    @classmethod
+    def plot_contrib_func(cls, info_dict, log_scale=False, prefix=None):
         """
         Input an info_dict created by the TransitDepthCalculator or EclipseDepthCalculator
         to plot emission contribution function as a function of wavelength and pressure.
@@ -353,7 +358,8 @@ class Plotter():
             plt.savefig(prefix + "_contrib_func.png")
         
 
-    def plot_atm_abundances(self, atm_info, min_abund=1e-9, prefix=None):
+    @classmethod
+    def plot_atm_abundances(cls, atm_info, min_abund=1e-9, prefix=None):
         """
         Input a depth dictionary created by the TransitDepthCalculator or EclipseDepthCalculator
         or a dictionary outputed by AtmsophereSolver

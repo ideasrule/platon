@@ -66,8 +66,7 @@ class TestRetriever(unittest.TestCase):
         
         retriever = CombinedRetriever()
         result = retriever.run_emcee(self.wavelength_bins, self.depths, self.errors, None, None, None, self.fit_info, nsteps=nsteps, nwalkers=nwalkers, include_condensation=True, num_final_samples=20)
-        plotter = Plotter()
-        plotter.plot_retrieval_transit_spectrum(result)
+        Plotter.plot_retrieval_transit_spectrum(result)
         self.assertTrue(isinstance(result, RetrievalResult))
         self.assertEqual(result.chain.shape, (nwalkers, nsteps, len(self.fit_info.fit_param_names)))
         self.assertEqual(result.lnprobability.shape, (nwalkers, nsteps))
@@ -77,8 +76,7 @@ class TestRetriever(unittest.TestCase):
         self.initialize(False)
         retriever = CombinedRetriever()
         result = retriever.run_dynesty(self.wavelength_bins, self.depths, self.errors, None, None, None, self.fit_info, maxcall=200, include_condensation=False, num_final_samples=20)
-        plotter = Plotter()
-        plotter.plot_retrieval_transit_spectrum(result)
+        Plotter.plot_retrieval_transit_spectrum(result)
         
         self.assertTrue(isinstance(result, RetrievalResult))
         self.assertEqual(result.samples.shape[1], len(self.fit_info.fit_param_names))

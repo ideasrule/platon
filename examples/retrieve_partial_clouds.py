@@ -93,6 +93,5 @@ with open("partial_clouds_retrieval_result.pkl", "wb") as f:
     pickle.dump(result, f)
 
 # --- Plot the best fit and the posterior ---
-plotter = Plotter()
-plotter.plot_retrieval_transit_spectrum(result, prefix="partial_clouds")
-plotter.plot_retrieval_corner(result, filename="partial_clouds_corner.png")
+Plotter.plot_retrieval_transit_spectrum(result, prefix="partial_clouds")
+Plotter.plot_retrieval_corner(result, filename="partial_clouds_corner.png")

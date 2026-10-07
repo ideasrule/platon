@@ -117,9 +117,8 @@ to plotting the posterior distribution and the best fit::
      pickle.dump(result, f)
 
   from platon.plotter import Plotter
-  plotter = Plotter()
-  plotter.plot_retrieval_transit_spectrum(result, prefix="best_fit")
-  plotter.plot_retrieval_corner(result, filename="dynesty_corner.png")
+  Plotter.plot_retrieval_transit_spectrum(result, prefix="best_fit")
+  Plotter.plot_retrieval_corner(result, filename="dynesty_corner.png")
 
 If you prefer using MCMC instead of Nested Sampling in your retrieval, you can
 use the run_emcee method instead of the run_dynesty method. Do note that

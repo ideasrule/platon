@@ -20,8 +20,7 @@ depth_calculator = TransitDepthCalculator()
 wavelengths, transit_depths, info_dict = depth_calculator.compute_depths(
     p, Rs, Mp, Rp, logZ=0, CO_ratio=0.5, cloudtop_pressure=1e4, full_output=True)
 
-plotter = Plotter()
-plotter.plot_contrib_func(info_dict, log_scale=False, prefix="contrib")
+Plotter.plot_contrib_func(info_dict, log_scale=False, prefix="contrib")
 plt.xscale("log")
 
 plt.figure()

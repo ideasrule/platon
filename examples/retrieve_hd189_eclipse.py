@@ -61,15 +61,14 @@ with open(output_dirname + "retrieval_result.pkl", "wb") as f:
     pickle.dump(result, f)
 
 
-plotter = Plotter()
 #Plot the spectrum and save it to best_fit.png
-plotter.plot_retrieval_eclipse_spectrum(result, prefix=output_dirname + 'best_fit')
+Plotter.plot_retrieval_eclipse_spectrum(result, prefix=output_dirname + 'best_fit')
 
 #Plot the 2D posteriors with "corner" package and save it to multinest_corner.png
-plotter.plot_retrieval_corner(result, filename=output_dirname + "corner.png")
+Plotter.plot_retrieval_corner(result, filename=output_dirname + "corner.png")
 
 #Plot the contribution function
-plotter.plot_contrib_func(result.best_fit_eclipse_dict, prefix=output_dirname + 'best_fit')
+Plotter.plot_contrib_func(result.best_fit_eclipse_dict, prefix=output_dirname + 'best_fit')
 
 #Plot the retrieved TP profiles
-plotter.plot_retrieval_TP_profiles(result, plot_samples=True, plot_1sigma_bounds=False, prefix=output_dirname + 'corner')
+Plotter.plot_retrieval_TP_profiles(result, plot_samples=True, plot_1sigma_bounds=False, prefix=output_dirname + 'corner')

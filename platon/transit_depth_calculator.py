@@ -353,7 +353,9 @@ class TransitDepthCalculator:
                 (1 - cloud_fraction) * np.array(clear_out.depths,
                                                 dtype=np.float64)
         atm_info["tau_los"] = np.array(out.tau_los)[:, :n - 1]
-        atm_info["contrib"] = np.array(out.absorption_fraction)[:, :n - 1]
+        atm_info["contrib"] = (out.tau_los * np.exp(-out.tau_los))[:,:n]
+        atm_info["contrib"] /= np.sum(atm_info["contrib"], axis=1)[:,np.newaxis]
+        
         atm_info["unbinned_wavelengths"] = np.array(self.atm.lambda_grid)
         atm_info["unbinned_stellar_spectrum"] = stellar
         atm_info["unbinned_correction_factors"] = corr

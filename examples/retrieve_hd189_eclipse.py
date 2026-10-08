@@ -27,9 +27,9 @@ fit_info = retriever.get_default_fit_info(
     Rs=0.75 * R_sun, Mp=1.123 * M_jup, Rp=1.117 * R_jup,
     logZ=1, CO_ratio=0.7, log_cloudtop_P=np.inf,
     log_scatt_factor=0, scatt_slope=4, error_excess=0, T_star=5052,
-    T_irr = 1692,
+    a = 0.03412 * AU,
     log_k_th = -2.52, log_gamma=-0.8, log_gamma2=-0.8, alpha=0.4, beta=1, T_int=100,
-    profile_type="line2013",
+    profile_type="radiative_solution",
     eclipse_offsets={"offset_f322": (0, 31)}
 )
 

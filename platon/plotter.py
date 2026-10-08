@@ -247,9 +247,17 @@ class Plotter:
                         retrieval_result.transit_depths,
                         yerr = retrieval_result.transit_errors,
                         fmt='.', color='k', label="Observed", zorder=5)
+        points = plt.scatter(
+            METRES_TO_UM * retrieval_result.transit_wavelengths,
+            retrieval_result.transit_depths,
+            c=retrieval_result["loos"], cmap="viridis",
+            s=25, edgecolors='k', linewidths=0.5,
+            label="Observed", zorder=6)
+        plt.colorbar(points, label="LOO log predictive density", pad=0.01)
+        
         plt.scatter(METRES_TO_UM * retrieval_result.transit_wavelengths,
                     retrieval_result.best_fit_transit_depths,
-                    color='b', label="Calculated (binned)", zorder=4)                        
+                    color='b', label="Calculated (binned)", zorder=4)     
                             
         plt.xlabel("Wavelength ($\mu m$)")
         plt.ylabel("Transit depth")
@@ -284,6 +292,14 @@ class Plotter:
                         retrieval_result.eclipse_depths,
                         yerr=retrieval_result.eclipse_errors,
                         fmt='.', color='k', label="Observed")
+        points = plt.scatter(
+            METRES_TO_UM * retrieval_result.eclipse_wavelengths,
+            retrieval_result.eclipse_depths,
+            c=retrieval_result["loos"], cmap="viridis",
+            s=25, edgecolors='k', linewidths=0.5,
+            label="Observed", zorder=6)
+        plt.colorbar(points, label="LOO log predictive density", pad=0.01)
+        
         plt.scatter(METRES_TO_UM * retrieval_result.eclipse_wavelengths,
                     retrieval_result.best_fit_eclipse_depths,
                     color='r', label="Calculated (binned)")

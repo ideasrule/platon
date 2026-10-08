@@ -4,6 +4,7 @@ import corner
 from .constants import METRES_TO_UM, BAR_TO_PASCALS, R_jup
 from .retrieval_result import RetrievalResult
 from . TP_profile import Profile
+from .terminator import label_by_temperature
 import numpy as _np
 import dynesty
 
@@ -201,20 +202,21 @@ class Plotter:
         posteriors of the fitted parameters.
         """
         assert(isinstance(retrieval_result, RetrievalResult))
+        # Two-sector parameters are shown as cold/hot by temperature
+        samples = retrieval_result.flatchain if retrieval_result.retrieval_type == "emcee" \
+            else retrieval_result.equal_samples if retrieval_result.retrieval_type == "pymultinest" \
+            else retrieval_result.samples
+        labels, samples = label_by_temperature(retrieval_result.fit_info, samples)
         if retrieval_result.retrieval_type in ("dynesty", "nautilus"):
-            fig = corner.corner(retrieval_result.samples, weights=retrieval_result.weights,
-                                range=[0.99] * retrieval_result.samples.shape[1],
-                                show_titles=True,
-                                labels=retrieval_result.fit_info.fit_param_names, **args)
+            fig = corner.corner(samples, weights=retrieval_result.weights,
+                                range=[0.99] * samples.shape[1],
+                                show_titles=True, labels=labels, **args)
         elif retrieval_result.retrieval_type == "pymultinest":
-            fig = corner.corner(retrieval_result.equal_samples,
-                                range=[0.99] * retrieval_result.equal_samples.shape[1],
-                                show_titles=True,
-                                labels=retrieval_result.fit_info.fit_param_names, **args)                
+            fig = corner.corner(samples, range=[0.99] * samples.shape[1],
+                                show_titles=True, labels=labels, **args)
         elif retrieval_result.retrieval_type == "emcee":
-            fig = corner.corner(retrieval_result.flatchain,
-                                range=[0.99] * retrieval_result.flatchain.shape[1],
-                                labels=retrieval_result.fit_info.fit_param_names, **args)
+            fig = corner.corner(samples, range=[0.99] * samples.shape[1],
+                                labels=labels, **args)
         else:
             assert(False)
 

@@ -88,9 +88,10 @@ shared by the two sectors, while ``beta`` and ``log_gamma`` may differ::
       TerminatorSector(hot_profile, cloudtop_pressure=1e6),
       cold_fraction=0.5)
 
-For a Guillot model, cold and hot refer to the ordering of ``beta``.  The
-temperature profiles can cross at some pressures when their ``log_gamma``
-values differ.
+Cold and hot refer to the mean temperature between 0.1 mbar and 1 bar,
+roughly where transmission spectra form.  Guillot profiles can cross when
+their ``log_gamma`` values differ, so the sector with the larger ``beta`` is
+not necessarily the hot one.
 
 Bonus: quench pressure
 ======================
@@ -129,9 +130,12 @@ Retrieving two sectors
 ======================
 
 Pass the terminator to
-:func:`.CombinedRetriever.get_default_fit_info`.  Temperatures use an ordered
-pair of uniform priors.  This treats both original temperature draws in the
-same way, then labels the lower one cold::
+:func:`.CombinedRetriever.get_default_fit_info`.  Its sectors are fitted
+under the neutral names ``sector1`` and ``sector2``, each with its own
+independent priors.  Afterwards, each sample's colder sector is labelled
+``cold``, with all of its parameters, so the corner plot and ``BestFit.txt``
+show ``cold.T``, ``hot.T``, ``cold.log_cloudtop_P``, ... and
+``cold_fraction``::
 
   from platon.combined_retriever import CombinedRetriever
 
@@ -141,14 +145,11 @@ same way, then labels the lower one cold::
       logZ=0, CO_ratio=0.53, T_star=6100,
       transit_terminator=terminator)
 
-  fit_info.add_ordered_uniform_fit_params(
-      "cold.T", "hot.T", 500, 2500)
-  fit_info.add_uniform_fit_param("cold.log_cloudtop_P", -0.99, 7)
-  fit_info.add_uniform_fit_param("hot.log_cloudtop_P", -0.99, 7)
-  fit_info.add_uniform_fit_param("cold.log_scatt_factor", -2, 6)
-  fit_info.add_uniform_fit_param("hot.log_scatt_factor", -2, 6)
-  fit_info.add_uniform_fit_param("cold.scatt_slope", 0, 12)
-  fit_info.add_uniform_fit_param("hot.scatt_slope", 0, 12)
+  for sector in ("sector1", "sector2"):
+      fit_info.add_uniform_fit_param(sector + ".T", 300, 3000)
+      fit_info.add_uniform_fit_param(sector + ".log_cloudtop_P", -0.99, 7)
+      fit_info.add_uniform_fit_param(sector + ".log_scatt_factor", -2, 6)
+      fit_info.add_uniform_fit_param(sector + ".scatt_slope", 0, 12)
 
   result = retriever.run_dynesty(
       bins, depths, errors,
@@ -158,21 +159,21 @@ same way, then labels the lower one cold::
 In this example the fraction stays fixed at its initial value of 0.5.  To fit
 it freely, add one more uniform prior before running the retrieval::
 
-  fit_info.add_uniform_fit_param("cold_fraction", 0, 1)
+  fit_info.add_uniform_fit_param("sector1.fraction", 0, 1)
 
-The fraction prior is uniform in projected area.  The cloud and haze priors
-above are independent and have the same limits on both sectors.
+The fraction prior is uniform in projected area.  Because the sectors are
+unordered, the raw posterior has two mirror-image modes, which the labelling
+combines.  Give both sectors the same priors.
 
-For a Guillot retrieval, replace the ordered temperature names with
-``cold.beta`` and ``hot.beta``.  The shared ``T_star``, ``Rs``, ``a``,
+For a Guillot retrieval, fit ``sector1.beta`` and ``sector2.beta`` instead
+of the temperatures.  The shared ``T_star``, ``Rs``, ``a``,
 ``Mp``, and ``Rp`` are taken from the terminator; any of these also passed
 to ``get_default_fit_info`` must agree with it.  The other profile
 parameters are ordinary uniform fit parameters::
 
-  fit_info.add_ordered_uniform_fit_params(
-      "cold.beta", "hot.beta", 0.4, 1.8)
-  fit_info.add_uniform_fit_param("cold.log_gamma", -3, 1)
-  fit_info.add_uniform_fit_param("hot.log_gamma", -3, 1)
+  for sector in ("sector1", "sector2"):
+      fit_info.add_uniform_fit_param(sector + ".beta", 0.4, 1.8)
+      fit_info.add_uniform_fit_param(sector + ".log_gamma", -3, 1)
   fit_info.add_uniform_fit_param("log_k_th", -5, 0)
 
 The standard spectrum and corner plots work with a 1.5-D result.  The

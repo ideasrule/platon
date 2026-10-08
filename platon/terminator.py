@@ -26,9 +26,18 @@ class TerminatorSector:
             raise ValueError("scattering_factor must be positive")
 
 
+def sector_temperature(profile):
+    """Mean temperature between 0.1 mbar and 1 bar, roughly where transmission
+    spectra form; the colder sector by this measure is the cold one."""
+    probed = (profile.pressures >= 10) & (profile.pressures <= 1e5)
+    return np.mean(profile.temperatures[probed])
+
+
 @dataclass(frozen=True)
 class TwoSectorTerminator:
-    """A cold and hot terminator sector combined by projected area."""
+    """A cold and hot terminator sector combined by projected area.
+    Retrievals sample the two sectors as sector1 and sector2 with independent
+    priors; each sample's colder sector is then labelled cold."""
 
     cold: TerminatorSector
     hot: TerminatorSector
@@ -48,9 +57,7 @@ class TwoSectorTerminator:
                 "cold and hot profiles must use the same isothermal or "
                 "Guillot parameterization")
 
-        order_name = "T" if kind == "isothermal" else "beta"
-        if self.cold.profile.profile_params[order_name] > \
-           self.hot.profile.profile_params[order_name]:
+        if sector_temperature(self.cold.profile) > sector_temperature(self.hot.profile):
             raise ValueError("cold profile must not be hotter than hot profile")
 
         if kind == "guillot":
@@ -65,17 +72,14 @@ class TwoSectorTerminator:
     def profile_type(self):
         return self.cold.profile.profile_type
 
-    @property
-    def order_parameter(self):
-        return "T" if self.profile_type == "isothermal" else "beta"
-
     def retrieval_defaults(self):
-        """Return the named values used to reconstruct this terminator."""
+        """Return the named values used to reconstruct this terminator, with
+        the cold sector as sector1 and the hot one as sector2."""
         values = {
             "transit_terminator": self,
-            "cold_fraction": self.cold_fraction,
+            "sector1.fraction": self.cold_fraction,
         }
-        for label, sector in (("cold", self.cold), ("hot", self.hot)):
+        for label, sector in (("sector1", self.cold), ("sector2", self.hot)):
             values[f"{label}.log_cloudtop_P"] = np.log10(
                 sector.cloudtop_pressure)
             values[f"{label}.log_scatt_factor"] = np.log10(
@@ -94,13 +98,13 @@ class TwoSectorTerminator:
                 values[name] = self.cold.profile.profile_params[name]
         return values
 
-    def from_params(self, params):
-        """Build a terminator from a retrieval parameter dictionary.  Guillot
+    def sectors_from_params(self, params):
+        """(sector1, sector2) of a retrieval parameter dictionary.  Guillot
         sectors take T_star, Rs, a, Mp, Rp, log_k_th, and T_int from params,
         and beta and log_gamma from the sector-prefixed names (e.g.
-        cold.beta)."""
+        sector1.beta)."""
         sectors = []
-        for label in ("cold", "hot"):
+        for label in ("sector1", "sector2"):
             if self.profile_type == "isothermal":
                 profile = Profile.isothermal(params[f"{label}.T"])
             else:
@@ -116,6 +120,40 @@ class TwoSectorTerminator:
                 10**params[f"{label}.log_cloudtop_P"],
                 10**params[f"{label}.log_scatt_factor"],
                 params[f"{label}.scatt_slope"]))
+        return sectors
 
-        return TwoSectorTerminator(
-            sectors[0], sectors[1], params["cold_fraction"])
+    def from_params(self, params):
+        """Build a terminator from a retrieval parameter dictionary, with the
+        colder of sector1 and sector2 as the cold sector."""
+        first, second = self.sectors_from_params(params)
+        fraction = params["sector1.fraction"]
+        if sector_temperature(first.profile) > sector_temperature(second.profile):
+            return TwoSectorTerminator(second, first, 1 - fraction)
+        return TwoSectorTerminator(first, second, fraction)
+
+
+def label_by_temperature(fit_info, samples):
+    """Rename each sample's sector1/sector2 parameters to cold/hot, moving all
+    of the colder sector's parameters to cold (and sector1.fraction to
+    cold_fraction).  Returns (names, samples).  A parameter fitted for only
+    one sector keeps its sector name."""
+    names = list(fit_info.fit_param_names)
+    param = fit_info.all_params.get("transit_terminator")
+    if param is None or param.best_guess is None:
+        return names, samples
+    samples = np.array(samples, float, ndmin=2)
+    swap = []
+    for row in samples:
+        first, second = param.best_guess.sectors_from_params(
+            fit_info._interpret_param_array(row))
+        swap.append(sector_temperature(first.profile) > sector_temperature(second.profile))
+    labelled, swap = samples.copy(), np.array(swap)
+    for i, name in enumerate(list(names)):
+        if name == "sector1.fraction":
+            labelled[swap, i] = 1 - samples[swap, i]
+            names[i] = "cold_fraction"
+        elif name.startswith("sector1.") and "sector2." + name[8:] in names:
+            j = names.index("sector2." + name[8:])
+            labelled[swap, i], labelled[swap, j] = samples[swap, j], samples[swap, i]
+            names[i], names[j] = "cold." + name[8:], "hot." + name[8:]
+    return names, labelled

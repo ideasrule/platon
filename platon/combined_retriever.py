@@ -679,7 +679,18 @@ class CombinedRetriever:
                       multinest_kwargs={}):
         """multinest_kwargs are forwarded to pymultinest.solve/run (e.g.
         sampling_efficiency, const_efficiency_mode, evidence_tolerance,
-        multimodal, outputfiles_basename)."""
+        multimodal, outputfiles_basename). maxiter sets MultiNest's max_iter
+        (0 means unlimited). maxcall is unsupported and must be None.
+        """
+        if maxcall is not None:
+            raise ValueError(
+                "MultiNest does not support maxcall; use maxiter instead")
+        if maxiter is not None:
+            if not isinstance(maxiter, (int, np.integer)) or maxiter < 0:
+                raise ValueError("maxiter must be a non-negative integer")
+            if "max_iter" in multinest_kwargs and \
+               multinest_kwargs["max_iter"] != maxiter:
+                raise ValueError("maxiter conflicts with multinest_kwargs['max_iter']")
         import pymultinest
         
         self.params_to_lnlike = {}
@@ -716,6 +727,8 @@ class CombinedRetriever:
             verbose=True, resume=False, n_live_points=nlive,
             outputfiles_basename="multinest_" + str(np.random.randint(1000)))
         solve_kwargs.update(multinest_kwargs)
+        if maxiter is not None:
+            solve_kwargs["max_iter"] = int(maxiter)
         basename = solve_kwargs["outputfiles_basename"]
         result = pymultinest.solve(LogLikelihood=multinest_ln_like, Prior=transform_prior,
                                    n_dims=num_dim, **solve_kwargs)
@@ -758,14 +771,20 @@ class CombinedRetriever:
 
         self._init_random_samples(retrieval_result)
         for params in equal_samples[:num_final_samples]:
+            pointwise = self.params_to_lnlike.get(tuple(params))
+            if pointwise is None:
+                pointwise = self._ln_like(
+                    params, transit_calc, eclipse_calc, fit_info,
+                    transit_depths, transit_errors,
+                    eclipse_depths, eclipse_errors,
+                    zero_opacities=zero_opacities, lnlike_per_point=True)
             _, transit_info, _, eclipse_info = self._ln_like(
                 params, transit_calc, eclipse_calc, fit_info,
                 transit_depths, transit_errors,
                 eclipse_depths, eclipse_errors,
                 zero_opacities=zero_opacities, ret_best_fit=True)
             self._record_random_sample(
-                retrieval_result, transit_info, eclipse_info,
-                self.params_to_lnlike[tuple(params)])
+                retrieval_result, transit_info, eclipse_info, pointwise)
 
         #Calculate LOO-CV scores
         retrieval_result.loo_total, retrieval_result.loos, retrieval_result.loo_ks = psisloo(np.array(retrieval_result.pointwise_lnlikes))

@@ -1,14 +1,12 @@
 from urllib.request import urlopen
 
-import importlib.resources
 from platon import __data_url__, __md5sum__
 
-import sys
 import zipfile
 import os
 import hashlib
-import ssl
-from pathlib import Path
+import tempfile
+from pathlib import Path, PurePosixPath
 
 def get_data_if_needed():
     basedir = Path(__file__).resolve().parent
@@ -23,53 +21,63 @@ def get_data_if_needed():
         
 
 def get_data(target_dir):
+    """Download and verify the archive before installing its data directory.
+
+    Staging is on the destination filesystem so the final directory rename
+    is atomic. Failed downloads or extraction leave no partial installation.
+    """
     MB_TO_BYTES = 2**20
-    filename = "data.zip"
+    target_dir = Path(target_dir)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    destination = target_dir / "data"
+    if destination.exists():
+        raise FileExistsError("Data directory already exists: {}".format(destination))
     print("Data URL", __data_url__)
 
-    #Bad! Dangerous! But necessary...get a real certificate, Caltech!
-    ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
-    u = urlopen(__data_url__, context=ctx)
-    f = open(filename, 'wb')
+    with tempfile.TemporaryDirectory(prefix=".platon-download-",
+                                     dir=target_dir) as staging_dir:
+        staging = Path(staging_dir)
+        filename = staging / "data.zip"
+        checksum = hashlib.md5()
+        # urlopen's default HTTPS context verifies certificates and hostnames.
+        with urlopen(__data_url__) as response, filename.open("wb") as output:
+            length = response.getheader("Content-Length")
+            file_size = int(length) if length is not None else None
+            bytes_downloaded = 0
+            while True:
+                block = response.read(2**20)
+                if not block:
+                    break
+                output.write(block)
+                checksum.update(block)
+                bytes_downloaded += len(block)
+                status = "{:.0f} MB".format(bytes_downloaded / MB_TO_BYTES)
+                if file_size:
+                    status += "  [{}%]".format(int(100 * bytes_downloaded / file_size))
+                print(status, end="\r")
 
-    #Only for Python 3, because we don't support Python 2 anymore
-    file_size = int(u.getheader("Content-Length"))
+        curr_md5sum = checksum.hexdigest()
+        if curr_md5sum != __md5sum__:
+            raise RuntimeError(
+                "Downloaded data file is corrupt (wrong md5sum). Please try again.")
 
-    print("Downloading {}: {:.0f} MB".format(
-        filename, file_size / MB_TO_BYTES))
+        print("\nExtracting...")
+        with zipfile.ZipFile(filename) as archive:
+            # The archive may only populate data/, never package source files
+            # or paths outside the staging directory.
+            for member in archive.infolist():
+                path = PurePosixPath(member.filename)
+                if path.is_absolute() or ".." in path.parts or \
+                   "\\" in member.filename or not path.parts or path.parts[0] != "data":
+                    raise ValueError("Invalid data archive path: {}".format(member.filename))
+            archive.extractall(staging)
 
-    bytes_downloaded = 0
-    block_sz = 8192
-    while True:
-        buffer = u.read(block_sz)
-        if not buffer:
-            break
-
-        bytes_downloaded += len(buffer)
-        f.write(buffer)
-        percentage = int(100 * bytes_downloaded / file_size)
-        status = "{:.0f} MB  [{}%]".format(
-            bytes_downloaded / MB_TO_BYTES, percentage)
-        print(status, end="\r")
-
-    f.close()
-
-    print("\nExtracting...")
-    zip_ref = zipfile.ZipFile(filename, 'r')
-    zip_ref.extractall(target_dir)
-    zip_ref.close()
-
+        if not (staging / "data").is_dir():
+            raise ValueError("Downloaded archive does not contain a data directory")
+        checksum_path = staging / "md5sum"
+        checksum_path.write_text(curr_md5sum)
+        # Install the checksum first: once data/ becomes visible, its checksum
+        # is already present. A failed rename leaves data/ absent and retryable.
+        os.replace(checksum_path, target_dir / "md5sum")
+        os.replace(staging / "data", destination)
     print("Extraction finished!")
-    with open(filename, "rb") as f:
-        curr_md5sum = hashlib.md5(f.read()).hexdigest()
-
-    if curr_md5sum != __md5sum__:
-        raise RuntimeError("Downloaded data file is corrupt (wrong md5sum).  Please try again.")
-
-    basedir = Path(__file__).resolve().parent
-    with open(basedir / "md5sum", "w") as f:
-        f.write(curr_md5sum)
-        
-    os.remove(filename)

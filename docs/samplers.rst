@@ -41,6 +41,10 @@ nearly identical::
 
   nautilus_result = retriever.run_nautilus(*data)
 
+For PyMultiNest, ``maxiter`` sets the iteration limit (``0`` means
+unlimited). ``maxcall`` is not supported and raises ``ValueError``;
+use ``maxiter`` when a bounded run is needed.
+
 The Nautilus call above uses PLATON's defaults of 2,000 live points, 10,000
 effective posterior samples, and 16 neural networks.  Written out explicitly,
 it is::

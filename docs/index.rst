@@ -29,7 +29,6 @@ in our second PLATON paper.**
    mie_scattering
    eclipse_depths
    surface_emission
-   visualizer
    questions_and_answers
    source/modules
 

@@ -123,6 +123,10 @@ class EclipseDepthCalculator:
         '''
         T_profile = np.asarray(t_p_profile.temperatures, dtype=np.float64)
         P_profile = np.asarray(t_p_profile.pressures, dtype=np.float64)
+        if np.isfinite(cloudtop_pressure) and \
+           cloudtop_pressure == surface_pressure:
+            raise ValueError(
+                "cloudtop_pressure and surface_pressure must differ when finite")
         bot_pressure = min(cloudtop_pressure, surface_pressure)
 
         has_surface = surface_pressure < cloudtop_pressure
@@ -158,6 +162,11 @@ class EclipseDepthCalculator:
             bot_pressure=bot_pressure,
             surface_pressure=surface_pressure, a_over_Rs=a_over_Rs,
             surface_temp=surface_temp, redist=redist)
+
+        if np.isfinite(cloudtop_pressure) and not has_surface:
+            assert host["n_above"] >= 2, (
+                "Clouds are too high: at least two pressure levels must be "
+                "above cloudtop_pressure for eclipse emission")
 
         cfg = cfg._replace(has_surface=has_surface,
                            surface_temp_given=surface_temp is not None)

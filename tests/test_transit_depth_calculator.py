@@ -210,11 +210,13 @@ class TestTransitDepthCalculator(unittest.TestCase):
         logZ = 0
         CO_ratio = 1.1
         calculator = TransitDepthCalculator()
+        min_temperature = calculator.atm.min_temperature
+        max_temperature = calculator.atm.max_temperature
         
         with self.assertRaises(AtmosphereError):
-            calculator.compute_depths(isothermal_profile(99), Rs, Mp, Rp, logZ=logZ, CO_ratio=CO_ratio)
+            calculator.compute_depths(isothermal_profile(min_temperature - 1), Rs, Mp, Rp, logZ=logZ, CO_ratio=CO_ratio)
         with self.assertRaises(AtmosphereError):
-            calculator.compute_depths(isothermal_profile(3001), Rs, Mp, Rp, logZ=logZ, CO_ratio=CO_ratio)
+            calculator.compute_depths(isothermal_profile(max_temperature + 1), Rs, Mp, Rp, logZ=logZ, CO_ratio=CO_ratio)
         with self.assertRaises(ValueError):
             calculator.compute_depths(isothermal_profile(T), Rs, Mp, Rp, logZ=-2.1, CO_ratio=CO_ratio)
         with self.assertRaises(ValueError):

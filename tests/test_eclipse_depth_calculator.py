@@ -48,5 +48,37 @@ class TestEclipseDepthCalculator(unittest.TestCase):
         self.assertLess(np.median(np.abs(approximate_depths - depths)/approximate_depths), 0.2)
 
 
+class TestEclipseBoundaries(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.calc = EclipseDepthCalculator(include_opacities=[], downsample=200)
+        cls.profile = Profile.isothermal(1000)
+
+    def compute(self, **kwargs):
+        return self.calc.compute_depths(
+            self.profile, R_sun, M_jup, R_jup, 5700,
+            logZ=None, CO_ratio=None, gases=["H2"], vmrs=[1.],
+            add_gas_absorption=False, add_scattering=False,
+            add_collisional_absorption=False, **kwargs)
+
+    def test_clouds_must_leave_at_least_one_visible_shell(self):
+        for pressure in [1.01e-4, self.profile.pressures[1]]:
+            with self.subTest(pressure=pressure), self.assertRaisesRegex(
+                    AssertionError, "Clouds are too high"):
+                self.compute(cloudtop_pressure=pressure)
+        _, depths, _ = self.compute(
+            cloudtop_pressure=self.profile.pressures[1] * 1.01)
+        self.assertTrue(np.all(np.isfinite(depths)))
+        self.assertTrue(np.all(depths > 0))
+
+    def test_equal_finite_boundaries_are_rejected(self):
+        with self.assertRaisesRegex(ValueError, "must differ when finite"):
+            self.compute(cloudtop_pressure=1000, surface_pressure=1000)
+
+    def test_both_infinite_boundaries_remain_valid(self):
+        _, depths, _ = self.compute()
+        self.assertTrue(np.all(np.isfinite(depths)))
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -77,15 +77,6 @@ platon.transit\_depth\_calculator module
     :show-inheritance:
     :special-members: __init__
 
-platon.visualizer module
-------------------------
-
-.. automodule:: platon.visualizer
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-
 Module contents
 ---------------
 

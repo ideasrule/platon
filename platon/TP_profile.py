@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.special import expn
 
-from .constants import h, c, k_B, G
+from .constants import G
 from .params import NUM_LAYERS, MIN_P, MAX_P
 
 
@@ -20,7 +20,6 @@ class Profile:
         Profile.parametric(T0, P1, alpha1, alpha2, P3, T3)
         Profile.guillot(T_star, Rs, a, Mp, Rp, beta, log_k_th, log_gamma)
         Profile.radiative_solution(T_star, Rs, a, Mp, Rp, beta, ...)
-        Profile.from_opacity(T_irr, info_dict)
         Profile.from_arrays(P_profile, T_profile)
         Profile.from_params_dict(profile_type, params_dict)
 
@@ -114,52 +113,6 @@ class Profile:
                 np.where(P < P3, T2 + np.log(P / P2)**2 / alpha2**2, T3))
         return cls._parameterized(temperatures, "parametric", dict(
             T0=T0, P1=P1, alpha1=alpha1, alpha2=alpha2, P3=P3, T3=T3))
-
-    @classmethod
-    def from_opacity(cls, T_irr, info_dict, visible_cutoff=0.8e-6,
-                     T_int=100):
-        wavelengths = np.asarray(info_dict["unbinned_wavelengths"],
-                                 dtype=np.float64)
-        d_lambda = np.diff(wavelengths)
-        d_lambda = np.append(d_lambda[0], d_lambda)
-
-        # Convert stellar spectrum from photons/time to energy/time
-        stellar_spectrum = np.asarray(info_dict["stellar_spectrum"],
-                                      dtype=np.float64) * h * c / wavelengths
-
-        # Convert planetary spectrum from energy/time/wavelength to energy/time
-        planet_spectrum = np.asarray(info_dict["planet_spectrum"],
-                                     dtype=np.float64) * d_lambda
-        absorption_coeffs = np.asarray(info_dict["absorption_coeff_atm"],
-                                       dtype=np.float64)
-        radii = np.asarray(info_dict["radii"], dtype=np.float64)
-
-        # Equation 49 here: https://arxiv.org/pdf/1006.4702.pdf
-        visible = wavelengths < visible_cutoff
-        thermal = wavelengths >= visible_cutoff
-        n = np.asarray(info_dict["P_profile"], dtype=np.float64) / k_B / \
-            np.asarray(info_dict["T_profile"], dtype=np.float64)
-        intermediate_n = (n[0:-1] + n[1:]) / 2.0
-        sigmas = absorption_coeffs / n[:, np.newaxis]
-        sigma_v = np.median(np.average(sigmas[:, visible], axis=1,
-                                       weights=stellar_spectrum[visible]))
-        sigma_th = np.median(np.average(sigmas[:, thermal], axis=1,
-                                        weights=planet_spectrum[thermal]))
-
-        gamma = sigma_v / sigma_th
-
-        dr = -np.diff(radii)
-        d_taus = sigma_th * intermediate_n * dr
-        taus = np.cumsum(d_taus)
-
-        e2 = expn(2, gamma * taus)
-        T4 = 3.0 / 4 * T_int**4 * (2.0 / 3 + taus) + \
-            3.0 / 4 * T_irr**4 * (2.0 / 3 + 2.0 / 3 / gamma *
-                                  (1 + (gamma * taus / 2 - 1) * np.exp(-gamma * taus)) +
-                                  2.0 * gamma / 3 * (1 - taus**2 / 2) * e2)
-        T = T4 ** 0.25
-        return cls._parameterized(np.append(T[0], T), "opacity",
-                                  dict(T_irr=T_irr, T_int=T_int))
 
     @classmethod
     def guillot(cls, T_star, Rs, a, Mp, Rp, beta, log_k_th, log_gamma,

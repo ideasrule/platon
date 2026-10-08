@@ -5,7 +5,6 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from platon.TP_profile import Profile
-from platon.eclipse_depth_calculator import EclipseDepthCalculator
 from platon.constants import M_jup, R_jup, R_sun, AU
 from platon.params import NUM_LAYERS
 
@@ -67,19 +66,6 @@ class TestTPProfile(unittest.TestCase):
                                            suffix="_transit")
         self.assertTrue(np.all(profile.temperatures == 1000))
 
-    def test_set_opacity(self):
-        # Can't easily test whether this is "right", but at least make sure it
-        # runs
-        p = Profile.isothermal(1200)
-        
-        calc = EclipseDepthCalculator()
-        wavelengths, depths, info_dict = calc.compute_depths(
-            p, R_sun, M_jup, R_jup, 5700, full_output=True)
-        p = Profile.from_opacity(1700, info_dict)
-        self.assertTrue(np.all(p.temperatures > 0))
-        self.assertTrue(np.all(~np.isnan(p.temperatures)))
-
-        
     def test_radiative_solution(self):
         # Parameters from Table 1 of http://iopscience.iop.org/article/10.1088/0004-637X/775/2/137/pdf
         p = Profile.radiative_solution(5040, 0.756*R_sun, 0.031 * AU, 0.885*M_jup, R_jup, 1, np.log10(3e-3), np.log10(1.58e-1), np.log10(1.58e-1), 0.5, 100)

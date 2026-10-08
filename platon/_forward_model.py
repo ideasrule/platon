@@ -300,8 +300,7 @@ def _hydrostatic(sc, P_profile, T_profile, mu_profile):
     return radii, dr, unbound
 
 
-def _opacity(cfg, data, sc, inp, atm_abund, T_profile, P_profile,
-             clear_scattering=False):
+def _opacity(cfg, data, sc, inp, atm_abund, T_profile, P_profile):
     """Per-layer absorption coefficients, computed directly at each layer's
     (T, P) instead of on the 2D opacity grid: each opacity source is
     interpolated from its data grid onto the layers (log cross sections,
@@ -338,12 +337,8 @@ def _opacity(cfg, data, sc, inp, atm_abund, T_profile, P_profile,
     The anchor output must be kept live (it is protected by an
     optimization_barrier together with the coefficients).
 
-    With clear_scattering=True (used by the partial-cloud dual core), the
-    scattering seed is plain Rayleigh (factor 1, slope 4) and the Mie term
-    is omitted: the result is the CLEAR terminator's coefficients.  The
-    caller reconstructs the cloudy optical depths from these via a rank-1
-    update (haze/Mie/Rayleigh differences are all outer products), sharing
-    the expensive gas/CIA/H- accumulation between the two terminators.
+    The partial-cloud dual core disables scattering here and adds each
+    terminator's scattering directly to the shared absorption optical depths.
     """
     L = data.lambda_grid.shape[0]
     N = T_profile.shape[0]
@@ -357,7 +352,7 @@ def _opacity(cfg, data, sc, inp, atm_abund, T_profile, P_profile,
     a = jnp.clip(a, 0.0, 1.0)                                      # (N,)
     p_lo, b = fractional_index(jnp.log(P_profile), data.ln_P_grid)
 
-    use_mie = cfg.use_mie and not clear_scattering
+    use_mie = cfg.use_mie
 
     # The accumulator is seeded with the scattering term rather than zeros,
     # and -- in the sorted case -- that seed is passed through a column
@@ -366,17 +361,19 @@ def _opacity(cfg, data, sc, inp, atm_abund, T_profile, P_profile,
     # every species' grid rows per output element and runs 2-5x slower.
     if cfg.add_scattering:
         sum_pol = atm_abund @ data.pol_sqr                         # (N,)
-        if use_mie or clear_scattering:
+        if use_mie:
             factor, slope, ref_um = 1.0, 4.0, 1.0
         else:
             factor = sc[SC_SCAT_FACTOR]
             slope = sc[SC_SCAT_SLOPE]
             ref_um = sc[SC_SCAT_REF_UM]
-        pow_term = ref_um ** (slope - 4) / data.lambda_um ** slope  # (L,)
+        pow_term = factor * ref_um ** (slope - 4) / data.lambda_um ** slope
         # materialize: fused into the (L, N) coeff kernel, the expensive
         # pow would be recomputed for every layer
         pow_term = lax.optimization_barrier(pow_term)
-        seed = (factor * RAYLEIGH_PREF) * \
+        # Keep factor in the wavelength term: factor * RAYLEIGH_PREF can
+        # underflow in FP32 before the atmospheric density scales it back up.
+        seed = RAYLEIGH_PREF * \
             (n_atm * sum_pol)[None, :] * pow_term[:, None]
     else:
         seed = lax.optimization_barrier(
@@ -671,13 +668,12 @@ def _transit_depths_only(cfg, data, pin):
 def _transit_depths_dual(cfg, data, pin):
     """Partial-cloud variant: cloudy and clear (no cloud deck / haze / Mie,
     Rayleigh kept) binned depths from ONE pass over the shared work.
-    Abundances, hydrostatics, the opacity accumulation, and the big tau
-    matmul are computed once, for the CLEAR terminator; the cloudy optical
-    depths follow from a rank-1 update, since the haze/Rayleigh/Mie
-    differences between the terminators are all outer products of a
-    wavelength vector and a layer vector, and tau is linear in the
-    coefficients.  The update fuses into the elementwise expm1 pass, so the
-    cloudy side costs almost nothing extra.  Results agree with two
+    Abundances, hydrostatics, the absorption opacity accumulation, and the
+    big tau matmul are computed once.  Each terminator's scattering is
+    added to the shared absorption optical depths as an outer product of
+    a wavelength vector and an integrated layer vector.  In particular,
+    weak haze is never recovered by subtracting Rayleigh from clear tau,
+    which would lose precision through cancellation.  Results agree with two
     separate calls to FP32 rounding precision (not bit-for-bit).  Output
     layout: [cloudy_depths (B), clear_depths (B), flag, anchor]."""
     inp = unpack_inputs(cfg, pin)
@@ -689,9 +685,9 @@ def _transit_depths_dual(cfg, data, pin):
     atm_abund = 10.0 ** la_atm
     mu_profile = atm_abund @ data.masses                 # (N,)
     radii, dr, unbound = _hydrostatic(sc, P_profile, T_profile, mu_profile)
-    coeff_clear, perm, _, anchor = _opacity(
-        cfg, data, sc, inp, atm_abund, T_profile, P_profile,
-        clear_scattering=True)
+    absorption_cfg = cfg._replace(add_scattering=False, use_mie=False)
+    coeff_abs, perm, _, anchor = _opacity(
+        absorption_cfg, data, sc, inp, atm_abund, T_profile, P_profile)
 
     Rs = sc[SC_RS]
     dl = _get_dl(radii)                                    # (N-1, N-1)
@@ -699,29 +695,30 @@ def _transit_depths_dual(cfg, data, pin):
     dl_mid = 0.5 * (jnp.concatenate([dl, pad]) +
                     jnp.concatenate([pad, dl]))            # (N, N-1)
     dl_mid_p = dl_mid[perm] if perm is not None else dl_mid
-    tau_clear = coeff_clear @ dl_mid_p                     # (L, N-1)
+    tau_abs = coeff_abs @ dl_mid_p                         # (L, N-1)
 
-    # Rank-1 corrections: cloudy tau = clear tau - Rayleigh + haze + Mie,
-    # with each term separable as pow(lambda) * weight(layer)
-    tau_cloudy = tau_clear
+    # All scattering contributions are additive; no large optical depths
+    # are subtracted to obtain a small cloudy optical depth.
+    tau_clear = tau_cloudy = tau_abs
     n_atm = P_profile / (k_B * T_profile)                  # (N,)
     if cfg.add_scattering:
         sum_pol = atm_abund @ data.pol_sqr                 # (N,)
         v_ray = (RAYLEIGH_PREF * n_atm * sum_pol) @ dl_mid  # (N-1,)
         pow_clear = 1.0 / data.lambda_um ** 4              # (L,)
+        tau_clear = tau_abs + pow_clear[:, None] * v_ray[None, :]
         if cfg.use_mie:
             n_mie = sc[SC_NUM_DEN] * \
                 (P_profile / sc[SC_MIE_REF_P]) ** (1.0 / sc[SC_FSH])
             v_mie = n_mie @ dl_mid                         # (N-1,)
-            tau_cloudy = tau_cloudy + \
+            tau_cloudy = tau_clear + \
                 inp.eff_xsec[:, None] * v_mie[None, :]
         else:
             factor = sc[SC_SCAT_FACTOR]
             slope = sc[SC_SCAT_SLOPE]
             ref_um = sc[SC_SCAT_REF_UM]
             pow_cloudy = ref_um ** (slope - 4) / data.lambda_um ** slope
-            tau_cloudy = tau_cloudy + \
-                (factor * pow_cloudy - pow_clear)[:, None] * v_ray[None, :]
+            tau_cloudy = tau_abs + \
+                (factor * pow_cloudy)[:, None] * v_ray[None, :]
 
     stellar, corr = _stellar_spectrum(cfg, data, sc)
 

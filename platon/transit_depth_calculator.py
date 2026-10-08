@@ -305,9 +305,8 @@ class TransitDepthCalculator:
                     np.array(clear_out.binned_depths, dtype=np.float64)
                 unbound = unbound or bool(clear_out.atm.unbound)
         elif 0 < cloud_fraction < 1 and min_cross_sec == 1e-99:
-            # Fused core: shares abundances, hydrostatics, the opacity
-            # accumulation, and the tau matmul between the cloudy and clear
-            # terminators (the cloudy tau is a rank-1 update)
+            # Fused core: shares abundances, hydrostatics, absorption opacity,
+            # and the tau matmul, then adds each terminator's scattering.
             cloudy, clear_binned, unbound = fm.split_transit_dual_result(
                 np.asarray(fm.transit_depths_dual_core(
                     cfg, self.atm.device_data(), inputs)))

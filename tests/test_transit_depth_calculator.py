@@ -169,6 +169,63 @@ class TestTransitDepthCalculator(unittest.TestCase):
         with self.assertRaises(ValueError):
             calculator.compute_depths(profile, Rs, Mp, Rp, cloud_fraction=-0.1)
 
+    def test_partial_cloud_weak_scattering(self):
+        calculator = TransitDepthCalculator(include_opacities=[], downsample=100)
+        profile = isothermal_profile(1000)
+        # A low-gravity, pure-H2 atmosphere makes cancellation of Rayleigh
+        # optical depths visible even in the final blended spectrum.
+        for factor, slope in [(0., 4.), (1e-8, 4.), (1e-6, 4.), (1e-6, 0.)]:
+            with self.subTest(factor=factor, slope=slope):
+                kwargs = dict(
+                    logZ=None, CO_ratio=None, gases=["H2"], vmrs=[1.],
+                    add_gas_absorption=False, add_collisional_absorption=False,
+                    cloud_fraction=0.5, scattering_factor=factor,
+                    scattering_slope=slope)
+                _, fused, _ = calculator.compute_depths(
+                    profile, R_sun, 0.1 * M_jup, R_jup, **kwargs)
+                _, separate, info = calculator.compute_depths(
+                    profile, R_sun, 0.1 * M_jup, R_jup,
+                    full_output=True, **kwargs)
+                self.assertTrue(np.all(np.isfinite(fused)))
+                if factor > 0:
+                    # The reference path must not silently underflow weak
+                    # scattering to zero before multiplying by the density.
+                    self.assertTrue(np.all(info["tau_los"] > 0))
+                # Absolute depth tolerance of 0.01 ppm: allow FP32 rounding,
+                # but catch the tens of ppm lost by subtracting Rayleigh.
+                np.testing.assert_allclose(fused, separate, rtol=0, atol=1e-8)
+
+    def test_partial_cloud_shared_absorption(self):
+        calculator = TransitDepthCalculator(
+            include_opacities=["H2O", "CO"], downsample=100)
+        # A varying temperature exercises sorted opacity layers. Include gas,
+        # CIA, and H- absorption, plus stellar weighting and spot corrections.
+        profile = Profile.parametric(1300, 1e-3, 0.3, 0.5, 1e4, 2000)
+        bins = np.array([[0.4, 0.6], [1., 1.4], [3.2, 4.], [5., 6.]]) * 1e-6
+        scattering_cases = [
+            dict(scattering_factor=1e-6),
+            dict(scattering_factor=10, scattering_slope=2),
+            dict(add_scattering=False),
+            dict(ri=1.33 - 0.1j, number_density=1e9),
+        ]
+        for wavelength_bins in [None, bins]:
+            calculator.change_wavelength_bins(wavelength_bins)
+            for scattering in scattering_cases:
+                with self.subTest(binned=wavelength_bins is not None,
+                                  scattering=scattering):
+                    kwargs = dict(
+                        cloud_fraction=0.4, cloudtop_pressure=1e3,
+                        add_H_minus_absorption=True,
+                        T_star=5700, T_spot=5000, spot_cov_frac=0.1,
+                        **scattering)
+                    wavelengths, fused, _ = calculator.compute_depths(
+                        profile, R_sun, M_jup, R_jup, **kwargs)
+                    full_wavelengths, separate, _ = calculator.compute_depths(
+                        profile, R_sun, M_jup, R_jup,
+                        full_output=True, **kwargs)
+                    np.testing.assert_array_equal(wavelengths, full_wavelengths)
+                    np.testing.assert_allclose(fused, separate, rtol=0, atol=1e-8)
+
     def test_power_law_haze(self):
         Rs = R_sun     
         Mp = M_jup     

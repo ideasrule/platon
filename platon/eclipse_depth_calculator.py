@@ -1,4 +1,5 @@
 from . import _cupy_numpy as xp
+import numpy as np
 expn=xp.scipy.special.expn
 import matplotlib.pyplot as plt
 import scipy.special
@@ -47,7 +48,7 @@ class EclipseDepthCalculator:
 
     def calc_surface_temp(self, surface_type, stellar_fluxes_orig, a_over_Rs):
         interp_rh = xp.interp(self.atm.orig_lambda_grid, xp.asarray(self.hemi_refls["Wavelength"]), xp.asarray(self.hemi_refls[surface_type]))
-        irrad = self.redist_factors[surface_type] * xp.trapz(
+        irrad = self.redist_factors[surface_type] * np.trapezoid(
             (1 - interp_rh) * stellar_fluxes_orig / a_over_Rs**2,
             self.atm.orig_lambda_grid)
         if irrad < self.crust_emission_flux[surface_type].data[0] or irrad > self.crust_emission_flux[surface_type].data[-1]:

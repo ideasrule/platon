@@ -1,0 +1,2 @@
+class AtmosphereError(Exception):
+    pass

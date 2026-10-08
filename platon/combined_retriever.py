@@ -15,7 +15,7 @@ from .psis import psisloo
 from .transit_depth_calculator import TransitDepthCalculator
 from .eclipse_depth_calculator import EclipseDepthCalculator
 from .fit_info import FitInfo
-
+from .abundance_getter import AbundanceGetter
 from .constants import METRES_TO_UM, M_jup, R_jup, R_earth, M_earth, R_sun
 from ._params import _UniformParam
 from .errors import AtmosphereError
@@ -24,6 +24,7 @@ from .TP_profile import Profile
 from .retrieval_result import RetrievalResult
 from .custom_dynesty_result import CustomDynestyResult
 
+abundance_getter = AbundanceGetter()
 class CombinedRetriever:
     def pretty_print(self, fit_info):
         if not hasattr(self, "last_lnprob"):
@@ -135,6 +136,11 @@ class CombinedRetriever:
         part_size = 10.**params_dict["log_part_size"]
         P_quench = 10.** params_dict["log_P_quench"]
         CH4_mult = 10.**params_dict["log_CH4_mult"]
+        
+        #CS2_abund = 10.**params_dict["log_CS2"]
+
+        #abunds = abundance_getter.get(logZ, CO_ratio)
+        #abunds["CS2"] = np.full_like(abunds["H2O"], CS2_abund)
 
         if params_dict["fit_vmr"]:
             assert(logZ is None and CO_ratio is None)
@@ -391,7 +397,7 @@ class CombinedRetriever:
                       fit_info,
                       include_condensation=True, rad_method="xsec",
                       maxiter=None, maxcall=None, nlive=250,
-                      num_final_samples=100, zero_opacities=[],
+                      num_final_samples=100, zero_opacities=[], ABSORB_DIR = None,
                       **dynesty_kwargs):
         '''Runs nested sampling to retrieve atmospheric parameters.
 
@@ -437,7 +443,7 @@ class CombinedRetriever:
         eclipse_calc = None
         if transit_bins is not None:
             transit_calc = TransitDepthCalculator(
-                include_condensation=include_condensation, method=rad_method)
+                include_condensation=include_condensation, method=rad_method, ABSORB_DIR = ABSORB_DIR)
             transit_calc.change_wavelength_bins(transit_bins)
             self._validate_params(fit_info, transit_calc)
         if eclipse_bins is not None:

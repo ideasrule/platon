@@ -20,16 +20,24 @@ from .errors import AtmosphereError
 from ._interpolator_3D import regular_grid_interp, interp1d
 
 class AtmosphereSolver:
-    def __init__(self, include_condensation=True, ref_pressure=1e5, method='xsec', include_opacities=[], downsample=1):
+    def __init__(self, include_condensation=True, ref_pressure=1e5, method='xsec', include_opacities=[], downsample=1, ABSORB_DIR = None):
         self.arguments = locals()
         del self.arguments["self"]
 
         get_data_if_needed()
         
-        self.absorption_data, self.mass_data, self.polarizability_data = read_species_data(
-            resource_filename(__name__, "data/Absorption"),
-            resource_filename(__name__, "data/species_info"),
-            method, include_opacities, downsample)
+        if ABSORB_DIR is None:
+            print("USING absorption data from ", resource_filename(__name__, "data/Absorption"))
+            self.absorption_data, self.mass_data, self.polarizability_data = read_species_data(
+                resource_filename(__name__, "data/Absorption"),
+                resource_filename(__name__, "data/species_info"),
+                method, include_opacities, downsample)
+        if ABSORB_DIR is not None:
+            print("Using absorption data from ", ABSORB_DIR)
+            self.absorption_data, self.mass_data, self.polarizability_data = read_species_data(
+                ABSORB_DIR,
+                resource_filename(__name__, "data/species_info"),
+                method, include_opacities, downsample)
 
         self.low_res_lambdas = load_numpy("data/low_res_lambdas.npy")
         self.stellar_spectra_dict = load_dict_from_pickle("data/stellar_spectra.pkl")                    
@@ -63,7 +71,7 @@ class AtmosphereSolver:
         self.N_lambda = len(self.lambda_grid)
         self.N_T = len(self.T_grid)
         self.N_P = len(self.P_grid)
-
+        
         self.wavelength_rebinned = False
         self.wavelength_bins = None
 
@@ -273,7 +281,7 @@ class AtmosphereSolver:
             spl = scipy.interpolate.make_interp_spline(log_x_hist, Qext_hist)
             spl = xp.interpolate.BSpline(xp.array(spl.t), xp.array(spl.c), spl.k)           
             Qext_intpl = spl(log_dense_xs).reshape((self.N_lambda, len(radii)))
-            eff_cross_section = xp.trapz(probs*geometric_cross_section*Qext_intpl, z_scores)
+            eff_cross_section = np.trapz(probs*geometric_cross_section*Qext_intpl, z_scores)
 
         n = max_number_density * xp.power(self.P_grid[P_cond] / max(self.P_grid[P_cond]), 1.0/frac_scale_height)        
         absorption_coeff = n[xp.newaxis, :, xp.newaxis] * eff_cross_section[xp.newaxis, xp.newaxis, :]
@@ -286,7 +294,7 @@ class AtmosphereSolver:
         # First, get atmospheric weight profile
         mu_profile = xp.zeros(len(P_profile))
         atm_abundances = {}
-        
+        #print(abundaces.keys())
         for species_name in abundances:
             abund = 10.**regular_grid_interp(self.T_grid, xp.log10(self.P_grid), xp.log10(abundances[species_name]), T_profile, xp.log10(P_profile))
             atm_abundances[species_name] = abund
@@ -327,9 +335,23 @@ class AtmosphereSolver:
 
         
         if custom_abundances is None and vmrs is not None and gases is not None:
+            # Compute H2/He split fractions from mass data (matches JAX path)
+            mass_H2   = float(self.mass_data["H2"])
+            mass_He   = float(self.mass_data["He"])
+            mass_H2He = float(self.mass_data["H2-He"])
+            h2_frac = (mass_He - mass_H2He) / (mass_He - mass_H2)
+            he_frac = 1.0 - h2_frac
+
             abundances = {}
             for i, g in enumerate(gases):
-                abundances[g] = vmrs[i] * xp.ones((len(self.T_grid), len(self.P_grid)))
+                if g == "H2-He":
+                    # Split into H2 + He so Rayleigh scattering uses sum(x_i * pol_i^2)
+                    # rather than (sum(x_i * pol_i))^2, matching the JAX forward model.
+                    ones = vmrs[i] * xp.ones((len(self.T_grid), len(self.P_grid)))
+                    abundances["H2"] = abundances.get("H2", xp.zeros((len(self.T_grid), len(self.P_grid)))) + h2_frac * ones
+                    abundances["He"] = abundances.get("He", xp.zeros((len(self.T_grid), len(self.P_grid)))) + he_frac * ones
+                else:
+                    abundances[g] = vmrs[i] * xp.ones((len(self.T_grid), len(self.P_grid)))
             return abundances
 
         raise ValueError("Unrecognized format for custom_abundances")
@@ -413,17 +435,29 @@ class AtmosphereSolver:
                        ri=None, frac_scale_height=1, number_density=0,
                        part_size=1e-6, part_size_std=0.5,
                        P_quench=1e-99,
-                       min_abundance=1e-99, min_cross_sec=1e-99, zero_opacities=[]):
+                       min_abundance=1e-99, min_cross_sec=1e-99, zero_opacities=[],
+                       log_CS2=None):
         self._validate_params(T_profile, logZ, CO_ratio, cloudtop_pressure)
-       
+
         abundances = self._get_abundances_array(
             logZ, CO_ratio, CH4_mult, custom_abundances, gases, vmrs)
 
+        if log_CS2 is not None and 'CS2' in abundances:
+            abundances['CS2'] = xp.full_like(abundances['CS2'], 10.**log_CS2)
+
+        #T_quench = xp.interp(xp.log(P_quench), xp.log(xp.array(P_profile)), xp.array(T_profile))
         T_quench = xp.interp(xp.log(P_quench), xp.log(P_profile), T_profile)
+        #custom_quench_names = ["H2O", "CO2", "NH3", "CH4"]
+        #T_quench = 1000
+        #print(T_quench, P_quench)
+        
+
+
         for name in abundances:
             abundances[name][xp.isnan(abundances[name])] = min_abundance
             abundances[name][abundances[name] < min_abundance] = min_abundance
             quench_abund = 10.**regular_grid_interp(self.T_grid, xp.log10(self.P_grid), xp.log10(abundances[name]), T_quench, xp.log10(P_quench))
+            #print(quench_abund)
             abundances[name][:, self.P_grid <= P_quench] = quench_abund
 
         above_clouds = P_profile < cloudtop_pressure

@@ -18,7 +18,7 @@ from .params import NUM_LAYERS
 
 
 class TransitDepthCalculator:
-    def __init__(self, include_condensation=True, ref_pressure=1e5, method='xsec', include_opacities=["CH4", "CO2", "CO", "H2O", "H2S", "HCN", "K", "Na", "NH3", "SO2", "TiO", "VO"], downsample=1):
+    def __init__(self, include_condensation=True, ref_pressure=1e5, method='xsec', include_opacities=["CH4", "CO2", "CO", "H2O", "H2S", "HCN", "NH3", "CS2", "DMS", "CH3SH"], downsample=1, ABSORB_DIR = None):
         '''
         All physical parameters are in SI.
 
@@ -32,7 +32,7 @@ class TransitDepthCalculator:
         method : string
             "xsec" for opacity sampling, "ktables" for correlated k
         '''
-        self.atm = AtmosphereSolver(include_condensation, ref_pressure, method, include_opacities, downsample)
+        self.atm = AtmosphereSolver(include_condensation, ref_pressure, method, include_opacities, downsample, ABSORB_DIR)
 
     def change_wavelength_bins(self, bins):
         """Specify wavelength bins, instead of using the full wavelength grid
@@ -136,7 +136,7 @@ class TransitDepthCalculator:
                        T_star=None, T_spot=None, spot_cov_frac=None,
                        ri=None, frac_scale_height=1, number_density=0,
                        part_size=1e-6, part_size_std=0.5, P_quench=1e-99,
-                       full_output=False, min_abundance=1e-99, min_cross_sec=1e-99, stellar_blackbody=False, zero_opacities=[]):
+                       full_output=True, min_abundance=1e-99, min_cross_sec=1e-99, stellar_blackbody=False, zero_opacities=[]):
         '''
         Computes transit depths at a range of wavelengths, assuming an
         isothermal atmosphere.  To choose bins, call change_wavelength_bins().

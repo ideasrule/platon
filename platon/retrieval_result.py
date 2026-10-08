@@ -17,7 +17,10 @@ class RetrievalResult:
         if transit_bins is not None:
             transit_bins = np.array(transit_bins)
             self.transit_wavelengths = (transit_bins[:,0] + transit_bins[:,1]) / 2
-            self.transit_chi_sqr = np.sum((transit_depths - best_fit_transit_depths)**2 / transit_errors**2)
+            if best_fit_transit_depths is not None and transit_depths is not None:
+                self.transit_chi_sqr = np.sum((transit_depths - best_fit_transit_depths)**2 / transit_errors**2)
+            else:
+                self.transit_chi_sqr = None
             print("Transit chi sqr", self.transit_chi_sqr)
             
         
@@ -52,6 +55,9 @@ class RetrievalResult:
 
     def __delitem__(self, key):
         delattr(self, key)
+
+    def get(self, key, default=None):
+        return getattr(self, key, default)
 
     def keys(self):
         return list(self.__dict__.keys())

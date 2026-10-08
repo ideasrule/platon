@@ -366,8 +366,7 @@ class CombinedRetriever:
         [P, T_cold, T_hot] for 1.5-D terminator retrievals."""
         if transit_info is not None:
             retrieval_result.random_transit_depths.append(
-                transit_info["unbinned_depths"] *
-                transit_info["unbinned_correction_factors"])
+                transit_info["unbinned_depths"])
             retrieval_result.random_transit_TP_profiles.append(
                 transit_info["full_TP_profile"])
         if eclipse_info is not None:
@@ -722,6 +721,7 @@ class CombinedRetriever:
                                    n_dims=num_dim, **solve_kwargs)
         a = pymultinest.Analyzer(outputfiles_basename=basename, n_params=num_dim)
         data = a.get_data()
+        result["logz"] = np.atleast_1d(result["logZ"])
         result["samples"] = data[:,2:]
         result["logl"] = -0.5 * data[:,1]
         result["logp"] = result["logl"] + np.array(

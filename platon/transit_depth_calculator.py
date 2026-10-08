@@ -186,7 +186,10 @@ class TransitDepthCalculator:
             Returned if full_output is True, containing intermediate quantities
             calculated by the method.  These are: absorption_coeff_atm, tau_los,
             stellar_spectrum, radii, P_profile, T_profile, mu_profile,
-            atm_abundances, unbinned_depths, unbinned_wavelengths
+            atm_abundances, unbinned_depths, unbinned_wavelengths,
+            unbinned_correction_factors.  unbinned_depths are already
+            corrected for stellar spots (multiplied by
+            unbinned_correction_factors).
        '''
         if isinstance(t_p_profile, TwoSectorTerminator):
             if cloud_fraction != 1:
@@ -359,11 +362,10 @@ class TransitDepthCalculator:
         atm_info["unbinned_wavelengths"] = np.array(self.atm.lambda_grid)
         atm_info["unbinned_stellar_spectrum"] = stellar
         atm_info["unbinned_correction_factors"] = corr
+        atm_info["unbinned_depths"] = depths_uncorr * corr
         if self.atm.wavelength_bins is None:
-            atm_info["unbinned_depths"] = depths_uncorr * corr
             atm_info["binned_stellar_spectrum"] = stellar
         else:
-            atm_info["unbinned_depths"] = depths_uncorr
             atm_info["binned_stellar_spectrum"] = np.array(
                 [np.median(stellar[l:r])
                  for (l, r) in self.atm._bin_info["bin_ranges"]])

@@ -620,7 +620,7 @@ class AtmosphereSolver:
             if (ri, sigma) not in self._filtered_cross_secs:
                 self._filtered_cross_secs[(ri, sigma)] = \
                     scipy.ndimage.gaussian_filter(self.all_cross_secs[ri],
-                                                  kernel)
+                                                  (0, kernel))
             cross_secs = self._filtered_cross_secs[(ri, sigma)]
             if part_size < self.all_radii[3 * int(kernel)] or \
                part_size > self.all_radii[-3 * int(kernel)]:

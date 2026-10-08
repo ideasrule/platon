@@ -78,7 +78,7 @@ class CombinedRetriever:
                     "cloud_fraction must be fixed at 1 for a "
                     "TwoSectorTerminator")
         
-        if fit_info.all_params["log_k"].best_guess is None:
+        if fit_info.all_params["n"].best_guess is None:
             # Not using Mie scattering
             if fit_info.all_params["log_number_density"].best_guess != -np.inf:
                 raise ValueError("log number density must be -inf if not using Mie scattering")            

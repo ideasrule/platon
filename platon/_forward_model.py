@@ -38,6 +38,9 @@ LOG_MIN_ABUND = -99.0
 LN_MIN_XSEC = math.log(1e-99)   # floor of the stored log cross sections
 TWO_H_C_SQR = 2 * h * c ** 2
 HC_OVER_KB = h * c / k_B
+# Folded on the host: XLA would otherwise fold G * AMU / N into a float32
+# subnormal, which CPU flushes to zero
+KB_OVER_G_AMU = k_B / (G * AMU)
 
 # Indices into the packed scalar-parameter vector
 (SC_RS, SC_MP, SC_RP, SC_LOGZ, SC_CO, SC_LOG_CH4, SC_SCAT_FACTOR,
@@ -290,9 +293,9 @@ def _hydrostatic(sc, P_profile, T_profile, mu_profile):
     # Unbound-atmosphere diagnostics (same criteria as the FP64 version)
     R_hill = Rs * (sc[SC_T_STAR_HYDRO] / T_profile[0]) ** 2 * \
         (Mp / (3 * M_sun)) ** (1.0 / 3)
-    max_r_estimate = 1.0 / (1.0 / Rp + k_B * jnp.median(T_profile) *
+    max_r_estimate = 1.0 / (1.0 / Rp + KB_OVER_G_AMU * jnp.median(T_profile) *
                             jnp.log(P_profile[0] / sc[SC_REF_PRESSURE]) /
-                            (G * Mp * jnp.mean(mu_profile) * AMU))
+                            (Mp * jnp.mean(mu_profile)))
     unbound = (max_r_estimate < 0) | (max_r_estimate > R_hill)
     return radii, dr, unbound
 

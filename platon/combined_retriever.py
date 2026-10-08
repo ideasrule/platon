@@ -508,7 +508,8 @@ class CombinedRetriever:
             ret = self._ln_like(
                 params, transit_calc, eclipse_calc, fit_info,
                 transit_depths, transit_errors,
-                eclipse_depths, eclipse_errors, ret_best_fit=True)
+                eclipse_depths, eclipse_errors,
+                zero_opacities=zero_opacities, ret_best_fit=True)
             if ret == -np.inf: continue
             _, transit_info, _, eclipse_info = ret
             self._record_random_sample(
@@ -658,7 +659,8 @@ class CombinedRetriever:
             _, transit_info, _, eclipse_info = self._ln_like(
                 params, transit_calc, eclipse_calc, fit_info,
                 transit_depths, transit_errors,
-                eclipse_depths, eclipse_errors, ret_best_fit=True)
+                eclipse_depths, eclipse_errors,
+                zero_opacities=zero_opacities, ret_best_fit=True)
             self._record_random_sample(
                 retrieval_result, transit_info, eclipse_info,
                 self.params_to_lnlike[tuple(params)])
@@ -721,8 +723,9 @@ class CombinedRetriever:
         a = pymultinest.Analyzer(outputfiles_basename=basename, n_params=num_dim)
         data = a.get_data()
         result["samples"] = data[:,2:]
-        result["logp"] = np.log(data[:,0])
         result["logl"] = -0.5 * data[:,1]
+        result["logp"] = result["logl"] + np.array(
+            [fit_info._ln_prior(params) for params in result["samples"]])
         best_params_arr = result["samples"][np.argmax(result["logp"])]
         
         equal_samples = a.get_equal_weighted_posterior()[:,:-1]
@@ -758,7 +761,8 @@ class CombinedRetriever:
             _, transit_info, _, eclipse_info = self._ln_like(
                 params, transit_calc, eclipse_calc, fit_info,
                 transit_depths, transit_errors,
-                eclipse_depths, eclipse_errors, ret_best_fit=True)
+                eclipse_depths, eclipse_errors,
+                zero_opacities=zero_opacities, ret_best_fit=True)
             self._record_random_sample(
                 retrieval_result, transit_info, eclipse_info,
                 self.params_to_lnlike[tuple(params)])

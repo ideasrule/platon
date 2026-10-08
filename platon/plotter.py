@@ -250,7 +250,8 @@ class Plotter:
         points = plt.scatter(
             METRES_TO_UM * retrieval_result.transit_wavelengths,
             retrieval_result.transit_depths,
-            c=retrieval_result["loos"], cmap="viridis",
+            c=retrieval_result["loos"][:len(retrieval_result.transit_depths)],
+            cmap="viridis",
             s=25, edgecolors='k', linewidths=0.5,
             label="Observed", zorder=6)
         plt.colorbar(points, label="LOO log predictive density", pad=0.01)
@@ -295,7 +296,8 @@ class Plotter:
         points = plt.scatter(
             METRES_TO_UM * retrieval_result.eclipse_wavelengths,
             retrieval_result.eclipse_depths,
-            c=retrieval_result["loos"], cmap="viridis",
+            c=retrieval_result["loos"][-len(retrieval_result.eclipse_depths):],
+            cmap="viridis",
             s=25, edgecolors='k', linewidths=0.5,
             label="Observed", zorder=6)
         plt.colorbar(points, label="LOO log predictive density", pad=0.01)

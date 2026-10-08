@@ -108,3 +108,27 @@ in that order.
   points.
 
   We recommend a staged approach to retrievals.  Exploratory data analysis can be done with R=10,000 opacities and 250 live points.  In the process, intermittent spot checks should be performed with R=20,000 opacities and 500 live points to check the effect of resolution, and with R=10,000 opacities and 1000 live points to check the effect of sparse sampling.  When one is satisfied with the exploratory data analysis and is ready to finalize the results, one should run a final retrieval with R=20,000 opacities and 1000 live points.
+
+* **How do I use NewEra stellar spectra for stellar contamination?**
+  By default, T_star and T_het use built-in spectra that depend only on
+  temperature.  For spectra that also depend on surface gravity and
+  metallicity, use the NewEra grid (Hauschildt et al. 2025), which covers
+  2300-9000 K, log g 3.5-5.5 and [Fe/H] -1 to 0.5 at PLATON's resolution.
+  Pass it, with the star's log g (cgs) and [Fe/H], to the calculator::
+
+    calculator = TransitDepthCalculator(stellar_grid="newera",
+                                        logg_star=4.9, feh_star=0.0)
+
+  It is downloaded (about 470 MB) into PLATON's data folder the first time.
+
+  or to ``get_default_fit_info`` for retrievals.  Temperatures between grid
+  points are interpolated linearly, as for the built-in spectra.
+
+* **Can I fit two heterogeneities, or different ones in different visits?**
+  Yes: T_het/het_cov_frac and T_het2/het2_cov_frac describe up to two unocculted
+  heterogeneities, each hotter or cooler than the photosphere.  For
+  heterogeneities that differ between visits, pass
+  ``transit_visits={"visit1": (0, 120), "visit2": (120, 176)}`` (the rows of
+  each visit's transit data) to ``get_default_fit_info`` and fit e.g.
+  ``visit1.het_cov_frac`` and ``visit2.het_cov_frac``; unfitted visit parameters use the
+  shared T_het, het_cov_frac, ... values.

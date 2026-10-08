@@ -2,6 +2,7 @@ name = "platon"
 __version__ = "7.0"
 __md5sum__ = "8a209c5acecef4805d64d2714587df2f"
 __data_url__ = "https://astro.uchicago.edu/~mz/data_{}.zip".format(__md5sum__)
+__stellar_grid_url__ = "https://astro.uchicago.edu/~mz/newera_jwst.npz"
 
 # Capture small GPU kernel sequences into CUDA graphs (XLA's default
 # threshold is conservative); saves ~15% wall time per forward model by

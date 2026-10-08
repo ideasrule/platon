@@ -23,13 +23,14 @@ def prepare_forward_inputs(atm, *, star_radius, planet_mass, planet_radius,
                            scattering_factor, scattering_slope,
                            scattering_ref_wavelength,
                            add_collisional_absorption, cloudtop_pressure,
-                           custom_abundances, T_star, T_spot, spot_cov_frac,
+                           custom_abundances, T_star, T_het, het_cov_frac,
                            ri, frac_scale_height, number_density, part_size,
                            part_size_std, P_quench, zero_opacities,
                            stellar_blackbody, bot_pressure,
                            min_abundance=1e-99, min_cross_sec=1e-99,
                            surface_pressure=np.inf, a_over_Rs=0.0,
-                           surface_temp=None, redist=0.0):
+                           surface_temp=None, redist=0.0, T_het2=None,
+                           het2_cov_frac=None):
     """Host-side preparation shared by the transit and eclipse calculators.
     Returns (ForwardConfig, ForwardInputs, host bookkeeping dict)."""
     # bot_pressure is min(cloudtop_pressure, surface_pressure): the deepest
@@ -100,10 +101,12 @@ def prepare_forward_inputs(atm, *, star_radius, planet_mass, planet_radius,
 
     n_above, shell_mask = atm.get_above_info(P_profile, bot_pressure)
 
-    if T_spot is None:
-        T_spot = T_star
-    if spot_cov_frac is None:
-        spot_cov_frac = 0.0
+    if T_het is None:
+        T_het = T_star
+    if het_cov_frac is None:
+        het_cov_frac = 0.0
+    T_het2 = T_star if T_het2 is None else T_het2
+    het2_cov_frac = 0.0 if het2_cov_frac is None else het2_cov_frac
 
     # Static stellar-spectrum branches (comparison in float32 to match what
     # the device would compute)
@@ -122,8 +125,9 @@ def prepare_forward_inputs(atm, *, star_radius, planet_mass, planet_radius,
         p_quench=P_quench,
         log10_p_quench=math.log10(max(P_quench, 1e-99)),
         t_star=0.0 if T_star is None else T_star,
-        t_spot=0.0 if T_spot is None else T_spot,
-        spot_frac=spot_cov_frac,
+        t_het=0.0 if T_het is None else T_het,
+        het_frac=het_cov_frac,
+        t_het2=0.0 if T_het2 is None else T_het2, het2_frac=het2_cov_frac,
         fsh=frac_scale_height, num_den=number_density,
         ln_min_xsec=math.log(min_cross_sec),
         log_min_abund=math.log10(min_abundance),
@@ -160,7 +164,8 @@ def prepare_forward_inputs(atm, *, star_radius, planet_mass, planet_radius,
         use_mie=use_mie and add_scattering,
         has_t_star=T_star is not None,
         stellar_in_grid=bool(stellar_in_grid),
-        has_spots=spot_cov_frac != 0.0,
+        has_het=het_cov_frac != 0.0,
+        has_het2=het2_cov_frac != 0.0,
     )
 
     inputs = ForwardInputs(

@@ -137,6 +137,8 @@ class Profile:
 
         k_th = 10.0**log_k_th
         gamma = 10.0**log_gamma
+        if log_gamma2 is None and alpha != 0:
+            raise ValueError("log_gamma2 must be given when alpha != 0")
         gamma2 = 10.0**log_gamma2 if log_gamma2 is not None else None
 
         g = G * Mp / Rp**2

@@ -208,7 +208,7 @@ class EclipseDepthCalculator:
         atm_info["unbinned_eclipse_depths"] = np.array(out.depths,
                                                        dtype=np.float64)
         atm_info["taus"] = np.array(out.taus)[:, :n - 1]
-        atm_info["contrib"] = -integrand / fluxes[:, np.newaxis]
+        atm_info["contrib"] = integrand / np.sum(integrand, axis=1)[:, np.newaxis]
         atm_info["photosphere_radii"] = np.array(out.photosphere_radii)
 
         return binned_wavelengths, binned_depths, atm_info

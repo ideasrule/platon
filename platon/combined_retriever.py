@@ -520,7 +520,7 @@ class CombinedRetriever:
 
     def _get_divisors_labels(self, medians, labels):
         divisors = np.ones(len(labels))
-        new_labels = np.copy(labels)
+        new_labels = list(labels)
         
         for i, l in enumerate(labels):            
             if l == "Rs":

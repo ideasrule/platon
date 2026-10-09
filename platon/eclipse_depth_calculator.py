@@ -7,14 +7,13 @@ from astropy.io import ascii
 from . import _forward_model as fm
 from ._forward_model import planck_np
 from .errors import AtmosphereError
-from ._atmosphere_solver import AtmosphereSolver
+from ._atmosphere_solver import AtmosphereSolver, DEFAULT_OPACITIES
 from ._forward_prep import prepare_forward_inputs, atm_info_dict
 
 
 class EclipseDepthCalculator:
-    def __init__(self, include_condensation=True, method="xsec",
-                 include_opacities=["CH4", "CO2", "CO", "H2O", "H2S", "HCN",
-                                    "K", "Na", "NH3", "SO2", "TiO", "VO"],
+    def __init__(self, include_condensation=True,
+                 include_opacities=DEFAULT_OPACITIES,
                  downsample=1, surface_library="Paragas"):
         '''
         All physical parameters are in SI.
@@ -24,10 +23,8 @@ class EclipseDepthCalculator:
         include_condensation : bool
             Whether to use equilibrium abundances that take condensation into
             account.
-        method : string
-            "xsec" for opacity sampling (correlated-k is no longer supported)
         '''
-        self.atm = AtmosphereSolver(include_condensation, method=method,
+        self.atm = AtmosphereSolver(include_condensation,
                                     include_opacities=include_opacities,
                                     downsample=downsample)
         self.surface_library = surface_library

@@ -30,6 +30,10 @@ _LOG_ABUND_CACHE = {}
 _DEVICE_CACHE = {}
 _DEVICE_CACHE_MAX_ENTRIES = 8
 
+# Species whose opacities the calculators load by default
+DEFAULT_OPACITIES = ("CH4", "CO2", "CO", "H2O", "H2S", "HCN", "K", "Na", "NH3",
+                     "SO2", "TiO", "VO")
+
 
 _EVAL_POOL = None
 _EVAL_WORKERS = 8
@@ -162,17 +166,17 @@ def _compute_h_minus_k(T_grid, wavelengths_m):
     return (k_bf + k_ff) * 1e-3
 
 
-def _load_raw(method, include_opacities, downsample):
+def _load_raw(include_opacities, downsample):
     """Load all wavelength-dependent data at full resolution (CPU, float32)."""
     # sorted: the same opacity set in a different order must share one entry
-    key = (method, tuple(sorted(include_opacities)), downsample)
+    key = (tuple(sorted(include_opacities)), downsample)
     if key in _RAW_CACHE:
         return _RAW_CACHE[key]
 
     basedir = Path(__file__).resolve().parent
     absorption_files, mass_data, polarizability_data = read_species_data(
         basedir / "data/Absorption", basedir / "data/species_info",
-        method, include_opacities)
+        include_opacities)
 
     lambda_full = load_numpy("data/wavelengths.npy")[::downsample]
     low_res_lambdas = load_numpy("data/low_res_lambdas.npy")
@@ -286,16 +290,11 @@ def _get_log_abund_grid(include_condensation, abundance_getter, master_index):
 
 class AtmosphereSolver:
     def __init__(self, include_condensation=True, ref_pressure=1e5,
-                 method='xsec', include_opacities=[], downsample=1,
+                 include_opacities=DEFAULT_OPACITIES, downsample=1,
                  stellar_grid=None, logg_star=4.5, feh_star=0.):
-        if method == "ktables":
-            raise NotImplementedError(
-                "Correlated-k support has been removed from this JAX version "
-                "of PLATON; use method='xsec'")
-
         get_data_if_needed()
 
-        self.raw = _load_raw(method, include_opacities, downsample)
+        self.raw = _load_raw(include_opacities, downsample)
         if stellar_grid == "newera":
             stellar_grid = Path(__file__).resolve().parent / "data/newera_jwst.npz"
             if not stellar_grid.exists():

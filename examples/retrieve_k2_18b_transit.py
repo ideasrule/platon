@@ -42,7 +42,6 @@ result = retriever.run_multinest(bins, depths, errors,
                                  None, None, None,
                                  fit_info,
                                  #sample="rwalk",
-                                 rad_method="xsec",
                                  nlive=1000
                                  )
 with open("retrieval_result_k2_18b.pkl", "wb") as f:

@@ -1,5 +1,4 @@
 import numpy as np
-from io import open
 import configparser
 from pathlib import Path
 

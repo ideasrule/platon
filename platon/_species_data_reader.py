@@ -1,15 +1,11 @@
 import os
 
 
-def read_species_data(absorption_dir, species_info_file, method,
-                      include_opacities):
+def read_species_data(absorption_dir, species_info_file, include_opacities):
     """Reads the species info table.  Returns (absorption_files, mass_data,
     polarizability_data), where absorption_files maps each included species
     with an opacity file to its path; the caller loads the (large) opacity
     arrays itself, directly into a preallocated stack."""
-    if method != "xsec":
-        raise NotImplementedError(
-            "Correlated-k (ktables) support has been removed; use method='xsec'")
     absorption_file_prefix = "absorb_coeffs_"
 
     absorption_files = dict()

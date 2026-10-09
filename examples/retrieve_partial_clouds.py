@@ -86,7 +86,7 @@ fit_info.add_uniform_fit_param('T3_transit', 800, 2500)
 result = retriever.run_multinest(
     bins, depths, errors,
     None, None, None,
-    fit_info, rad_method="xsec", nlive=1000,
+    fit_info, nlive=1000,
     multinest_kwargs=dict(outputfiles_basename="multinest_partial_clouds_"))
 
 with open("partial_clouds_retrieval_result.pkl", "wb") as f:

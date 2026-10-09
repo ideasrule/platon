@@ -3,16 +3,14 @@ import numpy as np
 from . import _forward_model as fm
 from ._forward_prep import prepare_forward_inputs, atm_info_dict
 from .errors import AtmosphereError
-from ._atmosphere_solver import AtmosphereSolver
+from ._atmosphere_solver import AtmosphereSolver, DEFAULT_OPACITIES
 from .TP_profile import Profile
 from .terminator import TwoSectorTerminator
 
 
 class TransitDepthCalculator:
     def __init__(self, include_condensation=True, ref_pressure=1e5,
-                 method='xsec',
-                 include_opacities=["CH4", "CO2", "CO", "H2O", "H2S", "HCN",
-                                    "K", "Na", "NH3", "SO2", "TiO", "VO"],
+                 include_opacities=DEFAULT_OPACITIES,
                  downsample=1, stellar_grid=None, logg_star=4.5, feh_star=0.):
         '''
         All physical parameters are in SI.
@@ -24,8 +22,6 @@ class TransitDepthCalculator:
             account.
         ref_pressure : float
             The planetary radius is defined as the radius at this pressure
-        method : string
-            "xsec" for opacity sampling (correlated-k is no longer supported)
         stellar_grid : str, optional
             "newera" for the NewEra grid (Hauschildt et al. 2025), downloaded
             into PLATON's data folder on first use, or a file in the format
@@ -34,7 +30,7 @@ class TransitDepthCalculator:
             T_het2, interpolated to logg_star (cgs) and feh_star.
         '''
         self.atm = AtmosphereSolver(include_condensation, ref_pressure,
-                                    method, include_opacities, downsample,
+                                    include_opacities, downsample,
                                     stellar_grid, logg_star, feh_star)
 
     def change_wavelength_bins(self, bins, throughputs=None):

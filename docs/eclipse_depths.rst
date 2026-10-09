@@ -26,7 +26,7 @@ Other options are ``Profile.isothermal(T)``, ``Profile.guillot(...)`` (Guillot 2
 Then, call the eclipse depth calculator::
 
   from platon.eclipse_depth_calculator import EclipseDepthCalculator
-  calc = EclipseDepthCalculator(method="xsec")
+  calc = EclipseDepthCalculator()
   wavelengths, depths, _ = calc.compute_depths(p, Rs, Mp, Rp, Tstar)
   
 Most of the same parameters accepted by the transit depth calculator are also
@@ -48,8 +48,7 @@ It is also possible to retrieve on combined transit and eclipse depths::
 
   result = retriever.run_dynesty(transit_bins, transit_depths, transit_errors,
                                    eclipse_bins, eclipse_depths, eclipse_errors,
-				   fit_info,
-				   rad_method="xsec")
+				   fit_info)
 
 Here, T_limb is the temperature at the planetary limb (used for transit depths),
 while the T-P profile parameters are for the dayside (used for eclipse depths).

@@ -1,4 +1,3 @@
-import inspect
 import copy
 
 import numpy as np
@@ -10,6 +9,7 @@ import dynesty.utils
 from .psis import psisloo
 from .transit_depth_calculator import TransitDepthCalculator
 from .eclipse_depth_calculator import EclipseDepthCalculator
+from ._atmosphere_solver import DEFAULT_OPACITIES
 from .fit_info import FitInfo
 
 from .constants import M_jup, R_jup, R_earth, M_earth, R_sun
@@ -19,7 +19,6 @@ from ._output_writer import write_param_estimates_file
 from .TP_profile import Profile
 from .terminator import TwoSectorTerminator, label_by_temperature
 from .retrieval_result import RetrievalResult
-from .custom_dynesty_result import CustomDynestyResult
 
 
 # Stellar heterogeneity parameters, which can differ between transit visits
@@ -30,8 +29,7 @@ def _include_opacities(fit_info):
     '''The calculators' default opacities, plus those of any other gas being
     fit (e.g. CS2), so that free retrievals can use every gas PLATON has
     cross sections for'''
-    default = list(inspect.signature(TransitDepthCalculator).parameters[
-        "include_opacities"].default)
+    default = list(DEFAULT_OPACITIES)
     extra = [g for g in getattr(fit_info, "gases", [])
              if g not in default and g not in ["H2", "He", "H2-He", "N2", "O2"]]
     return default + extra
@@ -349,7 +347,7 @@ class CombinedRetriever:
             np.asarray(profile.pressures, dtype=np.float64),
             np.asarray(profile.temperatures, dtype=np.float64)])
 
-    def _make_ln_like(self, data, fit_info, include_condensation, rad_method,
+    def _make_ln_like(self, data, fit_info, include_condensation,
                       zero_opacities, transit_throughputs, eclipse_throughputs):
         '''Creates the depth calculators for data, which is (transit_bins,
         transit_depths, transit_errors, eclipse_bins, eclipse_depths,
@@ -362,7 +360,7 @@ class CombinedRetriever:
         include_opacities = _include_opacities(fit_info)
         if transit_bins is not None:
             transit_calc = TransitDepthCalculator(
-                include_condensation=include_condensation, method=rad_method,
+                include_condensation=include_condensation,
                 include_opacities=include_opacities,
                 **fit_info._stellar_grid_options())
             transit_calc.change_wavelength_bins(transit_bins,
@@ -370,7 +368,7 @@ class CombinedRetriever:
             self._validate_params(fit_info, transit_calc)
         if eclipse_bins is not None:
             eclipse_calc = EclipseDepthCalculator(
-                include_condensation=include_condensation, method=rad_method,
+                include_condensation=include_condensation,
                 include_opacities=include_opacities)
             eclipse_calc.change_wavelength_bins(eclipse_bins,
                                                 eclipse_throughputs)
@@ -404,7 +402,7 @@ class CombinedRetriever:
         sampler's output, the best fit (the sample with the highest ln_prob),
         and the spectra of num_final_samples posterior samples into a
         RetrievalResult.  equal_samples, the equally weighted posterior
-        samples, are shuffled in place.'''
+        samples, are shuffled in place and stored in the RetrievalResult.'''
         best_params_arr = samples[np.argmax(ln_probs)]
         np.random.shuffle(equal_samples)
 
@@ -426,6 +424,7 @@ class CombinedRetriever:
             best_fit_transit_depths, best_fit_transit_info,
             best_fit_eclipse_depths, best_fit_eclipse_info,
             fit_info, divisors, new_labels)
+        retrieval_result.equal_samples = equal_samples
         self._add_random_samples(
             retrieval_result, ln_like, equal_samples[:num_final_samples])
         return retrieval_result
@@ -478,7 +477,6 @@ class CombinedRetriever:
                   eclipse_bins, eclipse_depths, eclipse_errors,
                   fit_info, nwalkers=50,
                   nsteps=1000, include_condensation=True,
-                  rad_method="xsec",
                   num_final_samples=100, zero_opacities=[],
                   transit_throughputs=None, eclipse_throughputs=None):
         '''Runs affine-invariant MCMC to retrieve atmospheric parameters.
@@ -512,8 +510,6 @@ class CombinedRetriever:
         include_condensation : bool, optional
             When determining atmospheric abundances, whether to include
             condensation.
-        rad_method : string, optional
-            "xsec" for opacity sampling (correlated-k is no longer supported)
         zero_opacities : list of strings
             List of molecules to zero opacities for
         transit_throughputs, eclipse_throughputs : list, optional
@@ -528,7 +524,7 @@ class CombinedRetriever:
         data = (transit_bins, transit_depths, transit_errors,
                 eclipse_bins, eclipse_depths, eclipse_errors)
         ln_like = self._make_ln_like(
-            data, fit_info, include_condensation, rad_method, zero_opacities,
+            data, fit_info, include_condensation, zero_opacities,
             transit_throughputs, eclipse_throughputs)
 
         sampler = emcee.EnsembleSampler(
@@ -582,7 +578,7 @@ class CombinedRetriever:
     def run_dynesty(self, transit_bins, transit_depths, transit_errors,
                       eclipse_bins, eclipse_depths, eclipse_errors,
                       fit_info,
-                      include_condensation=True, rad_method="xsec",
+                      include_condensation=True,
                       maxiter=None, maxcall=None, nlive=250,
                       num_final_samples=100, zero_opacities=[],
                       transit_throughputs=None, eclipse_throughputs=None,
@@ -614,8 +610,6 @@ class CombinedRetriever:
         include_condensation : bool, optional
             When determining atmospheric abundances, whether to include
             condensation.
-        rad_method : string, optional
-            "xsec" for opacity sampling (correlated-k is no longer supported)
         nlive : int
             Number of live points to use for nested sampling
         zero_opacities : list of strings
@@ -633,7 +627,7 @@ class CombinedRetriever:
         data = (transit_bins, transit_depths, transit_errors,
                 eclipse_bins, eclipse_depths, eclipse_errors)
         ln_like = self._make_ln_like(
-            data, fit_info, include_condensation, rad_method, zero_opacities,
+            data, fit_info, include_condensation, zero_opacities,
             transit_throughputs, eclipse_throughputs)
 
         sampler = NestedSampler(
@@ -642,18 +636,19 @@ class CombinedRetriever:
             bound='multi', nlive=nlive, **dynesty_kwargs)
         sampler.run_nested(maxiter=maxiter, maxcall=maxcall)
 
-        result = CustomDynestyResult(sampler.results)
-        result.logp = self._ln_probs(fit_info, result.samples, result.logl)
-        result.weights = scipy.special.softmax(result.logwt)
-        equal_samples = dynesty.utils.resample_equal(result.samples, result.weights)
+        result = sampler.results.asdict()
+        result["logp"] = self._ln_probs(fit_info, result["samples"], result["logl"])
+        result["weights"] = scipy.special.softmax(result["logwt"])
+        equal_samples = dynesty.utils.resample_equal(
+            result["samples"], result["weights"])
         return self._make_result(
             ln_like, fit_info, data, "dynesty", result,
-            result.samples, result.logp, equal_samples, num_final_samples)
+            result["samples"], result["logp"], equal_samples, num_final_samples)
 
     def run_multinest(self, transit_bins, transit_depths, transit_errors,
                       eclipse_bins, eclipse_depths, eclipse_errors,
                       fit_info,
-                      include_condensation=True, rad_method="xsec",
+                      include_condensation=True,
                       maxiter=None, maxcall=None, nlive=250,
                       num_final_samples=100, zero_opacities=[],
                       multinest_kwargs={},
@@ -677,7 +672,7 @@ class CombinedRetriever:
         data = (transit_bins, transit_depths, transit_errors,
                 eclipse_bins, eclipse_depths, eclipse_errors)
         ln_like = self._make_ln_like(
-            data, fit_info, include_condensation, rad_method, zero_opacities,
+            data, fit_info, include_condensation, zero_opacities,
             transit_throughputs, eclipse_throughputs)
 
         num_dim = fit_info._get_num_fit_params()
@@ -701,15 +696,14 @@ class CombinedRetriever:
         result["samples"] = weighted_samples[:, 2:]
         result["logl"] = -0.5 * weighted_samples[:, 1]
         result["logp"] = self._ln_probs(fit_info, result["samples"], result["logl"])
-        result["equal_samples"] = analyzer.get_equal_weighted_posterior()[:, :-1]
+        equal_samples = analyzer.get_equal_weighted_posterior()[:, :-1]
         return self._make_result(
             ln_like, fit_info, data, "pymultinest", result,
-            result["samples"], result["logp"], result["equal_samples"],
-            num_final_samples)
+            result["samples"], result["logp"], equal_samples, num_final_samples)
 
     def run_nautilus(self, transit_bins, transit_depths, transit_errors,
                      eclipse_bins, eclipse_depths, eclipse_errors,
-                     fit_info, include_condensation=True, rad_method="xsec",
+                     fit_info, include_condensation=True,
                      n_live=2000, n_eff=10000, n_networks=16,
                      discard_exploration=True, verbose=True,
                      num_final_samples=100, zero_opacities=(),
@@ -732,7 +726,7 @@ class CombinedRetriever:
         data = (transit_bins, transit_depths, transit_errors,
                 eclipse_bins, eclipse_depths, eclipse_errors)
         ln_like = self._make_ln_like(
-            data, fit_info, include_condensation, rad_method, zero_opacities,
+            data, fit_info, include_condensation, zero_opacities,
             transit_throughputs, eclipse_throughputs)
 
         sampler = Sampler(

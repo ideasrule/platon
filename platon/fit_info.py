@@ -51,8 +51,6 @@ class FitInfo:
             cold_name, low_lim, high_lim, low_guess, high_guess)
         self.add_uniform_fit_param(
             hot_name, low_lim, high_lim, low_guess, high_guess)
-        if not hasattr(self, "ordered_pairs"):
-            self.ordered_pairs = []
         self.ordered_pairs.append((cold_name, hot_name))
 
     def add_gaussian_fit_param(self, name, std, low_guess=None, high_guess=None):

@@ -7,7 +7,7 @@ from platon.TP_profile import Profile
 
 p = Profile.parametric(1200, 500, 0.5, 0.6, 1e6, 1900)
 #p = Profile.isothermal(1500)
-calc = EclipseDepthCalculator(method="xsec")
+calc = EclipseDepthCalculator()
 
 #Uncomment below to get binned eclipse depths
 #edges = np.linspace(1.1e-6, 1.7e-6, 30)

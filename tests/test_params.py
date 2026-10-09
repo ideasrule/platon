@@ -26,11 +26,11 @@ class TestParams(unittest.TestCase):
 
         x = mu
         prob_density = np.exp(-(x-mu)**2/2/std**2)/np.sqrt(2*np.pi*std**2)
-        self.assertEqual(np.log(prob_density), p.ln_prior(x))
+        self.assertAlmostEqual(np.log(prob_density), p.ln_prior(x))
 
         x = 5
         prob_density = np.exp(-(x-mu)**2/2/std**2)/np.sqrt(2*np.pi*std**2)
-        self.assertEqual(np.log(prob_density), p.ln_prior(x))
+        self.assertAlmostEqual(np.log(prob_density), p.ln_prior(x))
 
         self.assertEqual(p.from_unit_interval(0.5), 10)
 

@@ -1,5 +1,5 @@
 import numpy as np
-import scipy.stats
+import scipy.special
 
 
 class _Param:
@@ -56,10 +56,11 @@ class _GaussianParam(_Param):
         self.std = std
 
     def ln_prior(self, value):
-        return np.log(scipy.stats.norm.pdf(value, self.best_guess, self.std))
+        z = (value - self.best_guess) / self.std
+        return -0.5 * z**2 - np.log(self.std * np.sqrt(2 * np.pi))
 
     def from_unit_interval(self, u):
-        return scipy.stats.norm.ppf(u, self.best_guess, self.std)
+        return self.best_guess + self.std * scipy.special.ndtri(u)
 
     def within_limits(self, value):
         return True

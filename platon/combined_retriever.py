@@ -1,4 +1,5 @@
 import os
+import inspect
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -24,12 +25,25 @@ from .terminator import TwoSectorTerminator, label_by_temperature
 from .retrieval_result import RetrievalResult
 from .custom_dynesty_result import CustomDynestyResult
 
+
+def _include_opacities(fit_info):
+    '''The calculators' default opacities, plus those of any other gas being
+    fit (e.g. CS2), so that free retrievals can use every gas PLATON has
+    cross sections for'''
+    default = list(inspect.signature(TransitDepthCalculator).parameters[
+        "include_opacities"].default)
+    extra = [g for g in getattr(fit_info, "gases", [])
+             if g not in default and g not in ["H2", "He", "H2-He", "N2", "O2"]]
+    return default + extra
+
 class CombinedRetriever:
     def pretty_print(self, fit_info):
-        if not hasattr(self, "last_lnprob"):
+        if not hasattr(self, "last_ln_like"):
             return
-        
-        line = "ln_prob={:.2e}\t".format(self.last_lnprob)
+
+        # The prior is only evaluated here, not on every likelihood call
+        ln_prob = fit_info._ln_prior(self.last_params) + self.last_ln_like
+        line = "ln_prob={:.2e}\t".format(ln_prob)
         for i, name in enumerate(fit_info.fit_param_names):            
             value = self.last_params[i]
             unit = ""
@@ -318,7 +332,7 @@ class CombinedRetriever:
             return -np.inf
         
         self.last_params = params
-        self.last_lnprob = fit_info._ln_prior(params) + ln_likelihood.sum()
+        self.last_ln_like = ln_likelihood.sum()
         
         if ret_best_fit:
             # Attach the full (untruncated) T/P profiles so that downstream
@@ -415,16 +429,19 @@ class CombinedRetriever:
                           transit_throughputs=None, eclipse_throughputs=None):
         transit_calc = None
         eclipse_calc = None
+        include_opacities = _include_opacities(fit_info)
         if transit_bins is not None:
             transit_calc = TransitDepthCalculator(
                 include_condensation=include_condensation, method=rad_method,
+                include_opacities=include_opacities,
                 **fit_info._stellar_grid_options())
             transit_calc.change_wavelength_bins(transit_bins,
                                                 transit_throughputs)
             self._validate_params(fit_info, transit_calc)
         if eclipse_bins is not None:
             eclipse_calc = EclipseDepthCalculator(
-                include_condensation=include_condensation, method=rad_method)
+                include_condensation=include_condensation, method=rad_method,
+                include_opacities=include_opacities)
             eclipse_calc.change_wavelength_bins(eclipse_bins,
                                                 eclipse_throughputs)
         return transit_calc, eclipse_calc

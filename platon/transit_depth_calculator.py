@@ -13,7 +13,7 @@ class TransitDepthCalculator:
                  method='xsec',
                  include_opacities=["CH4", "CO2", "CO", "H2O", "H2S", "HCN",
                                     "K", "Na", "NH3", "SO2", "TiO", "VO"],
-                 downsample=1):
+                 downsample=1, stellar_grid=None, logg_star=4.5, feh_star=0.):
         '''
         All physical parameters are in SI.
 
@@ -26,9 +26,16 @@ class TransitDepthCalculator:
             The planetary radius is defined as the radius at this pressure
         method : string
             "xsec" for opacity sampling (correlated-k is no longer supported)
+        stellar_grid : str, optional
+            "newera" for the NewEra grid (Hauschildt et al. 2025), downloaded
+            into PLATON's data folder on first use, or a file in the format
+            described in _atmosphere_solver._load_stellar_grid.  Used instead
+            of the built-in temperature-only spectra for T_star, T_het and
+            T_het2, interpolated to logg_star (cgs) and feh_star.
         '''
         self.atm = AtmosphereSolver(include_condensation, ref_pressure,
-                                    method, include_opacities, downsample)
+                                    method, include_opacities, downsample,
+                                    stellar_grid, logg_star, feh_star)
 
     def change_wavelength_bins(self, bins):
         """Specify wavelength bins, instead of using the full wavelength grid
@@ -57,12 +64,12 @@ class TransitDepthCalculator:
                        add_collisional_absorption=True,
                        cloudtop_pressure=np.inf, cloud_fraction=1,
                        custom_abundances=None,
-                       T_star=None, T_spot=None, spot_cov_frac=None,
+                       T_star=None, T_het=None, het_cov_frac=None,
                        ri=None, frac_scale_height=1, number_density=0,
                        part_size=1e-6, part_size_std=0.5, P_quench=1e-99,
                        full_output=False, min_abundance=1e-99,
                        min_cross_sec=1e-99, stellar_blackbody=False,
-                       zero_opacities=[]):
+                       zero_opacities=[], T_het2=None, het2_cov_frac=None):
         '''
         Computes transit depths at a range of wavelengths.  To choose bins,
         call change_wavelength_bins().
@@ -137,12 +144,14 @@ class TransitDepthCalculator:
             Effective temperature of the star.  If you specify this and
             use wavelength binning, the wavelength binning becomes
             more accurate.
-        T_spot : float, optional
-            Effective temperature of the star spots. This can be used to make
-            wavelength dependent correction to the observed transit depths.
-        spot_cov_frac : float, optional
-            The spot covering fraction of the star by area. This can be used to
-            make wavelength dependent correction to the transit depths.
+        T_het, het_cov_frac : float or array, optional
+            Temperature and covering fraction of an unocculted stellar
+            heterogeneity, cooler (spots) or hotter (faculae) than the
+            photosphere, for the transit light source effect.  With
+            wavelength bins set, they may be arrays with one value per bin
+            (e.g. for visits at different stellar activity levels).
+        T_het2, het2_cov_frac : float or array, optional
+            A second heterogeneity, as above.
         ri : complex, optional
             Complex refractive index n - ik (where k > 0) of the particles
             responsible for Mie scattering.  If provided, Mie scattering will
@@ -191,6 +200,22 @@ class TransitDepthCalculator:
             corrected for stellar spots (multiplied by
             unbinned_correction_factors).
        '''
+        hets = [T_star if T_het is None else T_het, 0 if het_cov_frac is None else het_cov_frac,
+                T_star if T_het2 is None else T_het2, 0 if het2_cov_frac is None else het2_cov_frac]
+        if any(np.ndim(x) for x in hets):
+            # Per-bin heterogeneities: one calculation per distinct set
+            kwargs, code = dict(locals()), self.compute_depths.__code__
+            kwargs = {name: kwargs[name] for name in code.co_varnames[1:code.co_argcount]}
+            rows = np.column_stack(np.broadcast_arrays(*hets))
+            depths = np.zeros(len(rows))
+            for i, row in enumerate(np.unique(rows, axis=0)):
+                wavelengths, visit_depths, visit_info = self.compute_depths(**dict(
+                    kwargs, T_het=row[0], het_cov_frac=row[1], T_het2=row[2], het2_cov_frac=row[3]))
+                visit = np.all(rows == row, axis=1)
+                depths[visit] = visit_depths[visit]
+                info = visit_info if i == 0 else info
+            return wavelengths, depths, info
+
         if isinstance(t_p_profile, TwoSectorTerminator):
             if cloud_fraction != 1:
                 raise ValueError(
@@ -205,8 +230,8 @@ class TransitDepthCalculator:
                 scattering_ref_wavelength=scattering_ref_wavelength,
                 add_collisional_absorption=add_collisional_absorption,
                 cloud_fraction=1, custom_abundances=custom_abundances,
-                T_star=T_star, T_spot=T_spot,
-                spot_cov_frac=spot_cov_frac, ri=ri,
+                T_star=T_star, T_het=T_het, het_cov_frac=het_cov_frac,
+                T_het2=T_het2, het2_cov_frac=het2_cov_frac, ri=ri,
                 frac_scale_height=frac_scale_height,
                 number_density=number_density, part_size=part_size,
                 part_size_std=part_size_std, P_quench=P_quench,
@@ -270,8 +295,8 @@ class TransitDepthCalculator:
             scattering_ref_wavelength=scattering_ref_wavelength,
             add_collisional_absorption=add_collisional_absorption,
             cloudtop_pressure=cloudtop_pressure,
-            custom_abundances=custom_abundances, T_star=T_star, T_spot=T_spot,
-            spot_cov_frac=spot_cov_frac, ri=ri,
+            custom_abundances=custom_abundances, T_star=T_star, T_het=T_het,
+            het_cov_frac=het_cov_frac, T_het2=T_het2, het2_cov_frac=het2_cov_frac, ri=ri,
             frac_scale_height=frac_scale_height,
             number_density=number_density, part_size=part_size,
             part_size_std=part_size_std, P_quench=P_quench,

@@ -3,6 +3,7 @@ import os
 import shutil
 import pdb
 import numpy as np
+from pathlib import Path
 import matplotlib.pyplot as plt
 import scipy.special
 from scipy.ndimage import uniform_filter
@@ -216,7 +217,7 @@ class TestTransitDepthCalculator(unittest.TestCase):
                     kwargs = dict(
                         cloud_fraction=0.4, cloudtop_pressure=1e3,
                         add_H_minus_absorption=True,
-                        T_star=5700, T_spot=5000, spot_cov_frac=0.1,
+                        T_star=5700, T_het=5000, het_cov_frac=0.1,
                         **scattering)
                     wavelengths, fused, _ = calculator.compute_depths(
                         profile, R_sun, M_jup, R_jup, **kwargs)
@@ -259,6 +260,40 @@ class TestTransitDepthCalculator(unittest.TestCase):
         self.assertTrue(np.all(relative_diffs < 0.001))
 
         
+    def test_stellar_grid_file(self):
+        # A grid built from the default spectra, constant in logg and [Fe/H],
+        # must reproduce the default contaminated depths
+        import pickle, tempfile
+        data = Path(__path__[0]) / "data"
+        with open(data / "stellar_spectra.pkl", "rb") as f:
+            default = pickle.load(f, encoding="latin1")
+        spectra = np.asarray(default["spectra"])[:, None, None, :] * np.ones((1, 2, 2, 1))
+        args = (isothermal_profile(1000), R_sun, M_jup, R_jup)
+        stellar = dict(T_star=5000, T_het=4000, het_cov_frac=0.1)
+        _, expected, _ = TransitDepthCalculator().compute_depths(*args, **stellar)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "grid.npz"
+            np.savez(path, temperatures=default["temperatures"], loggs=[4, 5],
+                     fehs=[-1, 0], wavelengths=np.load(data / "low_res_lambdas.npy"),
+                     spectra=spectra)
+            calculator = TransitDepthCalculator(stellar_grid=path, logg_star=4.3, feh_star=-0.2)
+            _, depths, _ = calculator.compute_depths(*args, **stellar)
+        np.testing.assert_allclose(depths, expected, rtol=1e-6)
+
+    def test_per_bin_heterogeneities(self):
+        # Per-bin (per-visit) values equal separate calls for each visit
+        calculator = TransitDepthCalculator()
+        calculator.change_wavelength_bins(1e-6 * np.array([[1, 1.2], [1.2, 1.5], [3, 3.5], [4, 4.5]]))
+        args = (isothermal_profile(1000), R_sun, M_jup, R_jup)
+        visit1 = dict(T_het=4000, het_cov_frac=0.1, T_het2=5500, het2_cov_frac=0.05)
+        visit2 = dict(T_het=4200, het_cov_frac=0.2, T_het2=5500, het2_cov_frac=0)
+        _, depths1, _ = calculator.compute_depths(*args, T_star=5000, **visit1)
+        _, depths2, _ = calculator.compute_depths(*args, T_star=5000, **visit2)
+        per_bin = {name: np.r_[[visit1[name]] * 2, [visit2[name]] * 2] for name in visit1}
+        _, depths, _ = calculator.compute_depths(*args, T_star=5000, **per_bin)
+        np.testing.assert_allclose(depths, np.r_[depths1[:2], depths2[2:]])
+        self.assertFalse(np.allclose(depths1, depths2))
+
     def test_bounds_checking(self):
         Rp = 7.14e7
         Mp = 7.49e26

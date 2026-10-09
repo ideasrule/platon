@@ -11,7 +11,7 @@ To try out this feature, take a look at examples/surface_example.py. One begins 
 Optionally, one can estimate the surface temperature of a chosen surface_type from energy balance before computing the secondary eclipse depths by first retrieving the appropriate stellar spectrum and then calling calc_surface_temp::
 
     stellar_fluxes_orig, _ = calc.atm.get_stellar_spectrum(
-        T_star=T_star, T_spot=None, spot_cov_frac=0,
+        T_star=T_star, T_het=None, het_cov_frac=0,
         blackbody=False, use_full_lambdas=True)
     surface_temp = calc.calc_surface_temp(surface_type, stellar_fluxes_orig, semi_major_axis / star_radius)
 

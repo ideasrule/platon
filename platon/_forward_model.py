@@ -45,10 +45,10 @@ KB_OVER_G_AMU = k_B / (G * AMU)
 # Indices into the packed scalar-parameter vector
 (SC_RS, SC_MP, SC_RP, SC_LOGZ, SC_CO, SC_LOG_CH4, SC_SCAT_FACTOR,
  SC_SCAT_SLOPE, SC_SCAT_REF_UM, SC_CLOUDTOP, SC_P_QUENCH,
- SC_LOG10_P_QUENCH, SC_T_STAR, SC_T_SPOT, SC_SPOT_FRAC, SC_FSH, SC_NUM_DEN,
+ SC_LOG10_P_QUENCH, SC_T_STAR, SC_T_HET, SC_HET_FRAC, SC_FSH, SC_NUM_DEN,
  SC_LN_MIN_XSEC, SC_LOG_MIN_ABUND, SC_REF_PRESSURE, SC_T_STAR_HYDRO,
  SC_MIE_REF_P, SC_SURFACE_P, SC_A_OVER_RS, SC_SURFACE_TEMP, SC_REDIST,
- SC_N_SCALARS) = range(27)
+ SC_T_HET2, SC_HET2_FRAC, SC_N_SCALARS) = range(29)
 
 # Indices into the packed int vector
 IX_FLOOR, IX_N_INTS = range(2)
@@ -109,9 +109,10 @@ class ForwardConfig(NamedTuple):
     use_mie: bool
     has_t_star: bool
     stellar_in_grid: bool    # PHOENIX grid interp vs blackbody (host-known)
-    has_spots: bool
+    has_het: bool
     has_surface: bool = False
     surface_temp_given: bool = False
+    has_het2: bool = False  # second heterogeneity (T_het2, het2_cov_frac)
 
 
 class ForwardInputs(NamedTuple):
@@ -489,22 +490,20 @@ def _stellar_spectrum(cfg, data, sc, orig=False):
         ones = jnp.ones(L, dtype=jnp.float32)
         return ones, ones
 
-    T_star = sc[SC_T_STAR]
-    T_spot = sc[SC_T_SPOT]
-    f_spot = sc[SC_SPOT_FRAC]
+    def component(T):
+        if cfg.stellar_in_grid:
+            return interp1d(T, data.stellar_temps, spectra)
+        return math.pi * _planck(lam, T)
 
-    if cfg.stellar_in_grid:
-        unspotted = interp1d(T_star, data.stellar_temps, spectra)
-    else:
-        unspotted = math.pi * _planck(lam, T_star)
-    if not cfg.has_spots:
+    unspotted = component(sc[SC_T_STAR])
+    if not (cfg.has_het or cfg.has_het2):
         return unspotted, jnp.ones(L, dtype=jnp.float32)
 
-    if cfg.stellar_in_grid:
-        spot = interp1d(T_spot, data.stellar_temps, spectra)
-    else:
-        spot = math.pi * _planck(lam, T_spot)
-    spectrum = f_spot * spot + (1 - f_spot) * unspotted
+    spectrum = (1 - sc[SC_HET_FRAC] - sc[SC_HET2_FRAC]) * unspotted
+    if cfg.has_het:
+        spectrum += sc[SC_HET_FRAC] * component(sc[SC_T_HET])
+    if cfg.has_het2:
+        spectrum += sc[SC_HET2_FRAC] * component(sc[SC_T_HET2])
     correction_factors = unspotted / spectrum
     return spectrum, correction_factors
 

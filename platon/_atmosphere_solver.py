@@ -99,6 +99,19 @@ def _interp_rows_to(lambda_target, lambda_source, data):
                      for row in data])
 
 
+def _load_stellar_grid(path, logg, feh, wavelengths):
+    """Read a stellar grid such as NewEra: an npz file with temperatures (K),
+    loggs (cgs), fehs, wavelengths (m, covering PLATON's range), and spectra
+    of shape (temperatures, loggs, fehs, wavelengths) in W m^-2 m^-1.
+    Returns the temperatures and the spectra interpolated linearly to logg,
+    feh, and wavelengths."""
+    with np.load(path) as grid:
+        spectra = scipy.interpolate.interp1d(grid["fehs"], grid["spectra"], axis=2)(feh)
+        spectra = scipy.interpolate.interp1d(grid["loggs"], spectra, axis=1)(logg)
+        return (np.asarray(grid["temperatures"], np.float64),
+                _interp_rows_to(wavelengths, grid["wavelengths"], spectra).astype(np.float32))
+
+
 def _compute_h_minus_k(T_grid, wavelengths_m):
     """John (1988) H- bound-free + free-free absorption k(T, lambda), in
     m^4/N, for all temperatures at once: returns (len(T_grid), L).  Runs in
@@ -273,7 +286,8 @@ def _get_log_abund_grid(include_condensation, abundance_getter, master_index):
 
 class AtmosphereSolver:
     def __init__(self, include_condensation=True, ref_pressure=1e5,
-                 method='xsec', include_opacities=[], downsample=1):
+                 method='xsec', include_opacities=[], downsample=1,
+                 stellar_grid=None, logg_star=4.5, feh_star=0.):
         if method == "ktables":
             raise NotImplementedError(
                 "Correlated-k support has been removed from this JAX version "
@@ -282,6 +296,19 @@ class AtmosphereSolver:
         get_data_if_needed()
 
         self.raw = _load_raw(method, include_opacities, downsample)
+        if stellar_grid == "newera":
+            stellar_grid = Path(__file__).resolve().parent / "data/newera_jwst.npz"
+            if not stellar_grid.exists():
+                from urllib.request import urlretrieve
+                from platon import __stellar_grid_url__
+                print("Downloading NewEra stellar spectra from", __stellar_grid_url__)
+                urlretrieve(__stellar_grid_url__, str(stellar_grid) + ".part")
+                os.replace(str(stellar_grid) + ".part", stellar_grid)
+        if stellar_grid is not None:
+            temps, spectra = _load_stellar_grid(
+                stellar_grid, logg_star, feh_star, self.raw["lambda_full"])
+            self.raw = dict(self.raw, stellar_temps=temps, stellar_spectra=spectra,
+                            key=self.raw["key"] + (str(stellar_grid), logg_star, feh_star))
         self.include_condensation = include_condensation
 
         self.orig_lambda_grid = np.array(self.raw["lambda_full"])
@@ -562,7 +589,7 @@ class AtmosphereSolver:
                     "{} Pa unless it is np.inf".format(
                         cloudtop_pressure, minimum, maximum))
 
-    def get_stellar_spectrum(self, T_star, T_spot, spot_cov_frac,
+    def get_stellar_spectrum(self, T_star, T_het, het_cov_frac,
                              blackbody=False, use_full_lambdas=False):
         """Host (numpy) stellar spectrum, for non-JIT use."""
         if use_full_lambdas:
@@ -574,11 +601,11 @@ class AtmosphereSolver:
             stellar_spectra = self.raw["stellar_spectra"] if cond is None \
                 else self.raw["stellar_spectra"][:, cond]
 
-        if spot_cov_frac is None:
-            spot_cov_frac = 0
+        if het_cov_frac is None:
+            het_cov_frac = 0
 
-        if T_spot is None:
-            T_spot = T_star
+        if T_het is None:
+            T_het = T_star
 
         temps = self.stellar_spectra_temps
         if T_star is None:
@@ -586,13 +613,13 @@ class AtmosphereSolver:
             spot_spectrum = np.ones(len(lambdas))
         elif T_star >= temps.min() and T_star <= temps.max() and not blackbody:
             unspotted_spectrum = interp1d_np(T_star, temps, stellar_spectra)
-            spot_spectrum = interp1d_np(T_spot, temps, stellar_spectra)
+            spot_spectrum = interp1d_np(T_het, temps, stellar_spectra)
         else:
             unspotted_spectrum = np.pi * planck_np(lambdas, T_star)
-            spot_spectrum = np.pi * planck_np(lambdas, T_spot)
+            spot_spectrum = np.pi * planck_np(lambdas, T_het)
 
-        stellar_spectrum = spot_cov_frac * spot_spectrum + \
-            (1 - spot_cov_frac) * unspotted_spectrum
+        stellar_spectrum = het_cov_frac * spot_spectrum + \
+            (1 - het_cov_frac) * unspotted_spectrum
         correction_factors = unspotted_spectrum / stellar_spectrum
         return stellar_spectrum, correction_factors
 

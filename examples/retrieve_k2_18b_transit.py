@@ -17,7 +17,7 @@ fit_info = retriever.get_default_fit_info(
     fit_vmr=True,
     log_cloudtop_P=4,
     log_scatt_factor=0, scatt_slope=4, error_excess=0,
-    T_star=3457, T_spot=3000, spot_cov_frac=0.05,
+    T_star=3457, T_het=3000, het_cov_frac=0.05,
     transit_offsets={"offset_niriss": (0, 405),
                      "offset_g235h_nrs2": (535, 735),
                      "offset_g395h_nrs1": (735, 945),
@@ -32,8 +32,8 @@ fit_info.add_uniform_fit_param("offset_niriss", -200e-6, 200e-6)
 fit_info.add_uniform_fit_param("offset_g235h_nrs2", -200e-6, 200e-6)
 fit_info.add_uniform_fit_param("offset_g395h_nrs1", -200e-6, 200e-6)
 fit_info.add_uniform_fit_param("offset_g395h_nrs2", -200e-6, 200e-6)
-fit_info.add_uniform_fit_param("T_spot", 2000, 3457)
-fit_info.add_uniform_fit_param("spot_cov_frac", 0, 0.2)
+fit_info.add_uniform_fit_param("T_het", 2000, 3457)
+fit_info.add_uniform_fit_param("het_cov_frac", 0, 0.2)
 
 fit_info.add_gases_vmr(["CH4", "CO2", "H2O", "NH3", "HCN", "CO", "H2-He"], 1e-12, 10**-0.3)
 

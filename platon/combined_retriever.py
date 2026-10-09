@@ -20,7 +20,7 @@ from ._params import _UniformParam
 from .errors import AtmosphereError
 from ._output_writer import write_param_estimates_file
 from .TP_profile import Profile
-from .terminator import TwoSectorTerminator
+from .terminator import TwoSectorTerminator, label_by_temperature
 from .retrieval_result import RetrievalResult
 from .custom_dynesty_result import CustomDynestyResult
 
@@ -116,8 +116,8 @@ class CombinedRetriever:
             best = [fit_info.all_params[name].best_guess
                     for name in fit_info.fit_param_names]
             params = fit_info._interpret_param_array(best)
-            rebuilt = terminator.from_params(params)
-            for sector in (rebuilt.cold, rebuilt.hot):
+            sectors = terminator.sectors_from_params(params)
+            for sector in sectors:
                 calculator._validate_params(
                     sector.profile.temperatures, params["logZ"],
                     params["CO_ratio"], sector.cloudtop_pressure)
@@ -126,12 +126,11 @@ class CombinedRetriever:
                 if not isinstance(param, _UniformParam):
                     continue
                 if name not in (
-                        "logZ", "CO_ratio", "cold.log_cloudtop_P",
-                        "hot.log_cloudtop_P"):
+                        "logZ", "CO_ratio", "sector1.log_cloudtop_P",
+                        "sector2.log_cloudtop_P"):
                     continue
                 for limit in (param.low_lim, param.high_lim):
-                    for label, sector in (
-                            ("cold", rebuilt.cold), ("hot", rebuilt.hot)):
+                    for label, sector in zip(("sector1", "sector2"), sectors):
                         logZ = limit if name == "logZ" else params["logZ"]
                         ratio = limit if name == "CO_ratio" else \
                             params["CO_ratio"]
@@ -160,6 +159,23 @@ class CombinedRetriever:
         if offsets is not None:
             for name, (start, end) in offsets.items():
                 depths[start:end] += params_dict[name]
+
+    @staticmethod
+    def _visit_hets(params, n_points):
+        """T_het, het_cov_frac, T_het2, het2_cov_frac, as arrays with one value per point
+        if any visit in transit_visits has its own value."""
+        hets = {name: params[name] for name in ("T_het", "het_cov_frac", "T_het2", "het2_cov_frac")}
+        visits = params.get("transit_visits") or {}
+        for name in hets:
+            own = [(r, params[v + "." + name]) for v, r in visits.items()
+                   if params[v + "." + name] is not None]
+            if own:
+                shared = hets[name] if hets[name] is not None else \
+                    params["T_star"] if name.startswith("T") else 0
+                hets[name] = np.full(n_points, shared, float)
+                for (start, end), value in own:
+                    hets[name][start:end] = value
+        return hets
 
     @staticmethod
     def convert_clr_to_vmr(clrs):
@@ -192,8 +208,7 @@ class CombinedRetriever:
         Rs = params_dict["Rs"]
         Mp = params_dict["Mp"]
         T_star = params_dict["T_star"]
-        T_spot = params_dict["T_spot"]
-        spot_cov_frac = params_dict["spot_cov_frac"]
+        T_het, het_cov_frac = params_dict["T_het"], params_dict["het_cov_frac"]
         frac_scale_height = params_dict["frac_scale_height"]
         number_density = 10.0**params_dict["log_number_density"]
         part_size = 10.**params_dict["log_part_size"]
@@ -205,11 +220,7 @@ class CombinedRetriever:
         if cloud_fraction < 0 or cloud_fraction > 1:
             return -np.inf
         if transit_terminator is not None:
-            if cloud_fraction != 1:
-                return -np.inf
-            order_name = transit_terminator.order_parameter
-            if params_dict[f"cold.{order_name}"] > \
-               params_dict[f"hot.{order_name}"]:
+            if cloud_fraction != 1 or not 0 <= params_dict["sector1.fraction"] <= 1:
                 return -np.inf
 
         if params_dict["fit_vmr"]:
@@ -270,7 +281,7 @@ class CombinedRetriever:
                     scattering_factor=scatt_factor, scattering_slope=scatt_slope,
                     cloudtop_pressure=cloudtop_P,
                     cloud_fraction=cloud_fraction, T_star=T_star,
-                    T_spot=T_spot, spot_cov_frac=spot_cov_frac,
+                    **self._visit_hets(params_dict, len(measured_transit_depths)),
                     frac_scale_height=frac_scale_height, number_density=number_density,
                     part_size=part_size, ri=ri, P_quench=P_quench, full_output=ret_best_fit, zero_opacities=zero_opacities)
 
@@ -295,7 +306,7 @@ class CombinedRetriever:
                     custom_abundances=None,
                     scattering_factor=scatt_factor, scattering_slope=scatt_slope,
                     cloudtop_pressure=cloudtop_P,
-                    T_spot=T_spot, spot_cov_frac=spot_cov_frac,
+                    T_het=T_het, het_cov_frac=het_cov_frac,
                     frac_scale_height=frac_scale_height, number_density=number_density,
                     part_size = part_size, ri=ri, P_quench=P_quench, full_output=ret_best_fit, zero_opacities=zero_opacities)
                 self._apply_offsets(calculated_eclipse_depths, params_dict, "eclipse")
@@ -452,7 +463,8 @@ class CombinedRetriever:
 
         if transit_bins is not None:
             transit_calc = TransitDepthCalculator(
-                include_condensation=include_condensation, method=rad_method)
+                include_condensation=include_condensation, method=rad_method,
+                **fit_info._stellar_grid_options())
             transit_calc.change_wavelength_bins(transit_bins)
             self._validate_params(fit_info, transit_calc)
         if eclipse_bins is not None:
@@ -473,13 +485,15 @@ class CombinedRetriever:
         best_params_arr = sampler.flatchain[np.argmax(
             sampler.flatlnprobability)]
         
+        # Two-sector parameters are reported as cold/hot by temperature
+        labels, samples = label_by_temperature(
+            fit_info, np.vstack([sampler.flatchain, best_params_arr]))
         divisors, new_labels = self._get_divisors_labels(
-            np.median(sampler.flatchain, axis=0),
-            fit_info.fit_param_names)
+            np.median(samples[:-1], axis=0), labels)
         
         write_param_estimates_file(
-            sampler.flatchain / divisors,
-            best_params_arr / divisors,
+            samples[:-1] / divisors,
+            samples[-1] / divisors,
             np.max(sampler.flatlnprobability),
             new_labels)
 
@@ -593,7 +607,8 @@ class CombinedRetriever:
         eclipse_calc = None
         if transit_bins is not None:
             transit_calc = TransitDepthCalculator(
-                include_condensation=include_condensation, method=rad_method)
+                include_condensation=include_condensation, method=rad_method,
+                **fit_info._stellar_grid_options())
             transit_calc.change_wavelength_bins(transit_bins)
             self._validate_params(fit_info, transit_calc)
         if eclipse_bins is not None:
@@ -630,13 +645,14 @@ class CombinedRetriever:
         equal_samples = dynesty.utils.resample_equal(result.samples, result.weights)
         np.random.shuffle(equal_samples)
 
+        labels, samples = label_by_temperature(
+            fit_info, np.vstack([equal_samples, best_params_arr]))
         divisors, new_labels = self._get_divisors_labels(
-            np.median(equal_samples, axis=0),
-            fit_info.fit_param_names)
+            np.median(samples[:-1], axis=0), labels)
         
         write_param_estimates_file(
-            equal_samples / divisors,
-            best_params_arr / divisors,
+            samples[:-1] / divisors,
+            samples[-1] / divisors,
             np.max(result.logp),
             new_labels)
         
@@ -698,7 +714,8 @@ class CombinedRetriever:
         eclipse_calc = None
         if transit_bins is not None:
             transit_calc = TransitDepthCalculator(
-                include_condensation=include_condensation, method=rad_method)
+                include_condensation=include_condensation, method=rad_method,
+                **fit_info._stellar_grid_options())
             transit_calc.change_wavelength_bins(transit_bins)
             self._validate_params(fit_info, transit_calc)
         if eclipse_bins is not None:
@@ -745,13 +762,14 @@ class CombinedRetriever:
         np.random.shuffle(equal_samples)
         result["equal_samples"] = equal_samples
         
+        labels, samples = label_by_temperature(
+            fit_info, np.vstack([equal_samples, best_params_arr]))
         divisors, new_labels = self._get_divisors_labels(
-            np.median(equal_samples, axis=0),
-            fit_info.fit_param_names)
+            np.median(samples[:-1], axis=0), labels)
         
         write_param_estimates_file(
-            equal_samples / divisors,
-            best_params_arr / divisors,
+            samples[:-1] / divisors,
+            samples[-1] / divisors,
             np.max(result["logp"]),
             new_labels)
 
@@ -816,7 +834,8 @@ class CombinedRetriever:
         eclipse_calc = None
         if transit_bins is not None:
             transit_calc = TransitDepthCalculator(
-                include_condensation=include_condensation, method=rad_method)
+                include_condensation=include_condensation, method=rad_method,
+                **fit_info._stellar_grid_options())
             transit_calc.change_wavelength_bins(transit_bins)
             self._validate_params(fit_info, transit_calc)
         if eclipse_bins is not None:
@@ -854,10 +873,12 @@ class CombinedRetriever:
 
         equal_samples = dynesty.utils.resample_equal(samples, weights)
         np.random.shuffle(equal_samples)
+        labels, samples = label_by_temperature(
+            fit_info, np.vstack([equal_samples, best_params_arr]))
         divisors, new_labels = self._get_divisors_labels(
-            np.median(equal_samples, axis=0), fit_info.fit_param_names)
+            np.median(samples[:-1], axis=0), labels)
         write_param_estimates_file(
-            equal_samples / divisors, best_params_arr / divisors,
+            samples[:-1] / divisors, samples[-1] / divisors,
             np.max(logp), new_labels)
 
         best = self._ln_like(
@@ -910,7 +931,7 @@ class CombinedRetriever:
                              log_cloudtop_P=np.inf, cloud_fraction=1,
                              log_scatt_factor=0,
                              scatt_slope=4, error_excess=0, T_star=None,
-                             T_spot=None, spot_cov_frac=None,
+                             T_het=None, het_cov_frac=None, T_het2=None, het2_cov_frac=None,
                              frac_scale_height=1,
                              log_number_density=-np.inf, log_part_size=-6,
                              n=None, log_k=-np.inf,
@@ -920,6 +941,8 @@ class CombinedRetriever:
                              profile_type = 'isothermal',
                              transit_profile_type = 'isothermal',
                              transit_terminator=None,
+                             stellar_grid=None, logg_star=4.5, feh_star=0.,
+                             transit_visits=None,
                              **profile_kwargs):
         '''Get a :class:`.FitInfo` object filled with best guess values.  A few
         parameters are required, but others can be set to default values if you
@@ -971,6 +994,19 @@ class CombinedRetriever:
             T3_transit); any parameter without a "_transit" version falls
             back to the unsuffixed (dayside) value.  For "isothermal", the
             temperature is T_transit, falling back to T.
+        T_het, het_cov_frac, T_het2, het2_cov_frac : float, optional
+            Temperatures and covering fractions of up to two unocculted
+            stellar heterogeneities (see TransitDepthCalculator).  Eclipse
+            depths use only the first.
+        stellar_grid, logg_star, feh_star : optional
+            Stellar spectra file and the (fixed) stellar log g and [Fe/H] it
+            is interpolated to; see TransitDepthCalculator.
+        transit_visits : dict, optional
+            Visit names mapped to the (start, end) indices of their transit
+            data, e.g. {"visit1": (0, 120), "visit2": (120, 176)}.  Each
+            visit gets parameters such as "visit1.het_cov_frac" (also T_het, T_het2,
+            het2_cov_frac), which default to None, meaning the shared value; fit
+            them to let the heterogeneities differ between visits.
         transit_terminator : TwoSectorTerminator, optional
             A cold and hot terminator template for a 1.5-D transit retrieval.
             Its named sector values are added to the returned FitInfo.  For
@@ -1035,5 +1071,9 @@ class CombinedRetriever:
                         "{} offsets {} {} and {} {} overlap".format(
                             kind, name1, tuple(range1), name2, tuple(range2)))
         
+        for visit in transit_visits or {}:
+            for name in ("T_het", "het_cov_frac", "T_het2", "het2_cov_frac"):
+                all_variables["{}.{}".format(visit, name)] = None
+
         fit_info = FitInfo(all_variables)
         return fit_info

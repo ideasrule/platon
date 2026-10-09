@@ -27,6 +27,8 @@ class FitInfo:
         if high_guess is None:
             high_guess = high_lim
         best_guess = self.all_params[name].best_guess
+        if best_guess is None:  # e.g. a per-visit value that defaults to the shared one
+            best_guess = 0.5 * (low_lim + high_lim)
 
         self.fit_param_names.append(name)
         self.all_params[name] = _UniformParam(best_guess, low_lim, high_lim,
@@ -140,6 +142,10 @@ class FitInfo:
 
     def _get(self, name):
         return self.all_params[name].best_guess
+
+    def _stellar_grid_options(self):
+        return {name: self.all_params[name].best_guess for name in
+                ("stellar_grid", "logg_star", "feh_star") if name in self.all_params}
 
     def _get_num_fit_params(self):
         return len(self.fit_param_names)

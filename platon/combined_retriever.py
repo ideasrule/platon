@@ -1,22 +1,18 @@
-import os
 import inspect
+import copy
 
 import numpy as np
-import matplotlib.pyplot as plt
-import scipy.interpolate
+import scipy.special
 import emcee
 from dynesty import NestedSampler
-from dynesty import plotting as dyplot
 import dynesty.utils
-import copy
-import pickle
 
 from .psis import psisloo
 from .transit_depth_calculator import TransitDepthCalculator
 from .eclipse_depth_calculator import EclipseDepthCalculator
 from .fit_info import FitInfo
 
-from .constants import METRES_TO_UM, M_jup, R_jup, R_earth, M_earth, R_sun
+from .constants import M_jup, R_jup, R_earth, M_earth, R_sun
 from ._params import _UniformParam
 from .errors import AtmosphereError
 from ._output_writer import write_param_estimates_file
@@ -24,6 +20,10 @@ from .TP_profile import Profile
 from .terminator import TwoSectorTerminator, label_by_temperature
 from .retrieval_result import RetrievalResult
 from .custom_dynesty_result import CustomDynestyResult
+
+
+# Stellar heterogeneity parameters, which can differ between transit visits
+_HET_PARAMS = ("T_het", "het_cov_frac", "T_het2", "het2_cov_frac")
 
 
 def _include_opacities(fit_info):
@@ -44,36 +44,30 @@ class CombinedRetriever:
         # The prior is only evaluated here, not on every likelihood call
         ln_prob = fit_info._ln_prior(self.last_params) + self.last_ln_like
         line = "ln_prob={:.2e}\t".format(ln_prob)
-        for i, name in enumerate(fit_info.fit_param_names):            
-            value = self.last_params[i]
+        units = {"Rs": (R_sun, "R_sun"), "Mp": (M_jup, "M_jup"),
+                 "Rp": (R_jup, "R_jup")}
+        ppm_names = self._offset_names(fit_info) | {"error_excess"}
+
+        for name, value in zip(fit_info.fit_param_names, self.last_params):
             unit = ""
-            if name == "Rs":
-                value /= R_sun
-                unit = "R_sun"
-            if name == "Mp":
-                value /= M_jup
-                unit = "M_jup"
-            if name == "Rp":
-                value /= R_jup
-                unit = "R_jup"
-            if name == "T" or name.endswith(".T"):
-                unit = "K"
+            if name in units:
+                divisor, unit = units[name]
+                value /= divisor
 
             if name == "T" or name.endswith(".T"):
-                format_str = "{:4.0f}"                
+                format_str = "{:4.0f}"
+                unit = "K"
             elif abs(value) < 1e4: format_str = "{:.2f}"
             else: format_str = "{:.2e}"
 
-            if name == "error_excess" or \
-               name in self._offset_names(fit_info):
+            if name in ppm_names:
                 unit = "ppm"
                 value *= 1e6
-            
-            format_str = "{}=" + format_str + " " + unit + "\t"
-            line += format_str.format(name, value)
-            
+
+            line += ("{}=" + format_str + " " + unit + "\t").format(name, value)
+
         return line
-    
+
     def _validate_params(self, fit_info, calculator):
         # This assumes that the valid parameter space is rectangular, so that
         # the bounds for each parameter can be treated separately. Unfortunately
@@ -91,68 +85,63 @@ class CombinedRetriever:
                 raise ValueError(
                     "cloud_fraction must be fixed at 1 for a "
                     "TwoSectorTerminator")
-        
+
         if fit_info.all_params["n"].best_guess is None:
             # Not using Mie scattering
             if fit_info.all_params["log_number_density"].best_guess != -np.inf:
-                raise ValueError("log number density must be -inf if not using Mie scattering")            
+                raise ValueError("log number density must be -inf if not using Mie scattering")
         else:
             if fit_info.all_params["log_scatt_factor"].best_guess != 0:
-                raise ValueError("log scattering factor must be 0 if using Mie scattering")           
-            
-        
-        for name in fit_info.fit_param_names:
-            this_param = fit_info.all_params[name]
-            if not isinstance(this_param, _UniformParam):
-                continue
+                raise ValueError("log scattering factor must be 0 if using Mie scattering")
 
-            if this_param.best_guess < this_param.low_lim \
-               or this_param.best_guess > this_param.high_lim:
+        uniform_params = [(name, fit_info.all_params[name])
+                          for name in fit_info.fit_param_names
+                          if isinstance(fit_info.all_params[name], _UniformParam)]
+
+        for name, param in uniform_params:
+            if param.best_guess < param.low_lim \
+               or param.best_guess > param.high_lim:
                 raise ValueError(
                     "Value {} for {} not between low and high limits {}-{}".format(
-                        this_param.best_guess, name, this_param.low_lim, this_param.high_lim))
-            if this_param.low_lim >= this_param.high_lim:
+                        param.best_guess, name, param.low_lim, param.high_lim))
+            if param.low_lim >= param.high_lim:
                 raise ValueError(
                     "low_lim for {} is higher than high_lim".format(name))
 
-            if terminator is not None:
+        if terminator is None:
+            for name, param in uniform_params:
+                for lim in [param.low_lim, param.high_lim]:
+                    param.best_guess = lim
+                    calculator._validate_params(
+                        fit_info._get("T"),
+                        fit_info._get("logZ"),
+                        fit_info._get("CO_ratio"),
+                        10**fit_info._get("log_cloudtop_P"))
+            return
+
+        best = [fit_info.all_params[name].best_guess
+                for name in fit_info.fit_param_names]
+        params = fit_info._interpret_param_array(best)
+        sectors = terminator.sectors_from_params(params)
+        for sector in sectors:
+            calculator._validate_params(
+                sector.profile.temperatures, params["logZ"],
+                params["CO_ratio"], sector.cloudtop_pressure)
+        for name, param in uniform_params:
+            if name not in (
+                    "logZ", "CO_ratio", "sector1.log_cloudtop_P",
+                    "sector2.log_cloudtop_P"):
                 continue
-
-            for lim in [this_param.low_lim, this_param.high_lim]:
-                this_param.best_guess = lim
-                calculator._validate_params(
-                    fit_info._get("T"),
-                    fit_info._get("logZ"),
-                    fit_info._get("CO_ratio"),
-                    10**fit_info._get("log_cloudtop_P"))
-
-        if terminator is not None:
-            best = [fit_info.all_params[name].best_guess
-                    for name in fit_info.fit_param_names]
-            params = fit_info._interpret_param_array(best)
-            sectors = terminator.sectors_from_params(params)
-            for sector in sectors:
-                calculator._validate_params(
-                    sector.profile.temperatures, params["logZ"],
-                    params["CO_ratio"], sector.cloudtop_pressure)
-            for name in fit_info.fit_param_names:
-                param = fit_info.all_params[name]
-                if not isinstance(param, _UniformParam):
-                    continue
-                if name not in (
-                        "logZ", "CO_ratio", "sector1.log_cloudtop_P",
-                        "sector2.log_cloudtop_P"):
-                    continue
-                for limit in (param.low_lim, param.high_lim):
-                    for label, sector in zip(("sector1", "sector2"), sectors):
-                        logZ = limit if name == "logZ" else params["logZ"]
-                        ratio = limit if name == "CO_ratio" else \
-                            params["CO_ratio"]
-                        cloudtop = 10**limit if \
-                            name == f"{label}.log_cloudtop_P" else \
-                            sector.cloudtop_pressure
-                        calculator._validate_params(
-                            sector.profile.temperatures, logZ, ratio, cloudtop)
+            for limit in (param.low_lim, param.high_lim):
+                for label, sector in zip(("sector1", "sector2"), sectors):
+                    logZ = limit if name == "logZ" else params["logZ"]
+                    ratio = limit if name == "CO_ratio" else \
+                        params["CO_ratio"]
+                    cloudtop = 10**limit if \
+                        name == f"{label}.log_cloudtop_P" else \
+                        sector.cloudtop_pressure
+                    calculator._validate_params(
+                        sector.profile.temperatures, logZ, ratio, cloudtop)
 
     @staticmethod
     def _offset_names(fit_info):
@@ -178,7 +167,7 @@ class CombinedRetriever:
     def _visit_hets(params, n_points):
         """T_het, het_cov_frac, T_het2, het2_cov_frac, as arrays with one value per point
         if any visit in transit_visits has its own value."""
-        hets = {name: params[name] for name in ("T_het", "het_cov_frac", "T_het2", "het2_cov_frac")}
+        hets = {name: params[name] for name in _HET_PARAMS}
         visits = params.get("transit_visits") or {}
         for name in hets:
             own = [(r, params[v + "." + name]) for v, r in visits.items()
@@ -199,157 +188,150 @@ class CombinedRetriever:
         vmrs_with_bkg = np.exp(clrs_with_bkg + np.log(geometric_mean))
         assert(np.around(np.sum(vmrs_with_bkg), decimals=5) == 1)
         return vmrs_with_bkg
-    
+
+    @staticmethod
+    def _gaussian_ln_like(model, measured, errors, error_excess):
+        """Log likelihood of each measured depth, with error_excess added in
+        quadrature to its error."""
+        variance = errors**2 + error_excess**2
+        return -0.5 * ((model - measured)**2 / variance +
+                       np.log(2 * np.pi * variance))
+
+    @staticmethod
+    def _check_profile(profile):
+        """Raises AtmosphereError if any temperature of a Profile or
+        TwoSectorTerminator is NaN."""
+        if np.any(np.isnan(CombinedRetriever._profile_to_array(profile)[1:])):
+            raise AtmosphereError("Invalid T/P profile")
+
     def _ln_like(self, params, transit_calc, eclipse_calc, fit_info, measured_transit_depths,
                  measured_transit_errors, measured_eclipse_depths,
                  measured_eclipse_errors, ret_best_fit=False,
                  lnlike_per_point=False,
                  zero_opacities=[]):
-
+        '''Returns -inf if params are invalid.  Otherwise, returns the total
+        log likelihood; or the log likelihood of every data point if
+        lnlike_per_point; or (transit depths, transit info dict, eclipse
+        depths, eclipse info dict, pointwise log likelihoods) if
+        ret_best_fit.'''
         if not fit_info._within_limits(params):
             return -np.inf
 
         params_dict = fit_info._interpret_param_array(params)
-        
-        Rp = params_dict["Rp"]
-        T = params_dict["T"]
         logZ = params_dict["logZ"]
         CO_ratio = params_dict["CO_ratio"]
-        scatt_factor = 10.0**params_dict["log_scatt_factor"]
-        scatt_slope = params_dict["scatt_slope"]
-        cloudtop_P = 10.0**params_dict["log_cloudtop_P"]
-        error_excess = params_dict["error_excess"]
-        Rs = params_dict["Rs"]
-        Mp = params_dict["Mp"]
-        T_star = params_dict["T_star"]
-        T_het, het_cov_frac = params_dict["T_het"], params_dict["het_cov_frac"]
-        frac_scale_height = params_dict["frac_scale_height"]
-        number_density = 10.0**params_dict["log_number_density"]
-        part_size = 10.**params_dict["log_part_size"]
-        P_quench = 10.** params_dict["log_P_quench"]
-        CH4_mult = 10.**params_dict["log_CH4_mult"]
         cloud_fraction = params_dict.get("cloud_fraction", 1)
         transit_terminator = params_dict.get("transit_terminator")
 
-        if cloud_fraction < 0 or cloud_fraction > 1:
+        if not 0 <= cloud_fraction <= 1:
             return -np.inf
         if transit_terminator is not None:
             if cloud_fraction != 1 or not 0 <= params_dict["sector1.fraction"] <= 1:
                 return -np.inf
+        if params_dict["Rs"] <= 0 or params_dict["Mp"] <= 0:
+            return -np.inf
 
-        if params_dict["fit_vmr"]:
+        gases = None
+        vmrs = None
+        if params_dict["fit_vmr"] or params_dict["fit_clr"]:
             assert(logZ is None and CO_ratio is None)
             gases = fit_info.gases
-            vmrs = [10.**params_dict[f'log_{gas}'] for gas in gases[:-1]]
-            vmrs.append(1 - np.sum(vmrs))
-            if vmrs[-1] < 0: return -np.inf
-        elif params_dict["fit_clr"]:
-            assert(logZ is None and CO_ratio is None)
-            gases = fit_info.gases
-            clrs = [params_dict[f'clr_{gas}'] for gas in gases[:-1]]
-            vmrs = self.convert_clr_to_vmr(clrs)
-            if np.min(vmrs) < fit_info.clr_low_lim: return -np.inf
-        else:
-            vmrs = None
-            gases = None
-        if "n" in params_dict and params_dict["n"] is not None and "log_k" in params_dict:
+            if params_dict["fit_vmr"]:
+                vmrs = [10.**params_dict[f'log_{gas}'] for gas in gases[:-1]]
+                vmrs.append(1 - np.sum(vmrs))
+                if vmrs[-1] < 0: return -np.inf
+            else:
+                clrs = [params_dict[f'clr_{gas}'] for gas in gases[:-1]]
+                vmrs = self.convert_clr_to_vmr(clrs)
+                if np.min(vmrs) < fit_info.clr_low_lim: return -np.inf
+
+        if params_dict.get("n") is not None and "log_k" in params_dict:
             ri = params_dict["n"] - 1j * 10**params_dict["log_k"]
         else:
             ri = None
-            
-        if Rs <= 0 or Mp <= 0:
-            return -np.inf
+
+        # Arguments shared by the transit and eclipse depth calculators
+        depth_kwargs = dict(
+            star_radius=params_dict["Rs"], planet_mass=params_dict["Mp"],
+            planet_radius=params_dict["Rp"], T_star=params_dict["T_star"],
+            logZ=logZ, CO_ratio=CO_ratio,
+            CH4_mult=10.**params_dict["log_CH4_mult"],
+            gases=gases, vmrs=vmrs,
+            scattering_factor=10.0**params_dict["log_scatt_factor"],
+            scattering_slope=params_dict["scatt_slope"],
+            cloudtop_pressure=10.0**params_dict["log_cloudtop_P"],
+            frac_scale_height=params_dict["frac_scale_height"],
+            number_density=10.0**params_dict["log_number_density"],
+            part_size=10.**params_dict["log_part_size"], ri=ri,
+            P_quench=10.**params_dict["log_P_quench"],
+            full_output=ret_best_fit, zero_opacities=zero_opacities)
+        error_excess = params_dict["error_excess"]
 
         ln_likelihood = np.array([])
-        calculated_transit_depths = None
-        transit_info_dict = None
-        calculated_eclipse_depths = None
-        eclipse_info_dict = None
-        
+        transit_depths = transit_info = eclipse_depths = eclipse_info = None
+
         try:
             if measured_transit_depths is not None:
                 if transit_terminator is None:
                     transit_profile_type = params_dict.get(
                         "transit_profile_type", "isothermal")
                     if transit_profile_type == "isothermal" and \
-                       params_dict.get("T_transit") is None and T is None:
+                       params_dict.get("T_transit") is None and params_dict["T"] is None:
                         raise ValueError(
                             "Must fit for T if using transit depths")
                     transit_profile = Profile.from_params_dict(
                         transit_profile_type, params_dict, suffix="_transit")
-                    transit_profiles = (transit_profile,)
                 else:
                     transit_profile = transit_terminator.from_params(
                         params_dict)
-                    transit_profiles = (
-                        transit_profile.cold.profile,
-                        transit_profile.hot.profile)
+                self._check_profile(transit_profile)
 
-                if any(np.any(np.isnan(p.temperatures))
-                       for p in transit_profiles):
-                    raise AtmosphereError("Invalid T/P profile")
-
-                transit_wavelengths, calculated_transit_depths, transit_info_dict = transit_calc.compute_depths(
-                    transit_profile, Rs, Mp, Rp, logZ, CO_ratio, CH4_mult, gases, vmrs,
-                    custom_abundances=None,
-                    scattering_factor=scatt_factor, scattering_slope=scatt_slope,
-                    cloudtop_pressure=cloudtop_P,
-                    cloud_fraction=cloud_fraction, T_star=T_star,
+                _, transit_depths, transit_info = transit_calc.compute_depths(
+                    transit_profile, cloud_fraction=cloud_fraction,
                     **self._visit_hets(params_dict, len(measured_transit_depths)),
-                    frac_scale_height=frac_scale_height, number_density=number_density,
-                    part_size=part_size, ri=ri, P_quench=P_quench, full_output=ret_best_fit, zero_opacities=zero_opacities)
+                    **depth_kwargs)
+                self._apply_offsets(transit_depths, params_dict, "transit")
+                ln_likelihood = np.append(ln_likelihood, self._gaussian_ln_like(
+                    transit_depths, measured_transit_depths,
+                    measured_transit_errors, error_excess))
 
-                self._apply_offsets(calculated_transit_depths, params_dict, "transit")
-                residuals = calculated_transit_depths - measured_transit_depths
-                scaled_errors = np.sqrt(measured_transit_errors**2 + error_excess**2)
-                ln_likelihood = np.append(ln_likelihood, -0.5 * (residuals**2 / scaled_errors**2 + np.log(2 * np.pi * scaled_errors**2)))
-                
             if measured_eclipse_depths is not None:
-                if params_dict["profile_type"] == "isothermal" and T is None:
+                if params_dict["profile_type"] == "isothermal" and params_dict["T"] is None:
                     raise ValueError(
                         "Must fit for T when profile_type is isothermal")
-
-                t_p_profile = Profile.from_params_dict(
+                eclipse_profile = Profile.from_params_dict(
                     params_dict["profile_type"], params_dict)
+                self._check_profile(eclipse_profile)
 
-                if np.any(np.isnan(t_p_profile.temperatures)):
-                    raise AtmosphereError("Invalid T/P profile")
+                _, eclipse_depths, eclipse_info = eclipse_calc.compute_depths(
+                    eclipse_profile, T_het=params_dict["T_het"],
+                    het_cov_frac=params_dict["het_cov_frac"], **depth_kwargs)
+                self._apply_offsets(eclipse_depths, params_dict, "eclipse")
+                ln_likelihood = np.append(ln_likelihood, self._gaussian_ln_like(
+                    eclipse_depths, measured_eclipse_depths,
+                    measured_eclipse_errors, error_excess))
 
-                eclipse_wavelengths, calculated_eclipse_depths, eclipse_info_dict = eclipse_calc.compute_depths(
-                    t_p_profile, Rs, Mp, Rp, T_star, logZ, CO_ratio, CH4_mult, gases, vmrs,
-                    custom_abundances=None,
-                    scattering_factor=scatt_factor, scattering_slope=scatt_slope,
-                    cloudtop_pressure=cloudtop_P,
-                    T_het=T_het, het_cov_frac=het_cov_frac,
-                    frac_scale_height=frac_scale_height, number_density=number_density,
-                    part_size = part_size, ri=ri, P_quench=P_quench, full_output=ret_best_fit, zero_opacities=zero_opacities)
-                self._apply_offsets(calculated_eclipse_depths, params_dict, "eclipse")
-                residuals = calculated_eclipse_depths - measured_eclipse_depths
-                scaled_errors = np.sqrt(measured_eclipse_errors**2 + error_excess**2)
-                ln_likelihood = np.append(ln_likelihood, -0.5 * (residuals**2 / scaled_errors**2 + np.log(2 * np.pi * scaled_errors**2)))
-
-        except AtmosphereError as e:
+        except AtmosphereError:
             return -np.inf
-        
+
         self.last_params = params
         self.last_ln_like = ln_likelihood.sum()
-        
+
         if ret_best_fit:
             # Attach the full (untruncated) T/P profiles so that downstream
             # code (RetrievalResult.random_TP_profiles, Plotter) has them
-            if transit_info_dict is not None:
-                transit_info_dict["full_TP_profile"] = \
+            if transit_info is not None:
+                transit_info["full_TP_profile"] = \
                     self._profile_to_array(transit_profile)
-            if eclipse_info_dict is not None:
-                eclipse_info_dict["full_TP_profile"] = \
-                    self._profile_to_array(t_p_profile)
-            return calculated_transit_depths, transit_info_dict, calculated_eclipse_depths, eclipse_info_dict, ln_likelihood
+            if eclipse_info is not None:
+                eclipse_info["full_TP_profile"] = \
+                    self._profile_to_array(eclipse_profile)
+            return transit_depths, transit_info, eclipse_depths, eclipse_info, ln_likelihood
 
         if lnlike_per_point:
             return ln_likelihood
 
-        return ln_likelihood.sum()
-
+        return self.last_ln_like
 
     @staticmethod
     def _profile_to_array(profile):
@@ -367,65 +349,14 @@ class CombinedRetriever:
             np.asarray(profile.pressures, dtype=np.float64),
             np.asarray(profile.temperatures, dtype=np.float64)])
 
-    @staticmethod
-    def _init_random_samples(retrieval_result):
-        """Creates the empty lists that _record_random_sample fills."""
-        retrieval_result.random_transit_depths = []
-        retrieval_result.random_eclipse_depths = []
-        retrieval_result.random_transit_TP_profiles = []
-        retrieval_result.random_eclipse_TP_profiles = []
-        # random_TP_profiles holds the dayside (eclipse) profiles when
-        # eclipse data are fit, and the terminator (transit) profiles
-        # otherwise.  It is kept for backwards compatibility.
-        retrieval_result.random_TP_profiles = []
-        retrieval_result.pointwise_lnlikes = []
-
-    @staticmethod
-    def _record_random_sample(retrieval_result, transit_info, eclipse_info,
-                              pointwise_lnlike):
-        """Appends the spectra and T/P profiles of one posterior sample to
-        the random_* lists of retrieval_result.
-
-        Transit T/P profiles are (2, N) arrays [P, T], or (3, N) arrays
-        [P, T_cold, T_hot] for 1.5-D terminator retrievals."""
-        if transit_info is not None:
-            retrieval_result.random_transit_depths.append(
-                transit_info["unbinned_depths"])
-            retrieval_result.random_transit_TP_profiles.append(
-                transit_info["full_TP_profile"])
-        if eclipse_info is not None:
-            retrieval_result.random_eclipse_depths.append(
-                eclipse_info["unbinned_eclipse_depths"])
-            retrieval_result.random_eclipse_TP_profiles.append(
-                eclipse_info["full_TP_profile"])
-        if eclipse_info is not None:
-            retrieval_result.random_TP_profiles.append(
-                eclipse_info["full_TP_profile"])
-        elif transit_info is not None:
-            retrieval_result.random_TP_profiles.append(
-                transit_info["full_TP_profile"])
-        retrieval_result.pointwise_lnlikes.append(pointwise_lnlike)
-
-    def _ln_prob(self, params, transit_calc, eclipse_calc, fit_info, measured_transit_depths,
-                 measured_transit_errors, measured_eclipse_depths,
-                 measured_eclipse_errors, zero_opacities=[]):
-        
-        lnlike_per_point = self._ln_like(params, transit_calc, eclipse_calc, fit_info, measured_transit_depths,
-                                measured_transit_errors, measured_eclipse_depths,
-                                measured_eclipse_errors, zero_opacities=zero_opacities, lnlike_per_point=True)
-        
-        if not np.isscalar(lnlike_per_point):
-            ln_like = lnlike_per_point.sum()
-        else:
-            assert(lnlike_per_point == -np.inf)
-            ln_like = -np.inf
-
-        return fit_info._ln_prior(params) + ln_like
-
-
-    def _make_calculators(self, transit_bins, eclipse_bins, fit_info,
-                          include_condensation, rad_method,
-                          transit_throughputs=None, eclipse_throughputs=None):
+    def _make_ln_like(self, data, fit_info, include_condensation, rad_method,
+                      zero_opacities, transit_throughputs, eclipse_throughputs):
+        '''Creates the depth calculators for data, which is (transit_bins,
+        transit_depths, transit_errors, eclipse_bins, eclipse_depths,
+        eclipse_errors), and returns ln_like(params, **kwargs), which calls
+        _ln_like on that data.'''
+        transit_bins, transit_depths, transit_errors, \
+            eclipse_bins, eclipse_depths, eclipse_errors = data
         transit_calc = None
         eclipse_calc = None
         include_opacities = _include_opacities(fit_info)
@@ -443,7 +374,105 @@ class CombinedRetriever:
                 include_opacities=include_opacities)
             eclipse_calc.change_wavelength_bins(eclipse_bins,
                                                 eclipse_throughputs)
-        return transit_calc, eclipse_calc
+
+        def ln_like(params, **kwargs):
+            return self._ln_like(
+                params, transit_calc, eclipse_calc, fit_info,
+                transit_depths, transit_errors, eclipse_depths, eclipse_errors,
+                zero_opacities=zero_opacities, **kwargs)
+        return ln_like
+
+    def _verbose_ln_like(self, ln_like, fit_info):
+        '''Wraps ln_like so that it prints the evaluated parameters on about
+        1 in 100 calls'''
+        def wrapped(params):
+            result = ln_like(params)
+            if np.random.randint(100) == 0:
+                print("\nEvaluated params: {}".format(self.pretty_print(fit_info)))
+            return result
+        return wrapped
+
+    @staticmethod
+    def _ln_probs(fit_info, samples, ln_likes):
+        '''Log posterior probability (up to a constant) of each sample'''
+        return ln_likes + np.array([fit_info._ln_prior(p) for p in samples])
+
+    def _make_result(self, ln_like, fit_info, data, retrieval_type,
+                     sampler_result, samples, ln_probs, equal_samples,
+                     num_final_samples):
+        '''Writes the parameter estimates to a file, then packages the
+        sampler's output, the best fit (the sample with the highest ln_prob),
+        and the spectra of num_final_samples posterior samples into a
+        RetrievalResult.  equal_samples, the equally weighted posterior
+        samples, are shuffled in place.'''
+        best_params_arr = samples[np.argmax(ln_probs)]
+        np.random.shuffle(equal_samples)
+
+        # Two-sector parameters are reported as cold/hot by temperature
+        labels, labelled = label_by_temperature(
+            fit_info, np.vstack([equal_samples, best_params_arr]))
+        divisors, new_labels = self._get_divisors_labels(
+            np.median(labelled[:-1], axis=0), labels)
+        write_param_estimates_file(
+            labelled[:-1] / divisors,
+            labelled[-1] / divisors,
+            np.max(ln_probs),
+            new_labels)
+
+        best_fit_transit_depths, best_fit_transit_info, best_fit_eclipse_depths, \
+            best_fit_eclipse_info, _ = ln_like(best_params_arr, ret_best_fit=True)
+        retrieval_result = RetrievalResult(
+            sampler_result, retrieval_type, best_params_arr, *data,
+            best_fit_transit_depths, best_fit_transit_info,
+            best_fit_eclipse_depths, best_fit_eclipse_info,
+            fit_info, divisors, new_labels)
+        self._add_random_samples(
+            retrieval_result, ln_like, equal_samples[:num_final_samples])
+        return retrieval_result
+
+    @staticmethod
+    def _add_random_samples(retrieval_result, ln_like, samples):
+        """Stores the spectra, T/P profiles, and pointwise log likelihoods of
+        the given posterior samples in the random_* lists of
+        retrieval_result, then calculates the LOO-CV scores.
+
+        Transit T/P profiles are (2, N) arrays [P, T], or (3, N) arrays
+        [P, T_cold, T_hot] for 1.5-D terminator retrievals."""
+        retrieval_result.random_transit_depths = []
+        retrieval_result.random_eclipse_depths = []
+        retrieval_result.random_transit_TP_profiles = []
+        retrieval_result.random_eclipse_TP_profiles = []
+        # random_TP_profiles holds the dayside (eclipse) profiles when
+        # eclipse data are fit, and the terminator (transit) profiles
+        # otherwise.  It is kept for backwards compatibility.
+        retrieval_result.random_TP_profiles = []
+        retrieval_result.pointwise_lnlikes = []
+
+        for params in samples:
+            ret = ln_like(params, ret_best_fit=True)
+            if np.isscalar(ret):
+                # Invalid parameters
+                continue
+            _, transit_info, _, eclipse_info, pointwise_lnlike = ret
+            if transit_info is not None:
+                retrieval_result.random_transit_depths.append(
+                    transit_info["unbinned_depths"])
+                retrieval_result.random_transit_TP_profiles.append(
+                    transit_info["full_TP_profile"])
+            if eclipse_info is not None:
+                retrieval_result.random_eclipse_depths.append(
+                    eclipse_info["unbinned_eclipse_depths"])
+                retrieval_result.random_eclipse_TP_profiles.append(
+                    eclipse_info["full_TP_profile"])
+            TP_info = eclipse_info if eclipse_info is not None else transit_info
+            if TP_info is not None:
+                retrieval_result.random_TP_profiles.append(
+                    TP_info["full_TP_profile"])
+            retrieval_result.pointwise_lnlikes.append(pointwise_lnlike)
+
+        retrieval_result.loo_total, retrieval_result.loos, \
+            retrieval_result.loo_ks = psisloo(
+                np.array(retrieval_result.pointwise_lnlikes))
 
     def run_emcee(self, transit_bins, transit_depths, transit_errors,
                   eclipse_bins, eclipse_depths, eclipse_errors,
@@ -496,74 +525,40 @@ class CombinedRetriever:
         -------
         result : RetrievalResult object
         '''
-        initial_positions = fit_info._generate_rand_param_arrays(nwalkers)
-        transit_calc, eclipse_calc = self._make_calculators(
-            transit_bins, eclipse_bins, fit_info, include_condensation,
-            rad_method, transit_throughputs, eclipse_throughputs)
+        data = (transit_bins, transit_depths, transit_errors,
+                eclipse_bins, eclipse_depths, eclipse_errors)
+        ln_like = self._make_ln_like(
+            data, fit_info, include_condensation, rad_method, zero_opacities,
+            transit_throughputs, eclipse_throughputs)
 
         sampler = emcee.EnsembleSampler(
-            nwalkers, fit_info._get_num_fit_params(), self._ln_prob,
-            args=(transit_calc, eclipse_calc, fit_info, transit_depths, transit_errors,
-                                 eclipse_depths, eclipse_errors, zero_opacities))
-
-        for i, result in enumerate(sampler.sample(
+            nwalkers, fit_info._get_num_fit_params(),
+            lambda params: ln_like(params) + fit_info._ln_prior(params))
+        initial_positions = fit_info._generate_rand_param_arrays(nwalkers)
+        for i, _ in enumerate(sampler.sample(
                 initial_positions, iterations=nsteps)):
             if (i + 1) % 10 == 0:
                 print("Step {}: {}".format(i + 1, self.pretty_print(fit_info)))
 
-        best_params_arr = sampler.flatchain[np.argmax(
-            sampler.flatlnprobability)]
-        
-        # Two-sector parameters are reported as cold/hot by temperature
-        labels, samples = label_by_temperature(
-            fit_info, np.vstack([sampler.flatchain, best_params_arr]))
-        divisors, new_labels = self._get_divisors_labels(
-            np.median(samples[:-1], axis=0), labels)
-        
-        write_param_estimates_file(
-            samples[:-1] / divisors,
-            samples[-1] / divisors,
-            np.max(sampler.flatlnprobability),
-            new_labels)
-
-        best_fit_transit_depths, best_fit_transit_info, best_fit_eclipse_depths, best_fit_eclipse_info, _ = self._ln_like(
-            best_params_arr, transit_calc, eclipse_calc, fit_info,
-            transit_depths, transit_errors,
-            eclipse_depths, eclipse_errors, zero_opacities=zero_opacities, ret_best_fit=True)
-        retrieval_result = RetrievalResult(
-            {"best_fit_params": best_params_arr,
-                "acceptance_fraction": sampler.acceptance_fraction,
-             "chain": sampler.chain,
-             "flatchain": sampler.flatchain,
-             "lnprobability": sampler.lnprobability,
-             "flatlnprobability": sampler.flatlnprobability},             
-            "emcee", best_params_arr,
-            transit_bins, transit_depths, transit_errors,
-            eclipse_bins, eclipse_depths, eclipse_errors,
-            best_fit_transit_depths, best_fit_transit_info,
-            best_fit_eclipse_depths, best_fit_eclipse_info,
-            fit_info, divisors, new_labels)
+        sampler_result = {
+            "acceptance_fraction": sampler.acceptance_fraction,
+            "chain": sampler.chain,
+            "flatchain": sampler.flatchain,
+            "lnprobability": sampler.lnprobability,
+            "flatlnprobability": sampler.flatlnprobability}
+        # Copied because _make_result shuffles it in place
         equal_samples = np.copy(sampler.flatchain)
-        np.random.shuffle(equal_samples)
-        self._init_random_samples(retrieval_result)
-        for params in equal_samples[:num_final_samples]:
-            ret = self._ln_like(
-                params, transit_calc, eclipse_calc, fit_info,
-                transit_depths, transit_errors,
-                eclipse_depths, eclipse_errors,
-                zero_opacities=zero_opacities, ret_best_fit=True)
-            if ret == -np.inf: continue
-            _, transit_info, _, eclipse_info, pointwise = ret
-            self._record_random_sample(
-                retrieval_result, transit_info, eclipse_info, pointwise)
-        retrieval_result.loo_total, retrieval_result.loos, retrieval_result.loo_ks = psisloo(np.array(retrieval_result.pointwise_lnlikes))
-        return retrieval_result
+        return self._make_result(
+            ln_like, fit_info, data, "emcee", sampler_result,
+            sampler.flatchain, sampler.flatlnprobability, equal_samples,
+            num_final_samples)
 
-    def _get_divisors_labels(self, medians, labels):
+    @staticmethod
+    def _get_divisors_labels(medians, labels):
         divisors = np.ones(len(labels))
         new_labels = list(labels)
-        
-        for i, l in enumerate(labels):            
+
+        for i, l in enumerate(labels):
             if l == "Rs":
                 divisors[i] = R_sun
                 new_labels[i] = "R_star/R_sun"
@@ -581,9 +576,9 @@ class CombinedRetriever:
                 else:
                     divisors[i] = M_earth
                     new_labels[i] = "M_p/M_e"
-                    
+
         return divisors, new_labels
-    
+
     def run_dynesty(self, transit_bins, transit_depths, transit_errors,
                       eclipse_bins, eclipse_depths, eclipse_errors,
                       fit_info,
@@ -620,7 +615,7 @@ class CombinedRetriever:
             When determining atmospheric abundances, whether to include
             condensation.
         rad_method : string, optional
-            "xsec" for opacity sampling (correlated-k is no longer supported)       
+            "xsec" for opacity sampling (correlated-k is no longer supported)
         nlive : int
             Number of live points to use for nested sampling
         zero_opacities : list of strings
@@ -634,79 +629,26 @@ class CombinedRetriever:
         Returns
         -------
         result : RetrievalResult object
-        '''        
-        transit_calc, eclipse_calc = self._make_calculators(
-            transit_bins, eclipse_bins, fit_info, include_condensation,
-            rad_method, transit_throughputs, eclipse_throughputs)
+        '''
+        data = (transit_bins, transit_depths, transit_errors,
+                eclipse_bins, eclipse_depths, eclipse_errors)
+        ln_like = self._make_ln_like(
+            data, fit_info, include_condensation, rad_method, zero_opacities,
+            transit_throughputs, eclipse_throughputs)
 
-        def transform_prior(cube):
-            return fit_info._from_unit_interval_array(cube)
-
-        def dynesty_ln_like(cube):
-            lnlike_per_point = self._ln_like(cube, transit_calc, eclipse_calc, fit_info, transit_depths, transit_errors,
-                                    eclipse_depths, eclipse_errors, zero_opacities=zero_opacities, lnlike_per_point=True)
-            if not np.isscalar(lnlike_per_point):
-                ln_like = lnlike_per_point.sum()
-            else:
-                assert(lnlike_per_point == -np.inf)
-                ln_like = -np.inf
-            
-            if np.random.randint(100) == 0:
-                print("\nEvaluated params: {}".format(self.pretty_print(fit_info)))
-            return ln_like
-
-        num_dim = fit_info._get_num_fit_params()
-        sampler = NestedSampler(dynesty_ln_like, transform_prior, num_dim, bound='multi', nlive=nlive, **dynesty_kwargs)
+        sampler = NestedSampler(
+            self._verbose_ln_like(ln_like, fit_info),
+            fit_info._from_unit_interval_array, fit_info._get_num_fit_params(),
+            bound='multi', nlive=nlive, **dynesty_kwargs)
         sampler.run_nested(maxiter=maxiter, maxcall=maxcall)
+
         result = CustomDynestyResult(sampler.results)
-        result.logp = result.logl + np.array([fit_info._ln_prior(params) for params in result.samples])
-        best_params_arr = result.samples[np.argmax(result.logp)]
-
-        normalized_weights = np.exp(result.logwt - np.max(result.logwt))
-        normalized_weights /= np.sum(normalized_weights)
-        result.weights = normalized_weights                                
+        result.logp = self._ln_probs(fit_info, result.samples, result.logl)
+        result.weights = scipy.special.softmax(result.logwt)
         equal_samples = dynesty.utils.resample_equal(result.samples, result.weights)
-        np.random.shuffle(equal_samples)
-
-        labels, samples = label_by_temperature(
-            fit_info, np.vstack([equal_samples, best_params_arr]))
-        divisors, new_labels = self._get_divisors_labels(
-            np.median(samples[:-1], axis=0), labels)
-        
-        write_param_estimates_file(
-            samples[:-1] / divisors,
-            samples[-1] / divisors,
-            np.max(result.logp),
-            new_labels)
-        
-        best_fit_transit_depths, best_fit_transit_info, best_fit_eclipse_depths, best_fit_eclipse_info, _ = self._ln_like(
-            best_params_arr, transit_calc, eclipse_calc, fit_info,
-            transit_depths, transit_errors,
-            eclipse_depths, eclipse_errors, zero_opacities=zero_opacities, ret_best_fit=True)
-
-        retrieval_result = RetrievalResult(
-            result, "dynesty", best_params_arr,
-            transit_bins, transit_depths, transit_errors,
-            eclipse_bins, eclipse_depths, eclipse_errors,
-            best_fit_transit_depths, best_fit_transit_info,
-            best_fit_eclipse_depths, best_fit_eclipse_info,
-            fit_info, divisors, new_labels)
-
-        self._init_random_samples(retrieval_result)
-        for params in equal_samples[:num_final_samples]:
-            _, transit_info, _, eclipse_info, pointwise = self._ln_like(
-                params, transit_calc, eclipse_calc, fit_info,
-                transit_depths, transit_errors,
-                eclipse_depths, eclipse_errors,
-                zero_opacities=zero_opacities, ret_best_fit=True)
-            self._record_random_sample(
-                retrieval_result, transit_info, eclipse_info, pointwise)
-
-        #Calculate LOO-CV scores
-        retrieval_result.loo_total, retrieval_result.loos, retrieval_result.loo_ks = psisloo(np.array(retrieval_result.pointwise_lnlikes))
-                    
-        return retrieval_result
-
+        return self._make_result(
+            ln_like, fit_info, data, "dynesty", result,
+            result.samples, result.logp, equal_samples, num_final_samples)
 
     def run_multinest(self, transit_bins, transit_depths, transit_errors,
                       eclipse_bins, eclipse_depths, eclipse_errors,
@@ -731,26 +673,12 @@ class CombinedRetriever:
                multinest_kwargs["max_iter"] != maxiter:
                 raise ValueError("maxiter conflicts with multinest_kwargs['max_iter']")
         import pymultinest
-        
-        transit_calc, eclipse_calc = self._make_calculators(
-            transit_bins, eclipse_bins, fit_info, include_condensation,
-            rad_method, transit_throughputs, eclipse_throughputs)
 
-        def transform_prior(cube):
-            return fit_info._from_unit_interval_array(cube)
-
-        def multinest_ln_like(cube):
-            lnlike_per_point = self._ln_like(cube, transit_calc, eclipse_calc, fit_info, transit_depths, transit_errors,
-                                    eclipse_depths, eclipse_errors, zero_opacities=zero_opacities, lnlike_per_point=True)
-            if not np.isscalar(lnlike_per_point):
-                ln_like = lnlike_per_point.sum()
-            else:
-                assert(lnlike_per_point == -np.inf)
-                ln_like = -np.inf
-            
-            if np.random.randint(100) == 0:
-                print("\nEvaluated params: {}".format(self.pretty_print(fit_info)))
-            return ln_like
+        data = (transit_bins, transit_depths, transit_errors,
+                eclipse_bins, eclipse_depths, eclipse_errors)
+        ln_like = self._make_ln_like(
+            data, fit_info, include_condensation, rad_method, zero_opacities,
+            transit_throughputs, eclipse_throughputs)
 
         num_dim = fit_info._get_num_fit_params()
         solve_kwargs = dict(
@@ -759,60 +687,25 @@ class CombinedRetriever:
         solve_kwargs.update(multinest_kwargs)
         if maxiter is not None:
             solve_kwargs["max_iter"] = int(maxiter)
-        basename = solve_kwargs["outputfiles_basename"]
-        result = pymultinest.solve(LogLikelihood=multinest_ln_like, Prior=transform_prior,
-                                   n_dims=num_dim, **solve_kwargs)
-        a = pymultinest.Analyzer(outputfiles_basename=basename, n_params=num_dim)
-        data = a.get_data()
+        result = pymultinest.solve(
+            LogLikelihood=self._verbose_ln_like(ln_like, fit_info),
+            Prior=fit_info._from_unit_interval_array,
+            n_dims=num_dim, **solve_kwargs)
+
+        analyzer = pymultinest.Analyzer(
+            outputfiles_basename=solve_kwargs["outputfiles_basename"],
+            n_params=num_dim)
+        # Columns are weight, -2 * ln_like, then the parameters
+        weighted_samples = analyzer.get_data()
         result["logz"] = np.atleast_1d(result["logZ"])
-        result["samples"] = data[:,2:]
-        result["logl"] = -0.5 * data[:,1]
-        result["logp"] = result["logl"] + np.array(
-            [fit_info._ln_prior(params) for params in result["samples"]])
-        best_params_arr = result["samples"][np.argmax(result["logp"])]
-        
-        equal_samples = a.get_equal_weighted_posterior()[:,:-1]
-        np.random.shuffle(equal_samples)
-        result["equal_samples"] = equal_samples
-        
-        labels, samples = label_by_temperature(
-            fit_info, np.vstack([equal_samples, best_params_arr]))
-        divisors, new_labels = self._get_divisors_labels(
-            np.median(samples[:-1], axis=0), labels)
-        
-        write_param_estimates_file(
-            samples[:-1] / divisors,
-            samples[-1] / divisors,
-            np.max(result["logp"]),
-            new_labels)
-
-        best_fit_transit_depths, best_fit_transit_info, best_fit_eclipse_depths, best_fit_eclipse_info, _ = self._ln_like(
-            best_params_arr,
-            transit_calc, eclipse_calc, fit_info,
-            transit_depths, transit_errors,
-            eclipse_depths, eclipse_errors, zero_opacities=zero_opacities, ret_best_fit=True)
-
-        retrieval_result = RetrievalResult(
-            result, "pymultinest", best_params_arr,
-            transit_bins, transit_depths, transit_errors,
-            eclipse_bins, eclipse_depths, eclipse_errors,
-            best_fit_transit_depths, best_fit_transit_info,
-            best_fit_eclipse_depths, best_fit_eclipse_info,
-            fit_info, divisors, new_labels)
-
-        self._init_random_samples(retrieval_result)
-        for params in equal_samples[:num_final_samples]:
-            _, transit_info, _, eclipse_info, pointwise = self._ln_like(
-                params, transit_calc, eclipse_calc, fit_info,
-                transit_depths, transit_errors,
-                eclipse_depths, eclipse_errors,
-                zero_opacities=zero_opacities, ret_best_fit=True)
-            self._record_random_sample(
-                retrieval_result, transit_info, eclipse_info, pointwise)
-
-        #Calculate LOO-CV scores
-        retrieval_result.loo_total, retrieval_result.loos, retrieval_result.loo_ks = psisloo(np.array(retrieval_result.pointwise_lnlikes))
-        return retrieval_result
+        result["samples"] = weighted_samples[:, 2:]
+        result["logl"] = -0.5 * weighted_samples[:, 1]
+        result["logp"] = self._ln_probs(fit_info, result["samples"], result["logl"])
+        result["equal_samples"] = analyzer.get_equal_weighted_posterior()[:, :-1]
+        return self._make_result(
+            ln_like, fit_info, data, "pymultinest", result,
+            result["samples"], result["logp"], result["equal_samples"],
+            num_final_samples)
 
     def run_nautilus(self, transit_bins, transit_depths, transit_errors,
                      eclipse_bins, eclipse_depths, eclipse_errors,
@@ -836,84 +729,35 @@ class CombinedRetriever:
                 'package. Install it with pip install "platon[nautilus]" '
                 'or pip install nautilus-sampler.') from error
 
-        transit_calc, eclipse_calc = self._make_calculators(
-            transit_bins, eclipse_bins, fit_info, include_condensation,
-            rad_method, transit_throughputs, eclipse_throughputs)
-
-        def transform_prior(cube):
-            return fit_info._from_unit_interval_array(cube)
-
-        def nautilus_ln_like(params):
-            values = self._ln_like(
-                params, transit_calc, eclipse_calc, fit_info,
-                transit_depths, transit_errors, eclipse_depths, eclipse_errors,
-                zero_opacities=zero_opacities, lnlike_per_point=True)
-            return values.sum() if not np.isscalar(values) else -np.inf
+        data = (transit_bins, transit_depths, transit_errors,
+                eclipse_bins, eclipse_depths, eclipse_errors)
+        ln_like = self._make_ln_like(
+            data, fit_info, include_condensation, rad_method, zero_opacities,
+            transit_throughputs, eclipse_throughputs)
 
         sampler = Sampler(
-            transform_prior, nautilus_ln_like,
+            fit_info._from_unit_interval_array, ln_like,
             n_dim=fit_info._get_num_fit_params(),
             n_live=n_live, n_networks=n_networks, **nautilus_kwargs)
         success = sampler.run(
             n_eff=n_eff, discard_exploration=discard_exploration,
             verbose=verbose)
 
-        samples, log_weights, logl = sampler.posterior()
-        samples = np.asarray(samples)
-        log_weights = np.asarray(log_weights)
-        logl = np.asarray(logl)
-        weights = np.exp(log_weights - np.max(log_weights))
-        weights /= np.sum(weights)
-        logp = logl + np.array(
-            [fit_info._ln_prior(params) for params in samples])
-        best_params_arr = samples[np.argmax(logp)]
-
-        equal_samples = dynesty.utils.resample_equal(samples, weights)
-        np.random.shuffle(equal_samples)
-        labels, samples = label_by_temperature(
-            fit_info, np.vstack([equal_samples, best_params_arr]))
-        divisors, new_labels = self._get_divisors_labels(
-            np.median(samples[:-1], axis=0), labels)
-        write_param_estimates_file(
-            samples[:-1] / divisors, samples[-1] / divisors,
-            np.max(logp), new_labels)
-
-        best = self._ln_like(
-            best_params_arr, transit_calc, eclipse_calc, fit_info,
-            transit_depths, transit_errors, eclipse_depths, eclipse_errors,
-            zero_opacities=zero_opacities, ret_best_fit=True)
+        samples, log_weights, logl = map(np.asarray, sampler.posterior())
         result = {
             "samples": samples,
-            "weights": weights,
+            "weights": scipy.special.softmax(log_weights),
             "logw": log_weights,
             "logl": logl,
-            "logp": logp,
+            "logp": self._ln_probs(fit_info, samples, logl),
             "logz": np.atleast_1d(sampler.log_z),
             "n_eff": sampler.n_eff,
             "success": success,
         }
-        retrieval_result = RetrievalResult(
-            result, "nautilus", best_params_arr,
-            transit_bins, transit_depths, transit_errors,
-            eclipse_bins, eclipse_depths, eclipse_errors,
-            best[0], best[1], best[2], best[3],
-            fit_info, divisors, new_labels)
-
-        self._init_random_samples(retrieval_result)
-        for params in equal_samples[:num_final_samples]:
-            _, transit_info, _, eclipse_info, pointwise = self._ln_like(
-                params, transit_calc, eclipse_calc, fit_info,
-                transit_depths, transit_errors,
-                eclipse_depths, eclipse_errors,
-                zero_opacities=zero_opacities, ret_best_fit=True)
-            self._record_random_sample(
-                retrieval_result, transit_info, eclipse_info, pointwise)
-
-        retrieval_result.loo_total, retrieval_result.loos, \
-            retrieval_result.loo_ks = psisloo(
-                np.array(retrieval_result.pointwise_lnlikes))
-        return retrieval_result
-        
+        equal_samples = dynesty.utils.resample_equal(samples, result["weights"])
+        return self._make_result(
+            ln_like, fit_info, data, "nautilus", result,
+            samples, result["logp"], equal_samples, num_final_samples)
 
     @staticmethod
     def get_default_fit_info(Rs, Mp, Rp, T=None, logZ=0, CO_ratio=0.53, log_CH4_mult=0,
@@ -1062,7 +906,7 @@ class CombinedRetriever:
                             kind, name1, tuple(range1), name2, tuple(range2)))
         
         for visit in transit_visits or {}:
-            for name in ("T_het", "het_cov_frac", "T_het2", "het2_cov_frac"):
+            for name in _HET_PARAMS:
                 all_variables["{}.{}".format(visit, name)] = None
 
         fit_info = FitInfo(all_variables)

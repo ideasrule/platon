@@ -410,12 +410,32 @@ class CombinedRetriever:
         return fit_info._ln_prior(params) + ln_like
 
 
+    def _make_calculators(self, transit_bins, eclipse_bins, fit_info,
+                          include_condensation, rad_method,
+                          transit_throughputs=None, eclipse_throughputs=None):
+        transit_calc = None
+        eclipse_calc = None
+        if transit_bins is not None:
+            transit_calc = TransitDepthCalculator(
+                include_condensation=include_condensation, method=rad_method,
+                **fit_info._stellar_grid_options())
+            transit_calc.change_wavelength_bins(transit_bins,
+                                                transit_throughputs)
+            self._validate_params(fit_info, transit_calc)
+        if eclipse_bins is not None:
+            eclipse_calc = EclipseDepthCalculator(
+                include_condensation=include_condensation, method=rad_method)
+            eclipse_calc.change_wavelength_bins(eclipse_bins,
+                                                eclipse_throughputs)
+        return transit_calc, eclipse_calc
+
     def run_emcee(self, transit_bins, transit_depths, transit_errors,
                   eclipse_bins, eclipse_depths, eclipse_errors,
                   fit_info, nwalkers=50,
                   nsteps=1000, include_condensation=True,
                   rad_method="xsec",
-                  num_final_samples=100, zero_opacities=[]):
+                  num_final_samples=100, zero_opacities=[],
+                  transit_throughputs=None, eclipse_throughputs=None):
         '''Runs affine-invariant MCMC to retrieve atmospheric parameters.
 
         Parameters
@@ -451,6 +471,10 @@ class CombinedRetriever:
             "xsec" for opacity sampling (correlated-k is no longer supported)
         zero_opacities : list of strings
             List of molecules to zero opacities for
+        transit_throughputs, eclipse_throughputs : list, optional
+            Throughput of each transit/eclipse bin (e.g. a photometric
+            filter's response curve); see
+            :func:`~platon.transit_depth_calculator.TransitDepthCalculator.change_wavelength_bins`
 
         Returns
         -------
@@ -458,19 +482,9 @@ class CombinedRetriever:
         '''
         self.params_to_lnlike = {}
         initial_positions = fit_info._generate_rand_param_arrays(nwalkers)
-        transit_calc = None
-        eclipse_calc = None
-
-        if transit_bins is not None:
-            transit_calc = TransitDepthCalculator(
-                include_condensation=include_condensation, method=rad_method,
-                **fit_info._stellar_grid_options())
-            transit_calc.change_wavelength_bins(transit_bins)
-            self._validate_params(fit_info, transit_calc)
-        if eclipse_bins is not None:
-            eclipse_calc = EclipseDepthCalculator(
-                include_condensation=include_condensation, method=rad_method)
-            eclipse_calc.change_wavelength_bins(eclipse_bins)       
+        transit_calc, eclipse_calc = self._make_calculators(
+            transit_bins, eclipse_bins, fit_info, include_condensation,
+            rad_method, transit_throughputs, eclipse_throughputs)
 
         sampler = emcee.EnsembleSampler(
             nwalkers, fit_info._get_num_fit_params(), self._ln_prob,
@@ -562,6 +576,7 @@ class CombinedRetriever:
                       include_condensation=True, rad_method="xsec",
                       maxiter=None, maxcall=None, nlive=250,
                       num_final_samples=100, zero_opacities=[],
+                      transit_throughputs=None, eclipse_throughputs=None,
                       **dynesty_kwargs):
         '''Runs nested sampling to retrieve atmospheric parameters.
 
@@ -594,8 +609,12 @@ class CombinedRetriever:
             "xsec" for opacity sampling (correlated-k is no longer supported)       
         nlive : int
             Number of live points to use for nested sampling
-        zero_opacities : list of strings                                                                                                                                                                   
+        zero_opacities : list of strings
             List of molecules to zero opacities for
+        transit_throughputs, eclipse_throughputs : list, optional
+            Throughput of each transit/eclipse bin (e.g. a photometric
+            filter's response curve); see
+            :func:`~platon.transit_depth_calculator.TransitDepthCalculator.change_wavelength_bins`
         **dynesty_kwargs : keyword arguments to pass to dynesty's NestedSampler
 
         Returns
@@ -603,18 +622,9 @@ class CombinedRetriever:
         result : RetrievalResult object
         '''        
         self.params_to_lnlike = {}
-        transit_calc = None
-        eclipse_calc = None
-        if transit_bins is not None:
-            transit_calc = TransitDepthCalculator(
-                include_condensation=include_condensation, method=rad_method,
-                **fit_info._stellar_grid_options())
-            transit_calc.change_wavelength_bins(transit_bins)
-            self._validate_params(fit_info, transit_calc)
-        if eclipse_bins is not None:
-            eclipse_calc = EclipseDepthCalculator(
-                include_condensation=include_condensation, method=rad_method)
-            eclipse_calc.change_wavelength_bins(eclipse_bins)
+        transit_calc, eclipse_calc = self._make_calculators(
+            transit_bins, eclipse_bins, fit_info, include_condensation,
+            rad_method, transit_throughputs, eclipse_throughputs)
 
         def transform_prior(cube):
             return fit_info._from_unit_interval_array(cube)
@@ -692,7 +702,8 @@ class CombinedRetriever:
                       include_condensation=True, rad_method="xsec",
                       maxiter=None, maxcall=None, nlive=250,
                       num_final_samples=100, zero_opacities=[],
-                      multinest_kwargs={}):
+                      multinest_kwargs={},
+                      transit_throughputs=None, eclipse_throughputs=None):
         """multinest_kwargs are forwarded to pymultinest.solve/run (e.g.
         sampling_efficiency, const_efficiency_mode, evidence_tolerance,
         multimodal, outputfiles_basename). maxiter sets MultiNest's max_iter
@@ -710,18 +721,9 @@ class CombinedRetriever:
         import pymultinest
         
         self.params_to_lnlike = {}
-        transit_calc = None
-        eclipse_calc = None
-        if transit_bins is not None:
-            transit_calc = TransitDepthCalculator(
-                include_condensation=include_condensation, method=rad_method,
-                **fit_info._stellar_grid_options())
-            transit_calc.change_wavelength_bins(transit_bins)
-            self._validate_params(fit_info, transit_calc)
-        if eclipse_bins is not None:
-            eclipse_calc = EclipseDepthCalculator(
-                include_condensation=include_condensation, method=rad_method)
-            eclipse_calc.change_wavelength_bins(eclipse_bins)
+        transit_calc, eclipse_calc = self._make_calculators(
+            transit_bins, eclipse_bins, fit_info, include_condensation,
+            rad_method, transit_throughputs, eclipse_throughputs)
 
         def transform_prior(cube):
             return fit_info._from_unit_interval_array(cube)
@@ -814,6 +816,7 @@ class CombinedRetriever:
                      n_live=2000, n_eff=10000, n_networks=16,
                      discard_exploration=True, verbose=True,
                      num_final_samples=100, zero_opacities=(),
+                     transit_throughputs=None, eclipse_throughputs=None,
                      **nautilus_kwargs):
         """Run optional Nautilus nested sampling.
 
@@ -830,18 +833,9 @@ class CombinedRetriever:
                 'or pip install nautilus-sampler.') from error
 
         self.params_to_lnlike = {}
-        transit_calc = None
-        eclipse_calc = None
-        if transit_bins is not None:
-            transit_calc = TransitDepthCalculator(
-                include_condensation=include_condensation, method=rad_method,
-                **fit_info._stellar_grid_options())
-            transit_calc.change_wavelength_bins(transit_bins)
-            self._validate_params(fit_info, transit_calc)
-        if eclipse_bins is not None:
-            eclipse_calc = EclipseDepthCalculator(
-                include_condensation=include_condensation, method=rad_method)
-            eclipse_calc.change_wavelength_bins(eclipse_bins)
+        transit_calc, eclipse_calc = self._make_calculators(
+            transit_bins, eclipse_bins, fit_info, include_condensation,
+            rad_method, transit_throughputs, eclipse_throughputs)
 
         def transform_prior(cube):
             return fit_info._from_unit_interval_array(cube)

@@ -94,9 +94,9 @@ class EclipseDepthCalculator:
             rh_binned
         return emitted_fluxes + reflected_fluxes
 
-    def change_wavelength_bins(self, bins):
+    def change_wavelength_bins(self, bins, throughputs=None):
         '''Same functionality as :func:`~platon.transit_depth_calculator.TransitDepthCalculator.change_wavelength_bins`'''
-        self.atm.change_wavelength_bins(bins)
+        self.atm.change_wavelength_bins(bins, throughputs)
         self._surface_cache = {}
 
     def compute_depths(self, t_p_profile, star_radius, planet_mass,

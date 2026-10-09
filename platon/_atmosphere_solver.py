@@ -357,7 +357,7 @@ class AtmosphereSolver:
     def get_lambda_grid(self):
         return np.array(self.lambda_grid)
 
-    def change_wavelength_bins(self, bins):
+    def change_wavelength_bins(self, bins, throughputs=None):
         """Specify wavelength bins, instead of using the full wavelength grid
         in self.lambda_grid.  This makes the code much faster, as
         `compute_depths` will only compute depths at wavelengths that fall
@@ -369,6 +369,15 @@ class AtmosphereSolver:
             Wavelength bins, where bins[i][0] is the start wavelength and
             bins[i][1] is the end wavelength for bin i. If bins is None, resets
             the calculator to its unbinned state.
+        throughputs : list of length N, optional
+            Throughput (e.g. a photometric filter's response curve) for each
+            bin, multiplying the weights of the bin average; only wavelengths
+            within the bin contribute.  Each entry is None (uniform
+            throughput) or an interpolator function, such as
+            scipy.interpolate.interp1d, that takes an array of wavelengths
+            in meters and returns the throughputs.  The interpolator must
+            cover the whole bin: for a curve narrower than its bin, use e.g.
+            interp1d(..., bounds_error=False, fill_value=0).
         """
         self._mie_eff_xsec_cache = {}    # results depend on lambda_grid
         self._mie_nbins_cache = {}
@@ -383,8 +392,14 @@ class AtmosphereSolver:
             self._device_data = None
 
         if bins is None:
+            if throughputs is not None:
+                raise ValueError("throughputs requires wavelength bins")
             return
         bins = np.asarray(bins, dtype=np.float64)
+        if throughputs is not None and len(throughputs) != len(bins):
+            raise ValueError(
+                "Got {} throughputs for {} wavelength bins".format(
+                    len(throughputs), len(bins)))
 
         full = self.orig_lambda_grid
         for start, end in bins:
@@ -407,10 +422,10 @@ class AtmosphereSolver:
         self._lambda_cond = cond
         self.lambda_grid = full[cond]
         self.N_lambda = len(self.lambda_grid)
-        self._bin_info = self._compute_bin_info(bins)
+        self._bin_info = self._compute_bin_info(bins, throughputs)
         self._device_data = None
 
-    def _compute_bin_info(self, bins):
+    def _compute_bin_info(self, bins, throughputs=None):
         """Precompute per-bin index ranges, the averaging matrix, and bin
         center wavelengths.  On the sorted wavelength grid, searchsorted
         [l:r) selects exactly the points with start <= lambda < end."""
@@ -421,7 +436,6 @@ class AtmosphereSolver:
         for i, (start, end) in enumerate(bins):
             l = np.searchsorted(lam, start)
             r = np.searchsorted(lam, end)
-            bin_wavelengths[i] = np.mean(lam[l:r])
             bin_ranges.append((l, r))
         # Bin averaging as a (B, W) gather + masked row sum (W = widest bin):
         # far cheaper on device than a (B, L) 0/1 matrix-vector product
@@ -430,7 +444,13 @@ class AtmosphereSolver:
         bin_w = np.zeros((B, W), dtype=np.float32)
         for i, (l, r) in enumerate(bin_ranges):
             bin_idx[i, :r - l] = np.arange(l, r)
-            bin_w[i, :r - l] = 1.0
+            w = np.ones(r - l)
+            if throughputs is not None and throughputs[i] is not None:
+                w = throughputs[i](lam[l:r])
+                assert(not np.any(w < 0) and np.sum(w) > 0)
+
+            bin_w[i, :r - l] = w
+            bin_wavelengths[i] = np.average(lam[l:r], weights=w)
         return dict(bin_idx=bin_idx, bin_w=bin_w,
                     bin_wavelengths=bin_wavelengths, bin_ranges=bin_ranges)
 
@@ -442,7 +462,8 @@ class AtmosphereSolver:
             return self._device_data
 
         bins_key = None if self.wavelength_bins is None \
-            else self.wavelength_bins.tobytes()
+            else (self.wavelength_bins.tobytes(),
+                  self._bin_info["bin_w"].tobytes())
         key = (self.raw["key"], self.include_condensation, bins_key)
         if key in _DEVICE_CACHE:
             # Move to the end so the LRU eviction below treats it as fresh

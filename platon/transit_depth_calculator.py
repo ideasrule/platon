@@ -37,7 +37,7 @@ class TransitDepthCalculator:
                                     method, include_opacities, downsample,
                                     stellar_grid, logg_star, feh_star)
 
-    def change_wavelength_bins(self, bins):
+    def change_wavelength_bins(self, bins, throughputs=None):
         """Specify wavelength bins, instead of using the full wavelength grid
         in self.lambda_grid.  This makes the code much faster, as
         `compute_depths` will only compute depths at wavelengths that fall
@@ -49,8 +49,17 @@ class TransitDepthCalculator:
             Wavelength bins, where bins[i][0] is the start wavelength and
             bins[i][1] is the end wavelength for bin i. If bins is None, resets
             the calculator to its unbinned state.
+        throughputs : list of length N, optional
+            Throughput (e.g. a photometric filter's response curve) for each
+            bin, multiplying the weights of the bin average; only wavelengths
+            within the bin contribute.  Each entry is None (uniform
+            throughput) or an interpolator function, such as
+            scipy.interpolate.interp1d, that takes an array of wavelengths
+            in meters and returns the throughputs.  The interpolator must
+            cover the whole bin: for a curve narrower than its bin, use e.g.
+            interp1d(..., bounds_error=False, fill_value=0).
         """
-        self.atm.change_wavelength_bins(bins)
+        self.atm.change_wavelength_bins(bins, throughputs)
 
     def _validate_params(self, T, logZ, CO_ratio, cloudtop_pressure):
         self.atm._validate_params(T, logZ, CO_ratio, cloudtop_pressure)

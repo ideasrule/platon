@@ -208,7 +208,6 @@ class TestRetriever(unittest.TestCase):
 
         # error_excess adds in quadrature to the measured errors
         fit_info = get_fit_info(error_excess=50e-6)
-        retriever.params_to_lnlike = {}
         lnlikes = retriever._ln_like(
             [1200], calc, None, fit_info, depths, errors, None, None,
             lnlike_per_point=True)

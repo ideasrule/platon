@@ -343,10 +343,9 @@ class CombinedRetriever:
             if eclipse_info_dict is not None:
                 eclipse_info_dict["full_TP_profile"] = \
                     self._profile_to_array(t_p_profile)
-            return calculated_transit_depths, transit_info_dict, calculated_eclipse_depths, eclipse_info_dict
+            return calculated_transit_depths, transit_info_dict, calculated_eclipse_depths, eclipse_info_dict, ln_likelihood
 
         if lnlike_per_point:
-            self.params_to_lnlike[tuple(params)] = ln_likelihood
             return ln_likelihood
 
         return ln_likelihood.sum()
@@ -497,7 +496,6 @@ class CombinedRetriever:
         -------
         result : RetrievalResult object
         '''
-        self.params_to_lnlike = {}
         initial_positions = fit_info._generate_rand_param_arrays(nwalkers)
         transit_calc, eclipse_calc = self._make_calculators(
             transit_bins, eclipse_bins, fit_info, include_condensation,
@@ -528,7 +526,7 @@ class CombinedRetriever:
             np.max(sampler.flatlnprobability),
             new_labels)
 
-        best_fit_transit_depths, best_fit_transit_info, best_fit_eclipse_depths, best_fit_eclipse_info = self._ln_like(
+        best_fit_transit_depths, best_fit_transit_info, best_fit_eclipse_depths, best_fit_eclipse_info, _ = self._ln_like(
             best_params_arr, transit_calc, eclipse_calc, fit_info,
             transit_depths, transit_errors,
             eclipse_depths, eclipse_errors, zero_opacities=zero_opacities, ret_best_fit=True)
@@ -555,10 +553,9 @@ class CombinedRetriever:
                 eclipse_depths, eclipse_errors,
                 zero_opacities=zero_opacities, ret_best_fit=True)
             if ret == -np.inf: continue
-            _, transit_info, _, eclipse_info = ret
+            _, transit_info, _, eclipse_info, pointwise = ret
             self._record_random_sample(
-                retrieval_result, transit_info, eclipse_info,
-                self.params_to_lnlike[tuple(params)])
+                retrieval_result, transit_info, eclipse_info, pointwise)
         retrieval_result.loo_total, retrieval_result.loos, retrieval_result.loo_ks = psisloo(np.array(retrieval_result.pointwise_lnlikes))
         return retrieval_result
 
@@ -638,7 +635,6 @@ class CombinedRetriever:
         -------
         result : RetrievalResult object
         '''        
-        self.params_to_lnlike = {}
         transit_calc, eclipse_calc = self._make_calculators(
             transit_bins, eclipse_bins, fit_info, include_condensation,
             rad_method, transit_throughputs, eclipse_throughputs)
@@ -683,7 +679,7 @@ class CombinedRetriever:
             np.max(result.logp),
             new_labels)
         
-        best_fit_transit_depths, best_fit_transit_info, best_fit_eclipse_depths, best_fit_eclipse_info = self._ln_like(
+        best_fit_transit_depths, best_fit_transit_info, best_fit_eclipse_depths, best_fit_eclipse_info, _ = self._ln_like(
             best_params_arr, transit_calc, eclipse_calc, fit_info,
             transit_depths, transit_errors,
             eclipse_depths, eclipse_errors, zero_opacities=zero_opacities, ret_best_fit=True)
@@ -698,14 +694,13 @@ class CombinedRetriever:
 
         self._init_random_samples(retrieval_result)
         for params in equal_samples[:num_final_samples]:
-            _, transit_info, _, eclipse_info = self._ln_like(
+            _, transit_info, _, eclipse_info, pointwise = self._ln_like(
                 params, transit_calc, eclipse_calc, fit_info,
                 transit_depths, transit_errors,
                 eclipse_depths, eclipse_errors,
                 zero_opacities=zero_opacities, ret_best_fit=True)
             self._record_random_sample(
-                retrieval_result, transit_info, eclipse_info,
-                self.params_to_lnlike[tuple(params)])
+                retrieval_result, transit_info, eclipse_info, pointwise)
 
         #Calculate LOO-CV scores
         retrieval_result.loo_total, retrieval_result.loos, retrieval_result.loo_ks = psisloo(np.array(retrieval_result.pointwise_lnlikes))
@@ -737,7 +732,6 @@ class CombinedRetriever:
                 raise ValueError("maxiter conflicts with multinest_kwargs['max_iter']")
         import pymultinest
         
-        self.params_to_lnlike = {}
         transit_calc, eclipse_calc = self._make_calculators(
             transit_bins, eclipse_bins, fit_info, include_condensation,
             rad_method, transit_throughputs, eclipse_throughputs)
@@ -792,7 +786,7 @@ class CombinedRetriever:
             np.max(result["logp"]),
             new_labels)
 
-        best_fit_transit_depths, best_fit_transit_info, best_fit_eclipse_depths, best_fit_eclipse_info = self._ln_like(
+        best_fit_transit_depths, best_fit_transit_info, best_fit_eclipse_depths, best_fit_eclipse_info, _ = self._ln_like(
             best_params_arr,
             transit_calc, eclipse_calc, fit_info,
             transit_depths, transit_errors,
@@ -808,14 +802,7 @@ class CombinedRetriever:
 
         self._init_random_samples(retrieval_result)
         for params in equal_samples[:num_final_samples]:
-            pointwise = self.params_to_lnlike.get(tuple(params))
-            if pointwise is None:
-                pointwise = self._ln_like(
-                    params, transit_calc, eclipse_calc, fit_info,
-                    transit_depths, transit_errors,
-                    eclipse_depths, eclipse_errors,
-                    zero_opacities=zero_opacities, lnlike_per_point=True)
-            _, transit_info, _, eclipse_info = self._ln_like(
+            _, transit_info, _, eclipse_info, pointwise = self._ln_like(
                 params, transit_calc, eclipse_calc, fit_info,
                 transit_depths, transit_errors,
                 eclipse_depths, eclipse_errors,
@@ -849,7 +836,6 @@ class CombinedRetriever:
                 'package. Install it with pip install "platon[nautilus]" '
                 'or pip install nautilus-sampler.') from error
 
-        self.params_to_lnlike = {}
         transit_calc, eclipse_calc = self._make_calculators(
             transit_bins, eclipse_bins, fit_info, include_condensation,
             rad_method, transit_throughputs, eclipse_throughputs)
@@ -915,14 +901,7 @@ class CombinedRetriever:
 
         self._init_random_samples(retrieval_result)
         for params in equal_samples[:num_final_samples]:
-            pointwise = self.params_to_lnlike.get(tuple(params))
-            if pointwise is None:
-                pointwise = self._ln_like(
-                    params, transit_calc, eclipse_calc, fit_info,
-                    transit_depths, transit_errors,
-                    eclipse_depths, eclipse_errors,
-                    zero_opacities=zero_opacities, lnlike_per_point=True)
-            _, transit_info, _, eclipse_info = self._ln_like(
+            _, transit_info, _, eclipse_info, pointwise = self._ln_like(
                 params, transit_calc, eclipse_calc, fit_info,
                 transit_depths, transit_errors,
                 eclipse_depths, eclipse_errors,

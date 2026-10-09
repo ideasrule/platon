@@ -68,13 +68,12 @@ class TestNautilus(unittest.TestCase):
 
         def fake_ln_like(params, *args, ret_best_fit=False,
                          lnlike_per_point=False, **kwargs):
-            if ret_best_fit:
-                return None, None, None, None
             values = np.array([
                 -0.5 * ((params[0] - 1200) / 100)**2,
                 -0.5 * params[1]**2])
+            if ret_best_fit:
+                return None, None, None, None, values
             if lnlike_per_point:
-                retriever.params_to_lnlike[tuple(params)] = values
                 return values
             return values.sum()
 

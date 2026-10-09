@@ -30,12 +30,11 @@ class TestMultiNest(unittest.TestCase):
 
         def likelihood(params, *args, ret_best_fit=False,
                        lnlike_per_point=False, **kwargs):
-            if ret_best_fit:
-                return None, None, None, None
             values = np.array([-0.5 * ((params[0] - 1000) / 100)**2, -1.])
-            if lnlike_per_point:
+            if ret_best_fit:
                 evaluated.append(params[0])
-                self.retriever.params_to_lnlike[tuple(params)] = values
+                return None, None, None, None, values
+            if lnlike_per_point:
                 return values
             return values.sum()
 
@@ -50,7 +49,8 @@ class TestMultiNest(unittest.TestCase):
         self.assertEqual(solve.call_args.kwargs["max_iter"], 17)
         self.assertTrue(solve.call_args.kwargs["resume"])
         self.assertNotIn("max_iter", options)
-        self.assertCountEqual(evaluated, [900., 1000., 1100.])
+        # The best fit (T=1000), then the three posterior samples
+        self.assertCountEqual(evaluated, [1000., 900., 1000., 1100.])
         self.assertEqual(np.shape(result.pointwise_lnlikes), (3, 2))
         self.assertTrue(np.isfinite(result.loo_total))
         self.assertEqual(result.final_logz, -12.5)

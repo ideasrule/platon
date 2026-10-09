@@ -69,6 +69,12 @@ def prepare_forward_inputs(atm, *, star_radius, planet_mass, planet_radius,
             for gas in gases:
                 if gas not in atm.master_index:
                     raise ValueError("Unknown gas: {}".format(gas))
+                if gas not in atm.raw["opac_names"] and \
+                   gas not in ["H2", "He", "H2-He", "N2", "O2"]:
+                    raise ValueError(
+                        "{} is being fit, but its opacity was not loaded; add "
+                        "it to include_opacities when constructing the "
+                        "calculator".format(gas))
             gas_master_idx = tuple(int(atm.master_index[g]) for g in gases)
             vmrs_arr = np.asarray(vmrs, dtype=np.float32)
             active_species = list(gases)

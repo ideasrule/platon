@@ -704,7 +704,7 @@ class CombinedRetriever:
     def run_nautilus(self, transit_bins, transit_depths, transit_errors,
                      eclipse_bins, eclipse_depths, eclipse_errors,
                      fit_info, include_condensation=True,
-                     n_live=2000, n_eff=10000, n_networks=16,
+                     n_live=5000, n_eff=10000, n_networks=16,
                      discard_exploration=True, verbose=True,
                      num_final_samples=100, zero_opacities=(),
                      transit_throughputs=None, eclipse_throughputs=None,

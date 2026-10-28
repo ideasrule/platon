@@ -10,8 +10,9 @@ readme = "README.md"
 license = "GPL-3.0-only"
 license-files = ["LICENSE"]
 authors = [
-    { name = "Michael Zhang", email = "zmzhang@caltech.edu" },
+    { name = "Michael Zhang", email = "zmzhang@uchicago.edu" },
     { name = "Yayaati Chachan" },
+    { name = "Tyler Fairnington" }
 ]
 requires-python = ">=3.10"
 classifiers = [
@@ -21,21 +22,16 @@ classifiers = [
 dependencies = [
     "numpy>=2.0",
     "scipy",
-    "jax>=0.5.0",
+    "jax[cuda12]",
     "emcee",
     "dynesty",
     "corner",
-    "future",
-    "nose",
-    "setuptools",
-    "configparser",
     "matplotlib",
     "pandas",
     "astropy",
+    "nautilus",
+    "pytest"
 ]
-
-[project.optional-dependencies]
-nautilus = ["nautilus-sampler"]
 
 [project.urls]
 Homepage = "https://github.com/ideasrule/platon"

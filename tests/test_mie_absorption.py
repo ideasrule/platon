@@ -1,7 +1,6 @@
 import unittest
 import numpy as np
 import scipy.integrate
-from nose.tools import nottest
 import matplotlib.pyplot as plt
 xp = np
 
@@ -31,7 +30,6 @@ class TestMieAbsorption(unittest.TestCase):
         result, error = scipy.integrate.quad(integrand, -5, 5, epsrel=1e-3, epsabs=0, limit=100)
         return result
 
-    @nottest
     def run_test(self, m, r_mean, sigma, frac_scale_height=2, rtol=1e-5, atol=1e-5):
         n_0 = 2.3e9
         calc = self.calc #TransitDepthCalculator()

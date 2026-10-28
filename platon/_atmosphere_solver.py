@@ -297,12 +297,6 @@ class AtmosphereSolver:
         self.raw = _load_raw(include_opacities, downsample)
         if stellar_grid == "newera":
             stellar_grid = Path(__file__).resolve().parent / "data/newera_jwst.npz"
-            if not stellar_grid.exists():
-                from urllib.request import urlretrieve
-                from platon import __stellar_grid_url__
-                print("Downloading NewEra stellar spectra from", __stellar_grid_url__)
-                urlretrieve(__stellar_grid_url__, str(stellar_grid) + ".part")
-                os.replace(str(stellar_grid) + ".part", stellar_grid)
         if stellar_grid is not None:
             temps, spectra = _load_stellar_grid(
                 stellar_grid, logg_star, feh_star, self.raw["lambda_full"])

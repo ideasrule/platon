@@ -1,4 +1,5 @@
 import copy
+import multiprocessing
 
 import numpy as np
 import scipy.special
@@ -23,6 +24,13 @@ from .retrieval_result import RetrievalResult
 
 # Stellar heterogeneity parameters, which can differ between transit visits
 _HET_PARAMS = ("T_het", "het_cov_frac", "T_het2", "het2_cov_frac")
+
+
+def _limit_worker_threads():
+    '''Pool initializer: one BLAS thread per worker, to avoid
+    oversubscribing the CPU when many workers train networks at once.'''
+    from threadpoolctl import threadpool_limits
+    threadpool_limits(limits=1)
 
 
 def _include_opacities(fit_info):
@@ -708,26 +716,18 @@ class CombinedRetriever:
                      discard_exploration=True, verbose=True,
                      num_final_samples=100, zero_opacities=(),
                      transit_throughputs=None, eclipse_throughputs=None,
-                     **nautilus_kwargs):
-        """Run optional Nautilus nested sampling.
-
-        Install support with ``pip install "platon[nautilus]"`` or
-        ``pip install nautilus-sampler``. Extra keyword arguments are passed
-        directly to :class:`nautilus.Sampler`.
-        """
-        try:
-            from nautilus import Sampler
-        except ImportError as error:
-            raise ImportError(
-                'run_nautilus requires the optional "nautilus-sampler" '
-                'package. Install it with pip install "platon[nautilus]" '
-                'or pip install nautilus-sampler.') from error
-
+                     n_train_workers=8, **nautilus_kwargs):
+        """Run nested sampling with Nautilus, a neural network based method."""
+        from nautilus import Sampler
         data = (transit_bins, transit_depths, transit_errors,
                 eclipse_bins, eclipse_depths, eclipse_errors)
         ln_like = self._make_ln_like(
             data, fit_info, include_condensation, zero_opacities,
             transit_throughputs, eclipse_throughputs)
+
+        train_pool = multiprocessing.get_context("fork").Pool(
+            n_train_workers, initializer=_limit_worker_threads)
+        nautilus_kwargs["pool"] = (None, train_pool)
 
         sampler = Sampler(
             fit_info._from_unit_interval_array, ln_like,
@@ -736,6 +736,8 @@ class CombinedRetriever:
         success = sampler.run(
             n_eff=n_eff, discard_exploration=discard_exploration,
             verbose=verbose)
+        train_pool.close()
+        train_pool.join()
 
         samples, log_weights, logl = map(np.asarray, sampler.posterior())
         result = {

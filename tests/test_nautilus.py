@@ -91,9 +91,9 @@ class TestNautilus(unittest.TestCase):
 
         self.assertIsInstance(result, RetrievalResult)
         self.assertEqual(result.retrieval_type, "nautilus")
-        self.assertEqual(_Sampler.init_kwargs["n_live"], 2000)
+        self.assertEqual(_Sampler.init_kwargs["n_live"], 5000)
         self.assertEqual(_Sampler.init_kwargs["n_networks"], 16)
-        self.assertEqual(_Sampler.run_kwargs["n_eff"], 10000)
+        self.assertEqual(_Sampler.run_kwargs["n_eff"], 5000)
         self.assertTrue(_Sampler.run_kwargs["discard_exploration"])
         self.assertAlmostEqual(np.sum(result.weights), 1)
         self.assertEqual(result.final_logz, -12.5)

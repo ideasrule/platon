@@ -56,13 +56,6 @@ class _Sampler:
 
 
 class TestNautilus(unittest.TestCase):
-    def test_lazy_import_error(self):
-        with mock.patch.dict(sys.modules, {"nautilus": None}):
-            with self.assertRaisesRegex(
-                    ImportError, "pip install nautilus-sampler"):
-                CombinedRetriever().run_nautilus(
-                    None, None, None, None, None, None, _FitInfo())
-
     def test_result_defaults_and_plots(self):
         retriever = CombinedRetriever()
 

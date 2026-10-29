@@ -4,7 +4,9 @@ Introduction
 PLATON (PLanetary Atmospheric Tool for Observer Noobs) is a
 fast and easy to use forward modelling and retrieval tool for
 exoplanet atmospheres.  Its roots are in ExoTransmit by Eliza Kempton, but
-it has dramatically changed since then.
+it has dramatically changed since then.  The latest version, PLATON 7, is
+built upon JAX and about a hundred times faster than PLATON 6, achieving a
+speed of 0.4 ms per forward model.
 
 The main modules are:
 
@@ -20,9 +22,5 @@ clouds, and scattering.  The eclipse spectrum is calculated with the same physic
 
 The retrievers use TransitDepthCalculator/EclipseDepthCalculator as a forward
 model, and can retrieve atmospheric properties using either MCMC or nested
-sampling.  The speed of these retrievals is highly dependent on the wavelength
-range, data precision, prior ranges, opacity resolution, and number of live points (nested sampling)
-or iterations/walkers (MCMC).  A very rough guideline is that a GPU-accelerated transit retrieval with
-250 live points and R=20k for
-STIS + WFC3 + IRAC 3.6 um + IRAC 4.5 um data takes 19 minutes with multinest, or 75 minutes with dynesty.  There are a variety of ways to speed up the retrieval, as
-described on the Q&A page. 
+sampling.  By default we use `nautilus <https://nautilus-sampler.readthedocs.io/en/latest/>`_, which does importance sampling using neural networks for efficient parameter space exploration.  We find that it is more robust and more sample
+efficient for high-dimensional problems.

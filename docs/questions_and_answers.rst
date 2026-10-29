@@ -20,23 +20,9 @@ in that order.
   will throw a ValueError.
   
 * **How do I specify custom abundances and T/P profiles?**
+
+  Check out plot_transit_custom_abunds.py and plot_eclipse_custom_abunds.py in examples/
   
-  One can set vertically constant abundances for some species
-  by getting the equilibrium abundances, then modifying them ::
-
-    from platon.abundance_getter import AbundanceGetter
-    getter = AbundanceGetter()
-    # Solar logZ and C/O ratio. Modify as required.
-    abundances = getter.get(0, 0.5)
-
-    # Zero out CO.  (Note that if CO is a major component, you should probably
-    # renormalize the abundances of other species so that they add up to 1.)    
-    abundances["CO"] *= 0
-
-    # Set CH4 abundance to a constant throughout the atmosphere
-    abundances["CH4"] *= 0
-    abundances["CH4"] += 1e-5
-
     
 * **How do I do check what effect a species has on the spectrum?**
   You can zero out its opacity:
@@ -55,29 +41,10 @@ in that order.
   can achieve in a fit, but we recommend fitting them with Gaussian priors to
   take into account the measurement errors.
 
-* **Should I use run_dynesty, run_multinest, or run_emcee?**
-  We recommend run_multinest.  We recommend nested sampling because it handles multimodal distributions more robustly, and because it has an
-  intuitive stopping criterion.  With emcee, checking for convergence is non-trivial.  Between the two nested sampling algorithms,
-  we typically find multinest to be faster, and have anecdotal evidence that it is more robust.
    
-* **My corner plots look ugly.  What do I do?**
-  
-  If you're using nested sampling, increase the number of live points. This
-  will increase the number of samples your corner plot is generated from: ::
-
-    # By default, nlive is 250
-    result = retriever.run_dynesty(bins, depths, errors, fit_info, nlive=1000)
-    
-  If you're using MCMC, increase nsteps from the default of 1000 to 10,000.
-
-* **How do I get statistics from the retrieval?**
-
-  Look at BestFit.txt.  It'll have the 16th, 50th, and 84th percentiles of
-  all parameters, as well as the best fit values.
-    
 * **PLATON is still too slow!  How do I make it faster?**
 
-  If you don't have a CUDA-capable GPU, get one!  Even a cheap gaming GPU, like a $300 RTX 3060 12 GB, will speed up PLATON many-fold.
+  If you don't have a CUDA-capable GPU, get one!  Even a cheap gaming GPU, like a RTX 3060 12 GB, will speed up PLATON many-fold.  You can also rent a RTX 5090 (a very good GPU for this use case) for only $0.60/hour on vast.ai.
   
   If PLATON is still too slow, try decreasing num_profile_heights in
   transit_depth_calculator.py (for transit depths) or
@@ -89,12 +56,6 @@ in that order.
 
   This loads only the CH4, H2O, and CO2 opacities, and downsamples them by a factor of 2 (to a resolution of 10k, if you started with the default R=20k opacities).
   
-  In some cases, dynesty becomes extremely inefficient with the default
-  sampling method.  In those cases, pass sample="rwalk" to run_dynesty, which
-  will cap the sampling efficiency at 1/25, 25 being the number of random walks to take.  According to the dynesty documentation, 25 should be sufficient
-  at low dimensionality (<=10), but 50 might be necessary at
-  moderate dimensionality (10-20).  To change the number of random walks to 50, pass walks=50.
-
 * **How small can I set my wavelength bins?**
   The error in the opacity sampling calculation for a given reasonably small bin is equal to the standard deviation of the
   transit/eclipse depths in that bin divided by sqrt(N), where N is the number of points in the bin.
@@ -107,7 +68,7 @@ in that order.
   the running time is proportional to the resolution and to the number of live
   points.
 
-  We recommend a staged approach to retrievals.  Exploratory data analysis can be done with R=10,000 opacities and 250 live points.  In the process, intermittent spot checks should be performed with R=20,000 opacities and 500 live points to check the effect of resolution, and with R=10,000 opacities and 1000 live points to check the effect of sparse sampling.  When one is satisfied with the exploratory data analysis and is ready to finalize the results, one should run a final retrieval with R=20,000 opacities and 1000 live points.
+  We recommend a staged approach to retrievals.  Exploratory data analysis can be done with R=10,000 opacities and 1000 live points.  In the process, intermittent spot checks should be performed with R=20,000 opacities and 1000 live points to check the effect of resolution, and with R=10,000 opacities and 5000 live points to check the effect of sparse sampling.  When one is satisfied with the exploratory data analysis and is ready to finalize the results, one should run a final retrieval with R=20,000 opacities and 5000 live points.
 
 * **How do I use NewEra stellar spectra for stellar contamination?**
   By default, T_star and T_het use built-in spectra that depend only on
@@ -118,8 +79,6 @@ in that order.
 
     calculator = TransitDepthCalculator(stellar_grid="newera",
                                         logg_star=4.9, feh_star=0.0)
-
-  It is downloaded (about 470 MB) into PLATON's data folder the first time.
 
   or to ``get_default_fit_info`` for retrievals.  Temperatures between grid
   points are interpolated linearly, as for the built-in spectra.

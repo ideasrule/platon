@@ -23,8 +23,8 @@ class TransitDepthCalculator:
         ref_pressure : float
             The planetary radius is defined as the radius at this pressure
         stellar_grid : str, optional
-            "newera" for the NewEra grid (Hauschildt et al. 2025), downloaded
-            into PLATON's data folder on first use, or a file in the format
+            "newera" for the NewEra grid (Hauschildt et al. 2025), included
+            in PLATON's data files, or a file in the format
             described in _atmosphere_solver._load_stellar_grid.  Used instead
             of the built-in temperature-only spectra for T_star, T_het and
             T_het2, interpolated to logg_star (cgs) and feh_star.
@@ -63,7 +63,7 @@ class TransitDepthCalculator:
     def compute_depths(self, t_p_profile, star_radius, planet_mass,
                        planet_radius, logZ=0, CO_ratio=0.53, CH4_mult=1,
                        gases=None, vmrs=None,
-                       add_gas_absorption=True, add_H_minus_absorption=False,
+                       add_gas_absorption=True, add_H_minus_absorption=True,
                        add_scattering=True, scattering_factor=1,
                        scattering_slope=4, scattering_ref_wavelength=1e-6,
                        add_collisional_absorption=True,
@@ -99,8 +99,10 @@ class TransitDepthCalculator:
             Multiple applied to equilibrium CH4 abundance, for methane depletion
         add_gas_absorption: float, optional
             Whether gas absorption is accounted for
-        add_H_minus_absorption: float, optional
-            Whether H- bound-free and free-free absorption is added in
+        add_H_minus_absorption: bool, optional
+            Whether H- bound-free and free-free absorption is added in.  It
+            is skipped if gases/custom_abundances do not include both el
+            and H.
         add_scattering : bool, optional
             whether Rayleigh scattering is taken into account
         scattering_factor : float, optional
@@ -199,7 +201,7 @@ class TransitDepthCalculator:
         info_dict : dict
             Returned if full_output is True, containing intermediate quantities
             calculated by the method.  These are: absorption_coeff_atm, tau_los,
-            stellar_spectrum, radii, P_profile, T_profile, mu_profile,
+            contrib, unbinned_stellar_spectrum, binned_stellar_spectrum, radii, P_profile, T_profile, mu_profile,
             atm_abundances, unbinned_depths, unbinned_wavelengths,
             unbinned_correction_factors.  unbinned_depths are already
             corrected for stellar spots (multiplied by

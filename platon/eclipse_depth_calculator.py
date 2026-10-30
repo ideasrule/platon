@@ -99,7 +99,7 @@ class EclipseDepthCalculator:
     def compute_depths(self, t_p_profile, star_radius, planet_mass,
                        planet_radius, T_star, logZ=0, CO_ratio=0.53,
                        CH4_mult=1, gases=None, vmrs=None,
-                       add_gas_absorption=True, add_H_minus_absorption=False,
+                       add_gas_absorption=True, add_H_minus_absorption=True,
                        add_scattering=True, scattering_factor=1,
                        scattering_slope=4, scattering_ref_wavelength=1e-6,
                        add_collisional_absorption=True,

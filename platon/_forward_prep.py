@@ -70,7 +70,7 @@ def prepare_forward_inputs(atm, *, star_radius, planet_mass, planet_radius,
                 if gas not in atm.master_index:
                     raise ValueError("Unknown gas: {}".format(gas))
                 if gas not in atm.raw["opac_names"] and \
-                   gas not in ["H2", "He", "H2-He", "N2", "O2"]:
+                   gas not in ["H2", "He", "H2-He", "N2", "O2", "el", "H"]:
                     raise ValueError(
                         "{} is being fit, but its opacity was not loaded; add "
                         "it to include_opacities when constructing the "
@@ -81,12 +81,10 @@ def prepare_forward_inputs(atm, *, star_radius, planet_mass, planet_radius,
         else:
             raise ValueError("Unrecognized format for custom_abundances")
 
-    add_H_minus_absorption = bool(add_H_minus_absorption)
-    if add_H_minus_absorption and \
-       ("el" not in active_species or "H" not in active_species):
-        raise ValueError(
-            "add_H_minus_absorption requires 'el' and 'H' abundances, which "
-            "are missing from the provided gases/custom_abundances")
+    # H- absorption is proportional to n_el * n_H, so it is negligible (and
+    # skipped) unless both are among the provided gases/custom_abundances
+    add_H_minus_absorption = bool(add_H_minus_absorption) and \
+        "el" in active_species and "H" in active_species
 
     # Mie scattering
     eff_xsec = None
@@ -152,7 +150,8 @@ def prepare_forward_inputs(atm, *, star_radius, planet_mass, planet_radius,
                             shell_mask, opac_mask)
 
     # el/H indices are only meaningful (and validated above) when H-
-    # absorption is on; -1 makes any unintended use fail loudly downstream
+    # absorption is on, and are only read under cfg.add_hminus.  -1 is a
+    # placeholder: JAX would silently read it as the last species, not fail
     config = ForwardConfig(
         n_layers=len(P_profile),
         abund_mode=abund_mode,

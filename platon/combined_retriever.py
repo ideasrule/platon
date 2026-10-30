@@ -39,7 +39,7 @@ def _include_opacities(fit_info):
     cross sections for'''
     default = list(DEFAULT_OPACITIES)
     extra = [g for g in getattr(fit_info, "gases", [])
-             if g not in default and g not in ["H2", "He", "H2-He", "N2", "O2"]]
+             if g not in default and g not in ["H2", "He", "H2-He", "N2", "O2", "el", "H"]]
     return default + extra
 
 class CombinedRetriever:
@@ -716,7 +716,7 @@ class CombinedRetriever:
                      discard_exploration=True, verbose=True,
                      num_final_samples=100, zero_opacities=(),
                      transit_throughputs=None, eclipse_throughputs=None,
-                     n_train_workers=8, **nautilus_kwargs):
+                     n_train_workers=16, **nautilus_kwargs):
         """Run nested sampling with Nautilus, a neural network based method."""
         from nautilus import Sampler
         data = (transit_bins, transit_depths, transit_errors,
@@ -844,8 +844,8 @@ class CombinedRetriever:
             T_int are taken from the template; any of these also passed here
             must agree with it.
         profile_kwargs : kwargs
-            T/P profile arguments.  For "isothermal": T_day.  For "parametric":
-            T0, P1, alpha1, alpha2, P3, T3.  For "radiative_solution":
+            T/P profile arguments.  For "isothermal": T.  For "parametric":
+            T0, log_P1, alpha1, alpha2, log_P3, T3.  For "radiative_solution":
             T_star, Rs, a, Mp, Rp, beta, log_k_th, log_gamma, log_gamma2,
             alpha, and T_int (optional).  We recommend that T_star, Rs, a, and
             Mp be fixed, and that T_int be omitted (which sets it to 100 K).

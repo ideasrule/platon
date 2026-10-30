@@ -9,23 +9,23 @@ in that order.
 
   We account for gas absorption, collisional absorption, an opaque
   cloud deck, Rayleigh scattering, and haze scattering--either a user-specified slope and amplitude, or Mie scattering.  H- bound-free and free-free absorption
-  is not enabled by default, but can be turned on by passing add_H_minus_absorption=True to compute_depths.  35 chemical species are included
+  is enabled by default, and can be turned off by passing add_H_minus_absorption=False to compute_depths.  36 chemical species are included
   in our calculations, namely the ones listed in data/species_info.
   The abundances of these species were calculated using FastChem for a
   grid of metallicity, C/O ratio, temperature, and pressure, assuming
   equilibrium chemistry with or without condensation.  Condensation can be
   toggled using include_condensation=True/False.  Metallicity ranges from 10^-2 to 10^3 times solar, C/O
-  ratio from 0.001 to 2, temperature from 200 to 3000 K, and pressure
+  ratio from 0.001 to 2, temperature from 100 to 4000 K, and pressure
   from 10^-4 to 10^8 Pa.  If you wander outside these limits, PLATON
-  will throw a ValueError.
+  will throw a ValueError (or an AtmosphereError, for temperatures).
   
 * **How do I specify custom abundances and T/P profiles?**
 
   Check out plot_transit_custom_abunds.py and plot_eclipse_custom_abunds.py in examples/
   
     
-* **How do I do check what effect a species has on the spectrum?**
-  You can zero out its opacity:
+* **How do I check what effect a species has on the spectrum?**
+  You can zero out its opacity::
 
     calculator.compute_depths(..., zero_opacities=["H2O"])
 
@@ -46,9 +46,8 @@ in that order.
 
   If you don't have a CUDA-capable GPU, get one!  Even a cheap gaming GPU, like a RTX 3060 12 GB, will speed up PLATON many-fold.  You can also rent a RTX 5090 (a very good GPU for this use case) for only $0.60/hour on vast.ai.
   
-  If PLATON is still too slow, try decreasing num_profile_heights in
-  transit_depth_calculator.py (for transit depths) or
-  TP_profile (for eclipse depths).  Of course, this comes at the expense of
+  If PLATON is still too slow, try decreasing NUM_LAYERS in
+  params.py (for both transit and eclipse depths).  Of course, this comes at the expense of
   accuracy.  You can also include fewer opacities than the default by passing
   include_opacities, or downsample the opacities by a certain factor by passing downsample::
 
@@ -63,7 +62,7 @@ in that order.
   keep N above 20 to avoid unreasonably large errors.  PLATON will throw a
   warning for N <= 5.
 
-* **What opacity resolution should I use?  How many live points**
+* **What opacity resolution should I use?  How many live points?**
   This is a tradeoff between running time and accuracy.  Roughly speaking,
   the running time is proportional to the resolution and to the number of live
   points.

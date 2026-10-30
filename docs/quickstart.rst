@@ -10,6 +10,7 @@ To compute transit depths, look at transit_depth_example.py, then go to
 :class:`.TransitDepthCalculator` for more info.  In short::
 
   from platon.transit_depth_calculator import TransitDepthCalculator
+  from platon.TP_profile import Profile
   from platon.constants import M_jup, R_jup, R_sun
 
   # All inputs and outputs for PLATON are in SI
@@ -42,7 +43,8 @@ To retrieve atmospheric parameters, look at retrieve_k2_18b_transit.py or retrie
 :class:`.CombinedRetriever` for more info.  The former performs a free retrieval, while the latter assumes equilibrium chemistry.  
 
 The example adopts uniform log VMRs, but it is also possible to use CLR priors::
-  fit_info = retriever.get_default_fit_info(...fit_vmr=False, fit_clr=True)
+
+  fit_info = retriever.get_default_fit_info(..., logZ=None, CO_ratio=None, fit_vmr=False, fit_clr=True)
   fit_info.add_gases_clr(["CH4", "CO2", "CO", "H2O", "H2S"])
 
 With a CLR prior, all gases are treated equally, and there is no pre-defined background gas.

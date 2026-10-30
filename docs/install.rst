@@ -1,6 +1,6 @@
 Install
 *******
-To install PLATON:
+To install PLATON::
 
   git clone https://github.com/ideasrule/platon.git
   cd platon/
@@ -14,11 +14,12 @@ PLATON is built on JAX and performs all heavy computation in single precision (F
 
 JAX will automatically detect the GPU and use it.  If you don't have a GPU, you can rent one on vast.ai.  A RTX 5090 rents for ~$0.60/hour and is more than sufficient.  We recommend giving an AI agent your vast.ai key and asking it to rent an instance, set up the environment, and install PLATON, so that you don't have to go through the process every time you want to run a retrieval.
 
-PLATON supports nautilus, dynesty, and pymultinest for nested sampling.  nautilus and dynesty is installed by default.  To install pymultinest::
+PLATON supports nautilus, dynesty, and pymultinest for nested sampling.  nautilus and dynesty are installed by default.  To install pymultinest::
   
   conda install -c conda-forge mpi4py pymultinest
 
 After installing PLATON, run one of the examples so that the data files are automatically downloaded::
+
   cd examples/
   python transit_depth_example.py
   

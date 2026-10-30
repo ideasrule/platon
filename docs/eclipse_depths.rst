@@ -31,9 +31,7 @@ Then, call the eclipse depth calculator::
   
 Most of the same parameters accepted by the transit depth calculator are also
 accepted by the eclipse depth calculator.  Surface emission can be included by
-passing surface_temp.  Only blackbody emission is supported at the moment, but
-non-blackbody emissivities (from new, state of the art lab data!) will be
-included in the next release (Paragas et al. 2024, in prep).
+passing surface_pressure, surface_type, and semimajor_axis; see :doc:`surface_emission`.
 
 It is also possible to retrieve on combined transit and eclipse depths::
 
@@ -41,7 +39,8 @@ It is also possible to retrieve on combined transit and eclipse depths::
 
   retriever = CombinedRetriever()
   fit_info = retriever.get_default_fit_info(Rs, Mp, Rp, T_limb,
-                 T0=1200, P1=500, alpha1=0.5, alpha2=0.6, P3=1e6, T3=1900)
+                 profile_type="parametric", T0=1200, log_P1=np.log10(500),
+                 alpha1=0.5, alpha2=0.6, log_P3=6, T3=1900)
 		 
   fit_info.add_uniform_fit_param(...)
   fit_info.add_uniform_fit_param(...)

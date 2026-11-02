@@ -29,7 +29,7 @@ dependencies = [
     "matplotlib",
     "pandas",
     "astropy",
-    "nautilus",
+    "nautilus-sampler",
     "pytest"
 ]
 

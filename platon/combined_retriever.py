@@ -320,6 +320,14 @@ class CombinedRetriever:
         except AtmosphereError:
             return -np.inf
 
+        if not ret_best_fit and np.any(np.isnan(ln_likelihood)):
+            # A numerical failure in the forward model must not reach the
+            # sampler: nautilus trains its networks on log likelihoods and
+            # crashes on NaN, and other samplers would silently misbehave.
+            if lnlike_per_point:
+                return np.full_like(ln_likelihood, -np.inf)
+            return -np.inf
+
         self.last_params = params
         self.last_ln_like = ln_likelihood.sum()
 

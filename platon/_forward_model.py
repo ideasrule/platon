@@ -61,6 +61,25 @@ SCALAR_INDEX = {name[3:].lower(): value
                 if name.startswith("SC_") and name != "SC_N_SCALARS"}
 
 
+# Aerosol number densities (m^-3) above this are capped.  A layer this dense
+# is opaque at every wavelength for any particle size in the Mie grid (tau
+# per km of path >~ 1e5 even for 10 nm particles at 5 um), so the cap never
+# changes a transit depth.  It prevents float32 overflow of
+# num_den * (P / P_ref)**(1 / fsh) deep in the atmosphere when fsh is small,
+# which would otherwise give inf, then inf * 0 = NaN in the path-length
+# matmuls.  It is also low enough that n_mie @ dl_mid (path lengths up to
+# ~1e7 m over ~100 layers) stays far below the float32 maximum.
+LOG_MAX_MIE_NUM_DEN = math.log(1e26)
+
+
+def _mie_number_density(P_profile, sc):
+    """num_den * (P / P_ref)**(1 / fsh), evaluated in log space and capped
+    at exp(LOG_MAX_MIE_NUM_DEN) to avoid float32 overflow."""
+    log_n = jnp.log(sc[SC_NUM_DEN]) + \
+        jnp.log(P_profile / sc[SC_MIE_REF_P]) / sc[SC_FSH]
+    return jnp.exp(jnp.minimum(log_n, LOG_MAX_MIE_NUM_DEN))
+
+
 class DeviceData(NamedTuple):
     """All device-resident model data.  Fields are jnp arrays (or None)."""
     lambda_grid: Any        # (L,)
@@ -425,8 +444,7 @@ def _opacity(cfg, data, sc, inp, atm_abund, T_profile, P_profile):
         coeff_T += jnp.exp(ln_k_atm) * w[None, :]
 
     if use_mie:
-        n_mie = sc[SC_NUM_DEN] * \
-            (P_profile / sc[SC_MIE_REF_P]) ** (1.0 / sc[SC_FSH])   # (N,)
+        n_mie = _mie_number_density(P_profile, sc)                  # (N,)
         coeff_T += n_mie[None, :] * inp.eff_xsec[:, None]
 
     if cfg.add_collisional:
@@ -706,8 +724,7 @@ def _transit_depths_dual(cfg, data, pin):
         pow_clear = 1.0 / data.lambda_um ** 4              # (L,)
         tau_clear = tau_abs + pow_clear[:, None] * v_ray[None, :]
         if cfg.use_mie:
-            n_mie = sc[SC_NUM_DEN] * \
-                (P_profile / sc[SC_MIE_REF_P]) ** (1.0 / sc[SC_FSH])
+            n_mie = _mie_number_density(P_profile, sc)
             v_mie = n_mie @ dl_mid                         # (N-1,)
             tau_cloudy = tau_clear + \
                 inp.eff_xsec[:, None] * v_mie[None, :]

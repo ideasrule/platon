@@ -17,6 +17,8 @@ from ._species_data_reader import read_species_data
 from .constants import k_B
 from ._get_data import get_data_if_needed
 from ._mie_cache import MieCache
+from . import _mie_jax
+from . import _mie_multi_x
 from .errors import AtmosphereError
 
 # Data caches shared between calculator instances, so that constructing many
@@ -38,13 +40,22 @@ DEFAULT_OPACITIES = ("CH4", "CO2", "CO", "H2O", "H2S", "HCN", "K", "Na", "NH3",
 _EVAL_POOL = None
 _EVAL_WORKERS = 8
 
+# The Mie hot path (spline integral over the size distribution, and Qext on
+# GPU backends) runs in JAX; see _mie_jax.  Set PLATON_MIE_JAX=0 to use the
+# reference numpy implementation instead.  A forked child always uses the
+# numpy path: the JAX runtime it inherits from its parent is not fork-safe.
+_MIE_JAX = os.environ.get("PLATON_MIE_JAX", "1") != "0"
+_IN_FORKED_CHILD = False
+
 
 def _reset_eval_pool():
     """Forked children inherit a ThreadPoolExecutor whose worker threads do
     not exist in the child, so any use would deadlock; drop it and let the
-    child lazily create its own (relevant for fork-based retrieval pools)."""
-    global _EVAL_POOL
+    child lazily create its own (relevant for fork-based retrieval pools).
+    Likewise, children keep the Mie calculation off JAX."""
+    global _EVAL_POOL, _IN_FORKED_CHILD
     _EVAL_POOL = None
+    _IN_FORKED_CHILD = True
 
 
 if hasattr(os, "register_at_fork"):
@@ -327,6 +338,7 @@ class AtmosphereSolver:
         self._filtered_cross_secs = {}   # (species, sigma) -> smoothed array
         self._mie_eff_xsec_cache = {}    # full-argument memo (per lambda grid)
         self._mie_nbins_cache = {}       # histogram bin counts (see below)
+        self._mie_device_cache = {}      # per-lambda-grid device arrays (JAX path)
         self._log_lambda_grid = None     # lazy log(lambda_grid)
 
         self.all_cross_secs = load_dict_from_pickle("data/all_cross_secs.pkl")
@@ -374,6 +386,7 @@ class AtmosphereSolver:
         """
         self._mie_eff_xsec_cache = {}    # results depend on lambda_grid
         self._mie_nbins_cache = {}
+        self._mie_device_cache = {}
         self._log_lambda_grid = None
         if self.wavelength_bins is not None:
             # Reset to the unbinned state before applying the new bins
@@ -645,7 +658,11 @@ class AtmosphereSolver:
                                   max_zscore=5, num_integral_points=100):
         """Effective extinction cross section vs wavelength for a log-normal
         particle size distribution.  Computed on the host in float64;
-        returned (and memoized) as float32, the forward model's precision."""
+        returned (and memoized) as float32, the forward model's precision.
+        The size-distribution integral (and, on GPU backends, Qext) is
+        evaluated with JAX kernels (see _mie_jax), matching the float64
+        reference to float32 precision; the result is always a host numpy
+        array."""
         cache_key = (ri, part_size, sigma, max_zscore, num_integral_points)
         if cache_key in self._mie_eff_xsec_cache:
             return self._mie_eff_xsec_cache[cache_key]
@@ -704,24 +721,46 @@ class AtmosphereSolver:
             self._mie_nbins_cache[nb_key] = n_bins
         log_x_hist = np.linspace(lo, hi, n_bins + 1)
 
-        Qext_hist = self._mie_cache.get_and_update(ri, np.exp(log_x_hist))
+        use_jax = _MIE_JAX and not _IN_FORKED_CHILD
+        qext_func = _mie_multi_x.get_Qext
+        if use_jax and _mie_jax.qext_on_device():
+            qext_func = _mie_jax.get_Qext
+        Qext_hist = self._mie_cache.get_and_update(ri, np.exp(log_x_hist),
+                                                   qext_func=qext_func)
         # trapezoid rule folded into per-row BLAS dots with fixed weights
         dz = np.diff(z_scores)
         w = np.zeros(len(z_scores))
         w[:-1] += 0.5 * dz
         w[1:] += 0.5 * dz
-        result = _mie_lognormal_integral(
-            log_lam, log_r, log_x_hist, Qext_hist,
-            w * probs * geometric_cross_section)
+        weights = w * probs * geometric_cross_section
+        if not use_jax:
+            result = _mie_lognormal_integral(
+                log_lam, log_r, log_x_hist, Qext_hist, weights)
+            return self._cache_mie_eff_xsec(cache_key, result)
 
+        # JAX path, in scaled knot coordinates u = (x - lo) * scale
+        # = a[j] + b[i], with a = (log_r - min log_r) * scale and
+        # b = (max log_lam - log_lam) * scale.  hi - lo, and hence scale and
+        # b, are invariant under part_size changes (like n_bins), so b lives
+        # on the device, split into integer and fractional parts.
+        dev = self._mie_device_cache.get(nb_key)
+        if dev is None:
+            scale = n_bins / (hi - lo)
+            ib, fb = _mie_jax.split_int_frac(
+                (log_lam.max() - log_lam) * scale)
+            dev = (scale, _mie_jax.to_device((ib, fb)))
+            self._mie_device_cache[nb_key] = dev
+        scale, ib_fb = dev
+        a = (log_r - log_r.min()) * scale
+        result = _mie_jax.spline_lognormal_integral(ib_fb, a, Qext_hist, weights)
         return self._cache_mie_eff_xsec(cache_key, result)
 
     def _cache_mie_eff_xsec(self, cache_key, result):
         """Memoize an effective cross section as float32 (the forward model's
         working precision), so cache hits skip the conversion.  Kept as a
-        numpy array -- not a JAX device array -- so this host-side path never
-        touches the JAX backend (which would break fork-based retrieval
-        pools) and stays mutable for external callers."""
+        numpy array -- not a JAX device array -- so callers (and forked
+        children, which use the numpy path) never receive device buffers,
+        and it stays mutable for external callers."""
         result = np.asarray(result, dtype=np.float32)
         if len(self._mie_eff_xsec_cache) > 64:
             self._mie_eff_xsec_cache.pop(next(iter(self._mie_eff_xsec_cache)))

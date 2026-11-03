@@ -34,7 +34,7 @@ _DEVICE_CACHE_MAX_ENTRIES = 8
 
 # Species whose opacities the calculators load by default
 DEFAULT_OPACITIES = ("CH4", "CO2", "CO", "H2O", "H2S", "HCN", "K", "Na", "NH3",
-                     "SO2", "TiO", "VO")
+                     "SO2", "TiO", "VO", "OCS", "CS2")
 
 
 _EVAL_POOL = None

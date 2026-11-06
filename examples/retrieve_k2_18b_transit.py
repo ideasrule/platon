@@ -38,11 +38,11 @@ fit_info.add_uniform_fit_param("het_cov_frac", 0, 0.2)
 fit_info.add_gases_vmr(["CH4", "CO2", "H2O", "NH3", "HCN", "CO", "H2-He"], 1e-12, 10**-0.3)
 
 #Use Nested Sampling to do the fitting
-result = retriever.run_multinest(bins, depths, errors,
+result = retriever.run_nautilus(bins, depths, errors,
                                  None, None, None,
                                  fit_info,
                                  #sample="rwalk",
-                                 nlive=1000
+                                 n_live=1000
                                  )
 with open("retrieval_result_k2_18b.pkl", "wb") as f:
     pickle.dump(result, f)

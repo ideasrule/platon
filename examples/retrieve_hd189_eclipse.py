@@ -47,10 +47,10 @@ fit_info.add_uniform_fit_param("beta", 0.5, 2)
 fit_info.add_uniform_fit_param("offset_f322", -100e-6, 100e-6)
 fit_info.add_uniform_fit_param("error_excess", 0, 100e-6)
 
-result = retriever.run_multinest(None, None, None,
+result = retriever.run_nautilus(None, None, None,
                                  bins, depths, errs,
-                                 fit_info, nlive=1000,
-                                 include_condensation=True,
+                                 fit_info, n_live=1000,
+                                 include_condensation=True
                                  #zero_opacities=["H2S"]
                                  )
 

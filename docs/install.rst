@@ -18,6 +18,10 @@ PLATON supports nautilus, dynesty, and pymultinest for nested sampling.  nautilu
   
   conda install -c conda-forge mpi4py pymultinest
 
+The default sampler, nautilus, trains small neural networks using the relatively slow scikit-learn.  In our experience, network training and sampling dominates the run time of a retrieval, with the actual
+likelihood calculation accounting for less than 10%.  We used Claude Opus 5.5 to optimize nautilus, which it did so mostly by writing a custom CUDA kernel, with the result that examples/retrieve_hd189_eclipse.py
+now runs in 1 minute instead of 5.  If you'd like to use our custom nautilus, install the fast_training branch of `our fork <https://github.com/ideasrule/nautilus/tree/fast_training>`_.  However, do so at your own risk--the unit tests pass, but no human has verified the new code.
+
 After installing PLATON, run one of the examples so that the data files are automatically downloaded::
 
   cd examples/

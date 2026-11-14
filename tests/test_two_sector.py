@@ -184,6 +184,10 @@ class TestTwoSectorForwardModel(unittest.TestCase):
         cls.calculator.change_wavelength_bins(
             1e-6 * np.array([[0.8, 1.0], [1.1, 1.4], [3.5, 4.5]]))
 
+    @classmethod
+    def tearDownClass(cls):
+        cls.calculator = None   # lets tests/conftest.py free the opacities
+
     def test_weighted_depths_and_full_output(self):
         cold = TerminatorSector(isothermal(900), 1e3, 100, 6)
         hot = TerminatorSector(isothermal(1400), 1e6, 0.1, 2)

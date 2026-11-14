@@ -8,13 +8,18 @@ from platon import _mie_multi_x
 from platon.transit_depth_calculator import TransitDepthCalculator
 
 class TestMieAbsorption(unittest.TestCase):
-    def __init__(self, *args, **kwargs):
-        super(TestMieAbsorption, self).__init__(*args, **kwargs)
-
+    @classmethod
+    def setUpClass(cls):
         # We're storing this object to take advantage of its cache, not
-        # for speed, but to test the cache
-        self.calc = TransitDepthCalculator()
-        
+        # for speed, but to test the cache.  (Not in __init__: pytest
+        # instantiates test classes at collection, which would load the
+        # opacities before any test runs and hold them for the whole session.)
+        cls.calc = TransitDepthCalculator()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.calc = None   # lets tests/conftest.py free the opacities
+
     def exact_cross_section(self, r_mean, wavelength, ri, sigma=0.5):        
         def integrand(y):
             r = r_mean * np.exp(np.sqrt(2) * sigma * y)

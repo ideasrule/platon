@@ -29,6 +29,12 @@ class TestMieJax(unittest.TestCase):
             np.array([wavelengths[:-1], wavelengths[1:]]).T)
         cls.atm = cls.calc.atm
 
+    @classmethod
+    def tearDownClass(cls):
+        # lets tests/conftest.py free the opacities
+        global _FORK_ATM
+        cls.calc = cls.atm = _FORK_ATM = None
+
     def _xsec(self, ri, part_size, use_jax, sigma=0.5):
         old = AS._MIE_JAX
         AS._MIE_JAX = use_jax

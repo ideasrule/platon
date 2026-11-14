@@ -5,7 +5,7 @@
 [![arXiv](http://img.shields.io/badge/arXiv-2004.09513-orange.svg)](https://arxiv.org/abs/2004.09513) 
 [![arXiv](http://img.shields.io/badge/arXiv-1811.11761-orange.svg)](https://arxiv.org/abs/1811.11761)
 
-**Oct 30, 2026: PLATON v7.0 is out!  After a complete rewrite by Claude, PLATON is now based on JAX and ~100x faster than it used to be.  Other improvements include support for multiple instrumental offsets, patchy clouds, non-isothermal T/P profiles in transit, separate morning and evening terminators, two stellar heterogeneity sources (e.g. spots + faculae), and a more robust and efficient nested sampler based on neural networks (nautilus).**
+**Oct 30, 2026: PLATON v7.0 is out!  After a complete rewrite by Claude, PLATON is now based on JAX and ~100x faster than it used to be.  Other improvements include support for multiple instrumental offsets, constant-VMR overrides in equilibrium retrievals, patchy clouds, non-isothermal T/P profiles in transit, separate morning and evening terminators, two stellar heterogeneity sources (e.g. spots + faculae), and a more robust and efficient nested sampler based on neural networks (nautilus).**
 
 **Feb 24, 2025: PLATON v6.3 is out!  The main difference from v6.2 is that we now include realistic emission from rocky surfaces using the emissivity library from [Paragas et al 2025](https://arxiv.org/abs/2502.04433).  The library contains 11 mineral compositions across 3 surface textures, and were obtained via lab reflectance measurements.**
 

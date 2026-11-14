@@ -55,8 +55,7 @@ bibliography: paper.bib
 # Summary
 The atmospheres of hundreds of exoplanets have been observed with transmission or
 emission spectroscopy.  To derive composition, temperature, cloudtop pressures, and other
-properties from these observations, the most common tool is a retrieval: an
-a parameterized atmospheric model, coupled with a Bayesian exploration of parameter space
+properties from these observations, the most common tool is a retrieval: a parameterized atmospheric model, coupled with a Bayesian exploration of parameter space
 using nested sampling or MCMC.  With the launch of JWST and proliferation of
 high-resolution spectrographs on ground telescopes, the increasing precision and volume
 of exoplanet atmospheric spectra require retrieval codes that are fast even at
@@ -195,7 +194,7 @@ stemming from the lower precision, which we fixed one by one.
 
 In September 2026, we started from scratch and prompted Fable 5 to rewrite all
 of PLATON--not just a small part of the transit spectrum code--to use JAX.  We told it from the outset
-to use single precision, set jax_enable_x64 to True, and prevent underflows or
+to use single precision, set jax_enable_x64 to False, and prevent underflows or
 overflows by rescaling variables to order unity and/or reordering operations.
 Afterwards, we told it to optimize the code while ensuring that the unit
 tests still pass.  After it was finished, we

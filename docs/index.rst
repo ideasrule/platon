@@ -5,7 +5,7 @@
 
 Welcome to PLATON's documentation!
 ==================================
-**Oct 30, 2026: PLATON v7.0 is out!  After a complete rewrite by Claude, PLATON is now based on JAX and ~100x faster than it used to be.  Other improvements include support for multiple instrumental offsets, patchy clouds, non-isothermal T/P profiles in transit, separate morning and evening terminators, two stellar heterogeneity sources (e.g. spots + faculae), and a more robust and efficient nested sampler based on neural networks (nautilus).**
+**Oct 30, 2026: PLATON v7.0 is out!  After a complete rewrite by Claude, PLATON is now based on JAX and ~100x faster than it used to be.  Other improvements include support for multiple instrumental offsets, constant-VMR overrides in equilibrium retrievals, patchy clouds, non-isothermal T/P profiles in transit, separate morning and evening terminators, two stellar heterogeneity sources (e.g. spots + faculae), and a more robust and efficient nested sampler based on neural networks (nautilus).**
 
 **Oct 30, 2024: PLATON v6.2 is out, with major updates!  This corresponds most closely to the version described in**
 `Zhang et al 2024 <https://arxiv.org/abs/2410.22398>`_.

@@ -35,7 +35,8 @@ fit_info = retriever.get_default_fit_info(
 
 fit_info.add_uniform_fit_param("logZ", -1, 3)
 fit_info.add_uniform_fit_param("CO_ratio", 0.2, 2)
-fit_info.add_uniform_fit_param("log_CH4_mult", -6, 3)
+# CH4 abundance (log10 VMR) is free; all other species are in equilibrium
+fit_info.add_uniform_fit_param("log_CH4", -12, -2)
 
 fit_info.add_uniform_fit_param("log_k_th", -5, 0)
 fit_info.add_uniform_fit_param("log_gamma", -4, 2)

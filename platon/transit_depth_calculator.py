@@ -61,7 +61,7 @@ class TransitDepthCalculator:
         self.atm._validate_params(T, logZ, CO_ratio, cloudtop_pressure)
 
     def compute_depths(self, t_p_profile, star_radius, planet_mass,
-                       planet_radius, logZ=0, CO_ratio=0.53, CH4_mult=1,
+                       planet_radius, logZ=0, CO_ratio=0.53,
                        gases=None, vmrs=None,
                        add_gas_absorption=True, add_H_minus_absorption=True,
                        add_scattering=True, scattering_factor=1,
@@ -95,8 +95,16 @@ class TransitDepthCalculator:
             Base-10 logarithm of the metallicity, in solar units
         CO_ratio : float, optional
             C/O atomic ratio in the atmosphere.  The solar value is 0.53.
-        CH4_mult : float
-            Multiple applied to equilibrium CH4 abundance, for methane depletion
+        gases : list of str, optional
+            Gases with vertically constant abundances.  If logZ and CO_ratio
+            are None, these are the only gases in the atmosphere.  Otherwise,
+            they override the equilibrium abundances of these gases, while
+            every other species stays at its equilibrium abundance (which
+            is not renormalized, so this is meant for trace gases).  For
+            example, gases=["CS2", "CH4"] with vmrs=[1e-6, 1e-8] enhances
+            CS2 (a photochemical product) and depletes CH4.
+        vmrs : list of float, optional
+            Volume mixing ratio of each gas in `gases`
         add_gas_absorption: float, optional
             Whether gas absorption is accounted for
         add_H_minus_absorption: bool, optional
@@ -229,7 +237,7 @@ class TransitDepthCalculator:
                     "cloud_fraction must be 1 for a TwoSectorTerminator; "
                     "use cold_fraction for its area weighting")
             common = dict(
-                logZ=logZ, CO_ratio=CO_ratio, CH4_mult=CH4_mult,
+                logZ=logZ, CO_ratio=CO_ratio,
                 gases=gases, vmrs=vmrs,
                 add_gas_absorption=add_gas_absorption,
                 add_H_minus_absorption=add_H_minus_absorption,
@@ -293,7 +301,7 @@ class TransitDepthCalculator:
             star_radius=star_radius, planet_mass=planet_mass,
             planet_radius=planet_radius, P_profile=P_profile,
             T_profile=T_profile, logZ=logZ, CO_ratio=CO_ratio,
-            CH4_mult=CH4_mult, gases=gases, vmrs=vmrs,
+            gases=gases, vmrs=vmrs,
             add_gas_absorption=add_gas_absorption,
             add_H_minus_absorption=add_H_minus_absorption,
             add_scattering=add_scattering,

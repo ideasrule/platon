@@ -222,6 +222,56 @@ class TestRetriever(unittest.TestCase):
             transit_offsets={"offset_a": (0, 5), "offset_b": (5, 8)},
             eclipse_offsets={"offset_a": (0, 3)})
 
+    def test_eq_gas_abundances(self):
+        """log_<gas> sets the abundance of one gas in an equilibrium
+        retrieval."""
+        min_wavelength, max_wavelength, depths, errors = np.loadtxt(
+            "tests/testing_data/hd209458b_transit_depths", unpack=True)
+        bins = np.array([min_wavelength, max_wavelength]).T
+
+        def get_fit_info(**kwargs):
+            fit_info = CombinedRetriever.get_default_fit_info(
+                Rs=1.19 * R_sun, Mp=0.73 * M_jup, Rp=1.4 * R_jup, T=1200,
+                **kwargs)
+            fit_info.add_uniform_fit_param("T", 800, 1800)
+            return fit_info
+
+        retriever = CombinedRetriever()
+        data = (bins, depths, errors, None, None, None)
+
+        def best_fit(fit_info, params):
+            ln_like = retriever._make_ln_like(
+                data, fit_info, True, [], None, None)
+            model, info = ln_like(params, ret_best_fit=True)[:2]
+            return model, info["atm_abundances"]
+
+        eq_depths, eq_abunds = best_fit(get_fit_info(), [1200])
+
+        # Fit CS2 (not in the default opacities), fix CH4
+        fit_info = get_fit_info(log_CH4=-9)
+        fit_info.add_uniform_fit_param("log_CS2", -12, -2)
+        model, abunds = best_fit(fit_info, [1200, -4.5])
+        self.assertTrue(np.allclose(abunds["CS2"], 10**-4.5, rtol=1e-4))
+        self.assertTrue(np.allclose(abunds["CH4"], 1e-9, rtol=1e-4))
+        self.assertTrue(np.array_equal(abunds["H2O"], eq_abunds["H2O"]))
+        self.assertGreater(np.max(np.abs(model - eq_depths)), 1e-5)
+        model2, _ = best_fit(fit_info, [1200, -11.5])
+        self.assertGreater(np.max(np.abs(model - model2)), 1e-5)
+
+        # Typos, and log_<gas> in a free retrieval, are caught
+        fit_info = get_fit_info()
+        fit_info.add_uniform_fit_param("log_cloudtop", -1, 5)
+        with self.assertRaises(ValueError):
+            retriever._make_ln_like(data, fit_info, True, [], None, None)
+        fit_info = get_fit_info(logZ=None, CO_ratio=None, fit_vmr=True)
+        fit_info.add_gases_vmr(["H2O", "H2"], 1e-12, 1e-1)
+        fit_info.add_uniform_fit_param("log_CS2", -12, -2)
+        with self.assertRaises(ValueError):
+            retriever._make_ln_like(data, fit_info, True, [], None, None)
+
+        with self.assertRaises(ValueError):
+            get_fit_info(log_CH4_mult=-1)
+
 
 if __name__ == '__main__':
     unittest.main()

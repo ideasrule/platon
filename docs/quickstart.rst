@@ -49,6 +49,21 @@ The example adopts uniform log VMRs, but it is also possible to use CLR priors::
 
 With a CLR prior, all gases are treated equally, and there is no pre-defined background gas.
 
+In an equilibrium retrieval, you can still retrieve the abundances of individual gases, such as
+photochemical products that equilibrium chemistry underpredicts.  Fit for log_<gas>, the log10 of
+the volume mixing ratio::
+
+  fit_info = retriever.get_default_fit_info(..., logZ=0, CO_ratio=0.53)
+  fit_info.add_uniform_fit_param("logZ", -1, 3)
+  fit_info.add_uniform_fit_param("log_CS2", -12, -2)
+  fit_info.add_uniform_fit_param("log_CH4", -12, -2)
+
+This sets the CS2 and CH4 abundances to 10**log_CS2 and 10**log_CH4 at all pressures, while all other
+species remain in chemical equilibrium.  The other abundances are not renormalized, so this is intended
+for trace gases.  To fix an abundance instead of fitting it, pass it to get_default_fit_info (e.g. log_SO2=-5.5).
+The forward models accept the same thing through the gases and vmrs arguments of compute_depths:
+``calculator.compute_depths(p, Rs, Mp, Rp, logZ=0, CO_ratio=0.53, gases=["CS2"], vmrs=[1e-6])``.
+
 The examples use the nautilus package for importance nested sampling.  You can also use dynesty, multinest, or emcee
 by changing retriever.run_nautilus to retriever.run_dynesty, retriever.run_multinest, or retriever.run_emcee and
 setting the hyperparameters accordingly.  We recommend sticking with nautilus because we find that it is more robust

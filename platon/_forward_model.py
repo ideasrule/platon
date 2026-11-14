@@ -43,12 +43,12 @@ HC_OVER_KB = h * c / k_B
 KB_OVER_G_AMU = k_B / (G * AMU)
 
 # Indices into the packed scalar-parameter vector
-(SC_RS, SC_MP, SC_RP, SC_LOGZ, SC_CO, SC_LOG_CH4, SC_SCAT_FACTOR,
+(SC_RS, SC_MP, SC_RP, SC_LOGZ, SC_CO, SC_SCAT_FACTOR,
  SC_SCAT_SLOPE, SC_SCAT_REF_UM, SC_CLOUDTOP, SC_P_QUENCH,
  SC_LOG10_P_QUENCH, SC_T_STAR, SC_T_HET, SC_HET_FRAC, SC_FSH, SC_NUM_DEN,
  SC_LN_MIN_XSEC, SC_LOG_MIN_ABUND, SC_REF_PRESSURE, SC_T_STAR_HYDRO,
  SC_MIE_REF_P, SC_SURFACE_P, SC_A_OVER_RS, SC_SURFACE_TEMP, SC_REDIST,
- SC_T_HET2, SC_HET2_FRAC, SC_N_SCALARS) = range(29)
+ SC_T_HET2, SC_HET2_FRAC, SC_N_SCALARS) = range(28)
 
 # Indices into the packed int vector
 IX_FLOOR, IX_N_INTS = range(2)
@@ -116,8 +116,9 @@ class ForwardConfig(NamedTuple):
     """Static (hashable) configuration; changing any field recompiles."""
     n_layers: int            # number of levels in the T/P profile
     abund_mode: str          # 'eq', 'vmr', or 'custom'
-    gas_master_idx: tuple    # master indices of fit gases ('vmr' mode)
-    ch4_idx: int
+    gas_master_idx: tuple    # master indices of the gases with fixed VMRs:
+                             # all gases in 'vmr' mode, or those overriding
+                             # their equilibrium abundances in 'eq' mode
     el_idx: int
     h_idx: int
     add_gas: bool
@@ -142,7 +143,7 @@ class ForwardInputs(NamedTuple):
     [scalars (SC_N_SCALARS) | ints-as-floats (IX_N_INTS) | T_profile (N) |
      P_profile (N) | shell_mask (N-1) | opac_mask (S)]."""
     packed: Any             # see layout above
-    vmrs: Any = None        # (n_gases,) for 'vmr' mode
+    vmrs: Any = None        # (n_gases,) VMRs of cfg.gas_master_idx, or None
     custom_log_abund: Any = None  # (N, M) per-layer, for 'custom' mode
     eff_xsec: Any = None    # (L,) Mie effective cross sections
     rh_binned: Any = None   # (L,) surface hemispheric reflectance
@@ -261,16 +262,18 @@ def _layer_log_abundances(cfg, data, sc, inp):
         la = regular_grid_interp(
             data.T_grid, data.log10_P_grid, la_grid,
             inp.T_profile, jnp.log10(inp.P_profile))    # (N, M)
-        if cfg.ch4_idx >= 0:
-            la = la.at[:, cfg.ch4_idx].add(sc[SC_LOG_CH4])
     elif cfg.abund_mode == "vmr":
         la = jnp.full((N, n_master), LOG_MIN_ABUND, dtype=jnp.float32)
+    else:
+        la = inp.custom_log_abund                       # (N, M)
+
+    if cfg.gas_master_idx:
+        # Vertically constant VMRs: every gas in 'vmr' mode; in 'eq' mode,
+        # the gases whose equilibrium abundances are overridden
         idx = jnp.asarray(cfg.gas_master_idx, dtype=jnp.int32)
         vals = jnp.broadcast_to(jnp.log10(inp.vmrs)[None, :],
                                 (N, len(cfg.gas_master_idx)))
         la = la.at[:, idx].set(vals)
-    else:
-        la = inp.custom_log_abund                       # (N, M)
 
     la = jnp.maximum(la, sc[SC_LOG_MIN_ABUND])
 

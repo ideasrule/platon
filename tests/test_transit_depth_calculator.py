@@ -294,6 +294,61 @@ class TestTransitDepthCalculator(unittest.TestCase):
         np.testing.assert_allclose(depths, np.r_[depths1[:2], depths2[2:]])
         self.assertFalse(np.allclose(depths1, depths2))
 
+    def test_eq_abundance_override(self):
+        """gases/vmrs with equilibrium chemistry fix only those gases."""
+        calc = TransitDepthCalculator(
+            include_opacities=["CH4", "H2O", "CO2", "CS2"], downsample=20)
+        profile = Profile.isothermal(900)
+        args = (profile, R_sun, M_jup, R_jup)
+        _, eq_depths, eq_info = calc.compute_depths(*args, full_output=True)
+        _, depths, info = calc.compute_depths(
+            *args, gases=["CS2", "CH4"], vmrs=[1e-5, 1e-9], full_output=True)
+
+        abunds = info["atm_abundances"]
+        self.assertTrue(np.allclose(abunds["CS2"], 1e-5, rtol=1e-4))
+        self.assertTrue(np.allclose(abunds["CH4"], 1e-9, rtol=1e-4))
+        # CH4 is far from constant in equilibrium, so this was an override
+        eq_CH4 = eq_info["atm_abundances"]["CH4"]
+        self.assertGreater(eq_CH4.max() / eq_CH4.min(), 10)
+        for name, eq_abund in eq_info["atm_abundances"].items():
+            if name not in ("CH4", "CS2"):
+                self.assertTrue(np.array_equal(abunds[name], eq_abund), name)
+        self.assertGreater(np.max(np.abs(depths - eq_depths)), 1e-5)
+
+        # Same atmosphere, specified layer by layer
+        custom = dict(eq_info["atm_abundances"])
+        custom["CH4"] = np.full(len(profile.pressures), 1e-9)
+        custom["CS2"] = np.full(len(profile.pressures), 1e-5)
+        _, custom_depths, _ = calc.compute_depths(
+            *args, logZ=None, CO_ratio=None, custom_abundances=custom)
+        self.assertTrue(np.allclose(depths, custom_depths, rtol=1e-4))
+
+        # Quenching leaves the fixed abundances alone
+        _, _, quench_info = calc.compute_depths(
+            *args, gases=["CS2", "CH4"], vmrs=[1e-5, 1e-9], P_quench=1e3,
+            full_output=True)
+        self.assertTrue(np.allclose(
+            quench_info["atm_abundances"]["CH4"], 1e-9, rtol=1e-4))
+
+        # A different abundance of the same gases must not recompile
+        cache_size = platon._forward_model.transit_depths_core._cache_size()
+        calc.compute_depths(*args, gases=["CS2", "CH4"], vmrs=[1e-5, 1e-9])
+        calc.compute_depths(*args, gases=["CS2", "CH4"], vmrs=[1e-7, 1e-4])
+        self.assertLessEqual(
+            platon._forward_model.transit_depths_core._cache_size(),
+            cache_size + 1)
+
+        with self.assertRaises(ValueError):
+            calc.compute_depths(*args, gases=["CS2"])
+        with self.assertRaises(ValueError):
+            calc.compute_depths(*args, gases=["CS2"], vmrs=[1e-5, 1e-6])
+        with self.assertRaises(ValueError):   # opacity not loaded
+            calc.compute_depths(*args, gases=["SO2"], vmrs=[1e-5])
+        with self.assertRaises(ValueError):
+            calc.compute_depths(*args, gases=["Xx"], vmrs=[1e-5])
+        with self.assertRaises(TypeError):
+            calc.compute_depths(*args, CH4_mult=0.1)
+
     def test_bounds_checking(self):
         Rp = 7.14e7
         Mp = 7.49e26

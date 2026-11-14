@@ -26,7 +26,16 @@ class FitInfo:
             low_guess = low_lim
         if high_guess is None:
             high_guess = high_lim
-        best_guess = self.all_params[name].best_guess
+        if name not in self.all_params:
+            # Only log_<gas> (e.g. log_CS2), which fixes the abundance of
+            # one gas in an equilibrium retrieval, has no default value.
+            # The retriever checks these names, as FitInfo knows no species.
+            if not hasattr(self, "undeclared_params"):
+                self.undeclared_params = []
+            self.undeclared_params.append(name)
+            best_guess = None
+        else:
+            best_guess = self.all_params[name].best_guess
         if best_guess is None:  # e.g. a per-visit value that defaults to the shared one
             best_guess = 0.5 * (low_lim + high_lim)
 

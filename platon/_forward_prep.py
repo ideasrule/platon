@@ -17,7 +17,7 @@ def _pack_scalars(**kwargs):
 
 
 def prepare_forward_inputs(atm, *, star_radius, planet_mass, planet_radius,
-                           P_profile, T_profile, logZ, CO_ratio, CH4_mult,
+                           P_profile, T_profile, logZ, CO_ratio,
                            gases, vmrs, add_gas_absorption,
                            add_H_minus_absorption, add_scattering,
                            scattering_factor, scattering_slope,
@@ -47,9 +47,35 @@ def prepare_forward_inputs(atm, *, star_radius, planet_mass, planet_radius,
     vmrs_arr = None
     custom_log_abund = None
     gas_master_idx = ()
+    if (gases is None) != (vmrs is None):
+        raise ValueError("gases and vmrs must be specified together")
+    if gases is not None:
+        if custom_abundances is not None:
+            raise ValueError(
+                "Cannot use gases/vmrs together with custom_abundances")
+        if len(gases) != len(vmrs):
+            raise ValueError("gases and vmrs must have the same length")
+        if len(set(gases)) != len(gases):
+            raise ValueError("gases contains duplicates")
+        for gas in gases:
+            if gas not in atm.master_index:
+                raise ValueError("Unknown gas: {}".format(gas))
+            if gas not in atm.raw["opac_names"] and \
+               gas not in ["H2", "He", "H2-He", "N2", "O2", "el", "H"]:
+                raise ValueError(
+                    "The abundance of {} is specified, but its opacity was "
+                    "not loaded; add it to include_opacities when "
+                    "constructing the calculator".format(gas))
+        gas_master_idx = tuple(int(atm.master_index[g]) for g in gases)
+        vmrs_arr = np.asarray(vmrs, dtype=np.float32)
+
     if custom_abundances is None and logZ is not None and CO_ratio is not None:
+        # Equilibrium chemistry; any gases/vmrs override the equilibrium
+        # abundances of those gases
         abund_mode = "eq"
         active_species = list(atm.abundance_getter.included_species)
+        if gases is not None:
+            active_species += [g for g in gases if g not in active_species]
     else:
         if logZ is not None or CO_ratio is not None:
             raise ValueError(
@@ -64,19 +90,8 @@ def prepare_forward_inputs(atm, *, star_radius, planet_mass, planet_radius,
             custom_log_abund = atm.custom_abundances_to_log_master(
                 custom_abundances, T_profile, P_profile)
             active_species = list(custom_abundances.keys())
-        elif vmrs is not None and gases is not None:
+        elif gases is not None:
             abund_mode = "vmr"
-            for gas in gases:
-                if gas not in atm.master_index:
-                    raise ValueError("Unknown gas: {}".format(gas))
-                if gas not in atm.raw["opac_names"] and \
-                   gas not in ["H2", "He", "H2-He", "N2", "O2", "el", "H"]:
-                    raise ValueError(
-                        "{} is being fit, but its opacity was not loaded; add "
-                        "it to include_opacities when constructing the "
-                        "calculator".format(gas))
-            gas_master_idx = tuple(int(atm.master_index[g]) for g in gases)
-            vmrs_arr = np.asarray(vmrs, dtype=np.float32)
             active_species = list(gases)
         else:
             raise ValueError("Unrecognized format for custom_abundances")
@@ -122,7 +137,6 @@ def prepare_forward_inputs(atm, *, star_radius, planet_mass, planet_radius,
         rs=star_radius, mp=planet_mass, rp=planet_radius,
         logz=0.0 if logZ is None else logZ,
         co=0.0 if CO_ratio is None else CO_ratio,
-        log_ch4=math.log10(max(CH4_mult, 1e-99)),
         scat_factor=scattering_factor, scat_slope=scattering_slope,
         scat_ref_um=scattering_ref_wavelength * 1e6,
         cloudtop=cloudtop_pressure,
@@ -156,7 +170,6 @@ def prepare_forward_inputs(atm, *, star_radius, planet_mass, planet_radius,
         n_layers=len(P_profile),
         abund_mode=abund_mode,
         gas_master_idx=gas_master_idx,
-        ch4_idx=int(atm.master_index.get("CH4", -1)),
         el_idx=int(atm.master_index["el"]) if add_H_minus_absorption else -1,
         h_idx=int(atm.master_index["H"]) if add_H_minus_absorption else -1,
         add_gas=bool(add_gas_absorption),

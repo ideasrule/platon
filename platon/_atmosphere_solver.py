@@ -1,3 +1,4 @@
+import functools
 import os
 from pathlib import Path
 
@@ -175,6 +176,18 @@ def _compute_h_minus_k(T_grid, wavelengths_m):
 
     # 1e-3 to convert from cm^4/dyne to m^4/N
     return (k_bf + k_ff) * 1e-3
+
+
+@functools.lru_cache(maxsize=None)
+def get_species_names():
+    """Names of every species PLATON has a mass for: the same list as
+    master_names, which does not depend on the opacities loaded.  This is
+    for callers that need the names before a calculator exists (e.g. to
+    choose its include_opacities)."""
+    get_data_if_needed()
+    basedir = Path(__file__).resolve().parent
+    return tuple(read_species_data(
+        basedir / "data/Absorption", basedir / "data/species_info", ())[1])
 
 
 def _load_raw(include_opacities, downsample):

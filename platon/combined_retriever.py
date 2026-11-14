@@ -10,7 +10,7 @@ import dynesty.utils
 from .psis import psisloo
 from .transit_depth_calculator import TransitDepthCalculator
 from .eclipse_depth_calculator import EclipseDepthCalculator
-from ._atmosphere_solver import DEFAULT_OPACITIES
+from ._atmosphere_solver import DEFAULT_OPACITIES, get_species_names
 from .fit_info import FitInfo
 
 from .constants import M_jup, R_jup, R_earth, M_earth, R_sun
@@ -33,12 +33,36 @@ def _limit_worker_threads():
     threadpool_limits(limits=1)
 
 
-def _include_opacities(fit_info):
+def _eq_gases(fit_info):
+    '''Gases whose abundances are set by log_<gas> parameters (e.g. log_CS2)
+    in an equilibrium retrieval, overriding their equilibrium abundances.
+    Raises ValueError if a fit parameter that was never given a default
+    value is not one of these.'''
+    gases = []
+    params = fit_info.all_params
+    free_retrieval = any(name in params and params[name].best_guess
+                         for name in ("fit_vmr", "fit_clr"))
+    if not free_retrieval:
+        species = get_species_names()
+        gases = [name[4:] for name, param in params.items()
+                 if name.startswith("log_") and name[4:] in species
+                 and param.best_guess is not None]
+    unknown = [name for name in getattr(fit_info, "undeclared_params", [])
+               if name[4:] not in gases]
+    if unknown:
+        raise ValueError(
+            "Unknown fit parameters: {}.  Only log_<gas>, in an equilibrium "
+            "retrieval, can be fit without a default value in "
+            "get_default_fit_info".format(unknown))
+    return gases
+
+
+def _include_opacities(fit_info, eq_gases=()):
     '''The calculators' default opacities, plus those of any other gas being
-    fit (e.g. CS2), so that free retrievals can use every gas PLATON has
+    fit (e.g. CS2), so that retrievals can use every gas PLATON has
     cross sections for'''
     default = list(DEFAULT_OPACITIES)
-    extra = [g for g in getattr(fit_info, "gases", [])
+    extra = [g for g in list(getattr(fit_info, "gases", [])) + list(eq_gases)
              if g not in default and g not in ["H2", "He", "H2-He", "N2", "O2", "el", "H"]]
     return default + extra
 
@@ -214,7 +238,7 @@ class CombinedRetriever:
                  measured_transit_errors, measured_eclipse_depths,
                  measured_eclipse_errors, ret_best_fit=False,
                  lnlike_per_point=False,
-                 zero_opacities=[]):
+                 zero_opacities=[], eq_gases=()):
         '''Returns -inf if params are invalid.  Otherwise, returns the total
         log likelihood; or the log likelihood of every data point if
         lnlike_per_point; or (transit depths, transit info dict, eclipse
@@ -250,6 +274,10 @@ class CombinedRetriever:
                 clrs = [params_dict[f'clr_{gas}'] for gas in gases[:-1]]
                 vmrs = self.convert_clr_to_vmr(clrs)
                 if np.min(vmrs) < fit_info.clr_low_lim: return -np.inf
+        elif eq_gases:
+            # Equilibrium chemistry, except for these gases
+            gases = list(eq_gases)
+            vmrs = [10.**params_dict[f'log_{gas}'] for gas in gases]
 
         if params_dict.get("n") is not None and "log_k" in params_dict:
             ri = params_dict["n"] - 1j * 10**params_dict["log_k"]
@@ -260,9 +288,7 @@ class CombinedRetriever:
         depth_kwargs = dict(
             star_radius=params_dict["Rs"], planet_mass=params_dict["Mp"],
             planet_radius=params_dict["Rp"], T_star=params_dict["T_star"],
-            logZ=logZ, CO_ratio=CO_ratio,
-            CH4_mult=10.**params_dict["log_CH4_mult"],
-            gases=gases, vmrs=vmrs,
+            logZ=logZ, CO_ratio=CO_ratio, gases=gases, vmrs=vmrs,
             scattering_factor=10.0**params_dict["log_scatt_factor"],
             scattering_slope=params_dict["scatt_slope"],
             cloudtop_pressure=10.0**params_dict["log_cloudtop_P"],
@@ -373,7 +399,8 @@ class CombinedRetriever:
             eclipse_bins, eclipse_depths, eclipse_errors = data
         transit_calc = None
         eclipse_calc = None
-        include_opacities = _include_opacities(fit_info)
+        eq_gases = _eq_gases(fit_info)
+        include_opacities = _include_opacities(fit_info, eq_gases)
         if transit_bins is not None:
             transit_calc = TransitDepthCalculator(
                 include_condensation=include_condensation,
@@ -393,7 +420,7 @@ class CombinedRetriever:
             return self._ln_like(
                 params, transit_calc, eclipse_calc, fit_info,
                 transit_depths, transit_errors, eclipse_depths, eclipse_errors,
-                zero_opacities=zero_opacities, **kwargs)
+                zero_opacities=zero_opacities, eq_gases=eq_gases, **kwargs)
         return ln_like
 
     def _verbose_ln_like(self, ln_like, fit_info):
@@ -764,7 +791,7 @@ class CombinedRetriever:
             samples, result["logp"], equal_samples, num_final_samples)
 
     @staticmethod
-    def get_default_fit_info(Rs, Mp, Rp, T=None, logZ=0, CO_ratio=0.53, log_CH4_mult=0,
+    def get_default_fit_info(Rs, Mp, Rp, T=None, logZ=0, CO_ratio=0.53,
                              free_retrieval=False,
                              log_cloudtop_P=np.inf, cloud_fraction=1,
                              log_scatt_factor=0,
@@ -787,6 +814,16 @@ class CombinedRetriever:
         do not want to specify them.  All parameters are in SI.  For 
         information on the parameters not described below, see the documentation
         for :func:`~platon.transit_depth_calculator.TransitDepthCalculator.compute_depths` and :func:`~platon.eclipse_depth_calculator.EclipseDepthCalculator.compute_depths`
+
+        In an equilibrium retrieval (logZ and CO_ratio not None), the
+        abundance of any individual gas can be set with a parameter named
+        log_<gas>, the log10 of its volume mixing ratio at all pressures,
+        while every other species stays in chemical equilibrium.  Either
+        pass it here to fix it (e.g. log_SO2=-5.5), or fit for it without
+        passing it here (e.g.
+        fit_info.add_uniform_fit_param("log_CS2", -12, -2)).  The other
+        equilibrium abundances are not renormalized, so this is meant for
+        trace gases.
 
         Parameters
         ----------
@@ -866,6 +903,10 @@ class CombinedRetriever:
         fit_info : :class:`.FitInfo` object
             This object is used to indicate which parameters to fit for, which
             to fix, and what values all parameters should take.'''
+        if "log_CH4_mult" in profile_kwargs:
+            raise ValueError(
+                "log_CH4_mult has been removed; use log_CH4 to set the CH4 "
+                "abundance instead")
         all_variables = locals().copy()
         del all_variables["profile_kwargs"]
         all_variables.update(profile_kwargs)

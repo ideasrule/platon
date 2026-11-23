@@ -2,8 +2,7 @@
 <img src="logo.png" height="315">
 
  [![codecov](https://codecov.io/gh/ideasrule/platon/branch/devel/graph/badge.svg)](https://codecov.io/gh/ideasrule/platon)
-[![arXiv](http://img.shields.io/badge/arXiv-2004.09513-orange.svg)](https://arxiv.org/abs/2004.09513) 
-[![arXiv](http://img.shields.io/badge/arXiv-1811.11761-orange.svg)](https://arxiv.org/abs/1811.11761)
+[![arXiv](http://img.shields.io/badge/arXiv-2611.26680-orange.svg)](https://arxiv.org/abs/2611.26680) 
 
 **Oct 30, 2026: PLATON v7.0 is out!  After a complete rewrite by Claude, PLATON is now based on JAX and ~100x faster than it used to be.  Other improvements include support for multiple instrumental offsets, constant-VMR overrides in equilibrium retrievals, patchy clouds, non-isothermal T/P profiles in transit, separate morning and evening terminators, two stellar heterogeneity sources (e.g. spots + faculae), and a more robust and efficient nested sampler based on neural networks (nautilus).**
 
